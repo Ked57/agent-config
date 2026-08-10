@@ -1,0 +1,17 @@
+{
+  "servers": {
+    "primevue": {
+      "transport": "stdio",
+      "command": "mcp/scripts/primevue-mcp.sh",
+      "args": []
+    },
+    "Figma": {
+      "transport": "http",
+      "url": "https://mcp.figma.com/mcp"
+    },
+    "atlassian": {
+      "transport": "http",
+      "url": "https://mcp.atlassian.com/v1/mcp/authv2"
+    }
+  }
+}
