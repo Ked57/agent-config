@@ -30,7 +30,6 @@ CLAUDE.md                                  thin Claude Code bridge to AGENTS.md
 .agents/policy/domain-module.md            domain work, when TypeScript is detected
 .agents/policy/vue-primevue.md             Vue work, when detected
 .agents/skills/fullstack-typescript-quality/SKILL.md
-.agents/scripts/agent-check.mjs
 .agents/agent-config.json                  project-owned command/routing map
 .agents/agent-config.lock.json
 ```
@@ -47,14 +46,8 @@ node bin/agent-config.mjs status --project ~/dev/my-webapp
 node bin/agent-config.mjs check --project ~/dev/my-webapp
 ```
 
-Use the installed verification router to see the checks applicable to a change:
-
-```sh
-node .agents/scripts/agent-check.mjs --files src/domain/project.service.ts
-```
-
-The router reports commands from `.agents/agent-config.json`; it does not execute
-them automatically.
+Project agents read `.agents/agent-config.json` directly to identify the verification
+commands relevant to their changed files.
 
 ## Ownership model
 

@@ -42,12 +42,7 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   assert.equal(config.commands.component, 'npm run test:component');
   assert.equal(config.commands.fast, 'npm run verify:fast');
-
-  const routed = execFileSync(process.execPath, [path.join(project, '.agents/scripts/agent-check.mjs'), '--files', 'src/components/ProjectDialog.vue'], {
-    cwd: project,
-    encoding: 'utf8'
-  });
-  assert.match(routed, /component: npm run test:component/);
+  assert.ok(!fs.existsSync(path.join(project, '.agents/scripts/agent-check.mjs')));
 
   fs.writeFileSync(configPath, JSON.stringify({ version: 1, commands: { fast: 'custom fast' }, routing: [] }, null, 2));
   run(project, 'sync');
@@ -81,7 +76,7 @@ test('runs from a source checkout path containing spaces', () => {
 
 test('preserves colliding unmanaged generated-target files', () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-collision-'));
-  const collision = path.join(project, '.agents/scripts/agent-check.mjs');
+  const collision = path.join(project, '.agents/skills/fullstack-typescript-quality/SKILL.md');
   fs.mkdirSync(path.dirname(collision), { recursive: true });
   fs.writeFileSync(collision, '// Project-owned implementation\n');
 
@@ -118,10 +113,16 @@ test('migrates lock-owned legacy Cursor rules to shared policy packs', () => {
     devDependencies: { typescript: '^5.0.0' }
   }, null, 2));
   fs.writeFileSync(path.join(project, 'tsconfig.json'), '{}');
-  const legacyRules = ['.cursor/rules/10-agent-config-typescript.mdc'];
-  const legacyFile = path.join(project, legacyRules[0]);
-  fs.mkdirSync(path.dirname(legacyFile), { recursive: true });
-  fs.copyFileSync(path.join(root, 'tests/fixtures/legacy-typescript.mdc'), legacyFile);
+  const legacyRules = [
+    '.cursor/rules/10-agent-config-typescript.mdc',
+    '.agents/scripts/agent-check.mjs'
+  ];
+  const legacyTypeScriptRule = path.join(project, legacyRules[0]);
+  const legacyRouter = path.join(project, legacyRules[1]);
+  fs.mkdirSync(path.dirname(legacyTypeScriptRule), { recursive: true });
+  fs.mkdirSync(path.dirname(legacyRouter), { recursive: true });
+  fs.copyFileSync(path.join(root, 'tests/fixtures/legacy-typescript.mdc'), legacyTypeScriptRule);
+  fs.copyFileSync(path.join(root, 'tests/fixtures/legacy-agent-check.mjs'), legacyRouter);
   const lockFile = path.join(project, '.agents/agent-config.lock.json');
   fs.mkdirSync(path.dirname(lockFile), { recursive: true });
   fs.writeFileSync(lockFile, JSON.stringify({
