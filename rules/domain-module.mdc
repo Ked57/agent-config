@@ -1,0 +1,22 @@
+---
+description: Four-file DDD domain-module convention when present or requested.
+---
+
+# Domain module convention
+
+Apply this convention only when the repository already uses it or when the user asks to introduce it. Do not force it into a repository with a different established architecture.
+
+```text
+<domain>/
+├── <domain>.model.ts
+├── <domain>.interface.ts
+├── <domain>.service.ts
+└── <domain>.mock.ts
+```
+
+- **`<domain>.model.ts`** owns domain models, value types, request/result types, discriminated unions, domain errors, type guards, and pure domain transformations. Keep API calls, UI state, and test fixtures out.
+- **`<domain>.interface.ts`** owns boundary contracts: cross-domain interfaces, repository/data-source contracts, API-client contracts, and injected dependencies. It declares capabilities, not implementations.
+- **`<domain>.service.ts`** owns use cases, business rules, orchestration through interfaces, and API/domain transformations. Keep UI concerns out. Follow the existing domain convention for TanStack Query functions and hooks.
+- **`<domain>.mock.ts`** owns typed fixture factories, fake interface implementations, and test-data builders. Production code must not import it.
+
+Reuse an existing domain module before creating one. Do not create all four files for trivial local UI behaviour. Keep tests beside or alongside the relevant domain behaviour using local conventions.

@@ -1,5 +1,4 @@
-# Generated configuration fragments and machine-local state
-out/
+# Machine-local state
 .DS_Store
 
 # Credentials must remain in each client's secure/local store.

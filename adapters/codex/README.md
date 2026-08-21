@@ -1,9 +1,10 @@
 # Codex adapter
 
-Run `node scripts/render-config.mjs`, then merge `out/codex-mcp.toml` into
-`~/.codex/config.toml`. The rendered file contains only MCP entries generated
-from the canonical source.
+Install portable, project-scoped guidance first:
 
-Codex reads repository `AGENTS.md` guidance and the portable `.agents/skills/`
-tree. Put trusted project-only settings, hooks, and MCP registration in the
-project's `.codex/config.toml`; do not replace an existing global config.
+```sh
+node bin/agent-config.mjs init --project /path/to/workspace
+```
+
+Codex reads the generated repository `AGENTS.md`; the workspace also receives the
+portable `.agents/` skill and quality-routing files. Commit these project files.

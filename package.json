@@ -1,0 +1,11 @@
+{
+  "name": "@ked57/agent-config",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "check": "node --check bin/agent-config.mjs && node --check runtime/agent-check.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "verify": "npm run check && npm test"
+  }
+}
