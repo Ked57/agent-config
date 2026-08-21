@@ -27,12 +27,16 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
     }
   }, null, 2));
   fs.writeFileSync(path.join(project, 'tsconfig.json'), '{}');
+  fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'src/App.vue'), '<script setup lang="ts"></script>\n<template><main /></template>\n');
 
   run(project, 'init');
 
-  assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /\.agents\/policy\/vue-primevue\.md/);
+  assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /vue-primevue\.md/);
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/react.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/domain-module.md')));
   assert.ok(!fs.existsSync(path.join(project, '.cursor/rules/30-agent-config-vue-primevue.mdc')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/fullstack-typescript-quality/SKILL.md')));
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /# agent-config:begin prettier-ignore/);
@@ -113,6 +117,11 @@ test('migrates lock-owned legacy Cursor rules to shared policy packs', () => {
     devDependencies: { typescript: '^5.0.0' }
   }, null, 2));
   fs.writeFileSync(path.join(project, 'tsconfig.json'), '{}');
+  fs.mkdirSync(path.join(project, 'src/domain'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'src/App.vue'), '<template><main /></template>\n');
+  for (const part of ['model', 'interface', 'service', 'mock']) {
+    fs.writeFileSync(path.join(project, `src/domain/counter.${part}.ts`), 'export {};\n');
+  }
   const legacyRules = [
     '.cursor/rules/10-agent-config-typescript.mdc',
     '.agents/scripts/agent-check.mjs'
@@ -169,4 +178,38 @@ test('preserves matching legacy content when the lock lacks a complete trusted s
 
   assert.throws(() => run(project, 'sync'));
   assert.ok(fs.existsSync(legacyRule));
+});
+
+test('installs React guidance only when React source exists', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-react-'));
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
+    dependencies: { react: '^19.0.0', 'react-dom': '^19.0.0' },
+    devDependencies: { typescript: '^5.0.0' }
+  }, null, 2));
+  fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'src/App.tsx'), 'export const App = () => <main />;\n');
+
+  run(project, 'init');
+
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/react.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/domain-module.md')));
+});
+
+test('does not install framework packs from dependencies alone', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-no-framework-source-'));
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
+    dependencies: { react: '^19.0.0', vue: '^3.5.0' },
+    devDependencies: { typescript: '^5.0.0' }
+  }, null, 2));
+  fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'src/index.js'), 'console.log("no framework source");\n');
+
+  run(project, 'init');
+
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/react.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/domain-module.md')));
 });

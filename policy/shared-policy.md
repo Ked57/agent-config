@@ -43,10 +43,12 @@ Do not claim manual verification was performed when it was not.
 
 ## Conditional guidance
 
-Read the relevant installed policy pack before editing:
+Read a conditional policy pack only when it is installed in `.agents/policy/` and
+matches the files or framework you are changing:
 
-- `.agents/policy/typescript.md` for TypeScript or TSX files.
-- `.agents/policy/vue-primevue.md` for Vue components, composables, PrimeVue UI, or Vue forms.
-- `.agents/policy/domain-module.md` only when the repository already uses the four-file domain convention or the user requests it.
+- `typescript.md` for TypeScript or TSX source.
+- `react.md` for React JSX or TSX source.
+- `vue-primevue.md` for Vue components, composables, PrimeVue UI, or Vue forms.
+- `domain-module.md` only when the repository already uses the four-file domain convention or the user requests it.
 
 Use `.agents/agent-config.json` to identify the required verification for changed files.
