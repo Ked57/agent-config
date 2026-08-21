@@ -33,6 +33,8 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /agent-config:begin shared-policy/);
   assert.ok(fs.existsSync(path.join(project, '.cursor/rules/30-agent-config-vue-primevue.mdc')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/fullstack-typescript-quality/SKILL.md')));
+  assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /# agent-config:begin prettier-ignore/);
+  assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /\.agents\//);
 
   const configPath = path.join(project, '.agents/agent-config.json');
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -96,4 +98,13 @@ test('preserves a colliding project-owned lock file', () => {
 
   assert.throws(() => run(project, 'init'));
   assert.deepEqual(JSON.parse(fs.readFileSync(lock, 'utf8')), { projectOwned: true });
+});
+
+test('does not mistake a similarly named prettier-ignore block for its own', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-prettier-collision-'));
+  const prettierIgnore = path.join(project, '.prettierignore');
+  fs.writeFileSync(prettierIgnore, '# agent-config:begin prettier-ignore-custom\nKEEP-ME\n# agent-config:end prettier-ignore-custom\n');
+
+  assert.throws(() => run(project, 'init'));
+  assert.match(fs.readFileSync(prettierIgnore, 'utf8'), /KEEP-ME/);
 });

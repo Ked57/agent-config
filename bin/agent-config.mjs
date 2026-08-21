@@ -24,15 +24,35 @@ const write = (file, content) => {
   fs.writeFileSync(file, content);
 };
 const copy = (from, to) => write(to, read(from));
+const findExactLine = (value, line) => {
+  let index = value.indexOf(line);
+  while (index !== -1) {
+    const isLineStart = index === 0 || value[index - 1] === '\n';
+    const lineEnd = index + line.length;
+    const isLineEnd = lineEnd === value.length || value[lineEnd] === '\n';
+    if (isLineStart && isLineEnd) return index;
+    index = value.indexOf(line, index + 1);
+  }
+  return -1;
+};
 
 const marker = (name, contents) => `<!-- agent-config:begin ${name} -->\n${contents.trim()}\n<!-- agent-config:end ${name} -->\n`;
 const replaceManagedBlock = (existing, name, contents) => {
   const start = `<!-- agent-config:begin ${name} -->`;
   const end = `<!-- agent-config:end ${name} -->`;
-  const startIndex = existing.indexOf(start);
-  const endIndex = existing.indexOf(end);
+  const startIndex = findExactLine(existing, start);
+  const endIndex = findExactLine(existing, end);
   if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) return null;
   return `${existing.slice(0, startIndex)}${marker(name, contents)}${existing.slice(endIndex + end.length).replace(/^\n?/, '')}`;
+};
+const lineMarker = (name, contents) => `# agent-config:begin ${name}\n${contents.trim()}\n# agent-config:end ${name}\n`;
+const replaceLineManagedBlock = (existing, name, contents) => {
+  const start = `# agent-config:begin ${name}`;
+  const end = `# agent-config:end ${name}`;
+  const startIndex = findExactLine(existing, start);
+  const endIndex = findExactLine(existing, end);
+  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) return null;
+  return `${existing.slice(0, startIndex)}${lineMarker(name, contents)}${existing.slice(endIndex + end.length).replace(/^\n?/, '')}`;
 };
 
 const sharedPolicy = read(path.join(sourceRoot, 'policy/shared-policy.md'));
@@ -105,6 +125,8 @@ const claudeFile = target('CLAUDE.md');
 const cursorRuleDirectory = target('.cursor', 'rules');
 const lockFile = target('.agents', 'agent-config.lock.json');
 const configFile = target('.agents', 'agent-config.json');
+const prettierIgnoreFile = target('.prettierignore');
+const prettierIgnoreContents = '.agents/\n.cursor/rules/\nAGENTS.md\nCLAUDE.md';
 const checkScript = target('.agents', 'scripts', 'agent-check.mjs');
 const skillDirectory = target('.agents', 'skills', 'fullstack-typescript-quality');
 const managedFiles = [
@@ -133,6 +155,24 @@ const writeBridge = (file, name, contents, header = '') => {
   if (read(file) !== replacement) {
     write(file, replacement);
     console.log(`Updated ${relative(file)}`);
+  }
+  return true;
+};
+
+const writePrettierIgnore = () => {
+  if (!exists(prettierIgnoreFile)) {
+    write(prettierIgnoreFile, lineMarker('prettier-ignore', prettierIgnoreContents));
+    console.log(`Created ${relative(prettierIgnoreFile)}`);
+    return true;
+  }
+  const replacement = replaceLineManagedBlock(read(prettierIgnoreFile), 'prettier-ignore', prettierIgnoreContents);
+  if (replacement === null) {
+    console.warn(`Preserved unmanaged ${relative(prettierIgnoreFile)}; add the prettier-ignore managed block manually.`);
+    return false;
+  }
+  if (read(prettierIgnoreFile) !== replacement) {
+    write(prettierIgnoreFile, replacement);
+    console.log(`Updated ${relative(prettierIgnoreFile)}`);
   }
   return true;
 };
@@ -173,6 +213,7 @@ const install = () => {
 
   safe = writeBridge(claudeFile, 'claude-bridge', claudeBridgePolicy, '# Claude Code project entry point\n\n') && safe;
   safe = writeBridge(cursorBridgeFile, 'cursor-bridge', cursorBridgePolicy, '---\ndescription: Load shared project agent guidance.\nalwaysApply: true\n---\n\n') && safe;
+  safe = writePrettierIgnore() && safe;
 
   for (const [destination, source, enabled] of managedFiles) {
     const name = relative(destination);
@@ -224,13 +265,13 @@ const status = () => {
   console.log(`Project: ${projectRoot}`);
   console.log(`Detected: runtime=${runtime}, typescript=${isTypeScript}, vue=${isVue}`);
   console.log(`Source policy revision: ${revision}`);
-  for (const file of [policyFile, claudeFile, cursorBridgeFile, configFile, checkScript]) {
+  for (const file of [policyFile, claudeFile, cursorBridgeFile, prettierIgnoreFile, configFile, checkScript]) {
     console.log(`${exists(file) ? 'present' : 'missing'} ${relative(file)}`);
   }
 };
 
 const check = () => {
-  const expected = [policyFile, claudeFile, cursorBridgeFile, configFile, checkScript, path.join(skillDirectory, 'SKILL.md'), lockFile];
+  const expected = [policyFile, claudeFile, cursorBridgeFile, prettierIgnoreFile, configFile, checkScript, path.join(skillDirectory, 'SKILL.md'), lockFile];
   if (isTypeScript) expected.push(target('.cursor', 'rules', '10-agent-config-typescript.mdc'), target('.cursor', 'rules', '20-agent-config-domain-module.mdc'));
   if (isVue) expected.push(target('.cursor', 'rules', '30-agent-config-vue-primevue.mdc'));
   const missing = expected.filter((file) => !exists(file));
@@ -244,6 +285,7 @@ const check = () => {
   if (!read(policyFile).includes(marker('shared-policy', sharedPolicy).trim())) stale.push(relative(policyFile));
   if (!read(claudeFile).includes(marker('claude-bridge', claudeBridgePolicy).trim())) stale.push(relative(claudeFile));
   if (!read(cursorBridgeFile).includes(marker('cursor-bridge', cursorBridgePolicy).trim())) stale.push(relative(cursorBridgeFile));
+  if (!read(prettierIgnoreFile).includes(lineMarker('prettier-ignore', prettierIgnoreContents).trim())) stale.push(relative(prettierIgnoreFile));
   for (const [destination, source, enabled] of managedFiles) {
     if (enabled && read(destination) !== read(source)) stale.push(relative(destination));
   }
