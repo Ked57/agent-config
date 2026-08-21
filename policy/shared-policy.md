@@ -40,3 +40,13 @@ Do not claim manual verification was performed when it was not.
 - Treat generated files, lockfiles, migrations, environment variables, and public API contracts as deliberate changes; update them only when the task requires it.
 - Keep secrets out of source, tests, fixtures, logs, and agent configuration.
 - For quality-stack installation, upgrades, or audits, follow the `fullstack-typescript-quality` skill when it is available.
+
+## Conditional guidance
+
+Read the relevant installed policy pack before editing:
+
+- `.agents/policy/typescript.md` for TypeScript or TSX files.
+- `.agents/policy/vue-primevue.md` for Vue components, composables, PrimeVue UI, or Vue forms.
+- `.agents/policy/domain-module.md` only when the repository already uses the four-file domain convention or the user requests it.
+
+Use `.agents/agent-config.json` to identify the required verification for changed files.

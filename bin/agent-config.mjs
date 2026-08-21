@@ -58,9 +58,9 @@ const replaceLineManagedBlock = (existing, name, contents) => {
 const sharedPolicy = read(path.join(sourceRoot, 'policy/shared-policy.md'));
 const managedSourceFiles = [
   'policy/shared-policy.md',
-  'rules/typescript.mdc',
-  'rules/domain-module.mdc',
-  'rules/vue-primevue.mdc',
+  'policy/typescript.md',
+  'policy/domain-module.md',
+  'policy/vue-primevue.md',
   'runtime/agent-check.mjs',
   'skills/fullstack-typescript-quality/SKILL.md'
 ];
@@ -128,11 +128,18 @@ const configFile = target('.agents', 'agent-config.json');
 const prettierIgnoreFile = target('.prettierignore');
 const prettierIgnoreContents = '.agents/\n.cursor/rules/\nAGENTS.md\nCLAUDE.md';
 const checkScript = target('.agents', 'scripts', 'agent-check.mjs');
+const policyDirectory = target('.agents', 'policy');
 const skillDirectory = target('.agents', 'skills', 'fullstack-typescript-quality');
+const legacyCursorRuleHashes = new Map([
+  ['.cursor/rules/10-agent-config-typescript.mdc', '9a85ebe11e8c80867e17dab4fe8275f4881b2f2a2e722367c9bd0ee86543815d'],
+  ['.cursor/rules/20-agent-config-domain-module.mdc', '61a6642ed1ba8bcb688ecdc2be987c42f90f277ff72dfb5985ed91b4876c51e7'],
+  ['.cursor/rules/30-agent-config-vue-primevue.mdc', '124883ad626885aa3d0244eee7cbad3d854cf9e4c7777834ddb1ed395baf92c2']
+]);
+const legacyCursorRuleFiles = [...legacyCursorRuleHashes.keys()].map((file) => target(...file.split('/')));
 const managedFiles = [
-  [target('.cursor', 'rules', '10-agent-config-typescript.mdc'), path.join(sourceRoot, 'rules/typescript.mdc'), isTypeScript],
-  [target('.cursor', 'rules', '20-agent-config-domain-module.mdc'), path.join(sourceRoot, 'rules/domain-module.mdc'), isTypeScript],
-  [target('.cursor', 'rules', '30-agent-config-vue-primevue.mdc'), path.join(sourceRoot, 'rules/vue-primevue.mdc'), isVue],
+  [path.join(policyDirectory, 'typescript.md'), path.join(sourceRoot, 'policy/typescript.md'), isTypeScript],
+  [path.join(policyDirectory, 'domain-module.md'), path.join(sourceRoot, 'policy/domain-module.md'), isTypeScript],
+  [path.join(policyDirectory, 'vue-primevue.md'), path.join(sourceRoot, 'policy/vue-primevue.md'), isVue],
   [checkScript, path.join(sourceRoot, 'runtime/agent-check.mjs'), true],
   [path.join(skillDirectory, 'SKILL.md'), path.join(sourceRoot, 'skills/fullstack-typescript-quality/SKILL.md'), true]
 ];
@@ -192,6 +199,13 @@ const install = () => {
   const previousLock = readLock();
   const trustedPreviousLock = previousLock?.source === 'Ked57/agent-config'
     && previousLock.version === 1
+    && typeof previousLock.revision === 'string'
+    && /^[a-f0-9]{12}$/.test(previousLock.revision)
+    && typeof previousLock.installedAt === 'string'
+    && !Number.isNaN(Date.parse(previousLock.installedAt))
+    && typeof previousLock.detected?.runtime === 'string'
+    && typeof previousLock.detected?.typescript === 'boolean'
+    && typeof previousLock.detected?.vue === 'boolean'
     && Array.isArray(previousLock.managedFiles);
   const ownedManagedFiles = new Set(trustedPreviousLock ? previousLock.managedFiles : []);
   const nextManagedFiles = [];
@@ -214,6 +228,19 @@ const install = () => {
   safe = writeBridge(claudeFile, 'claude-bridge', claudeBridgePolicy, '# Claude Code project entry point\n\n') && safe;
   safe = writeBridge(cursorBridgeFile, 'cursor-bridge', cursorBridgePolicy, '---\ndescription: Load shared project agent guidance.\nalwaysApply: true\n---\n\n') && safe;
   safe = writePrettierIgnore() && safe;
+
+  for (const legacyFile of legacyCursorRuleFiles) {
+    const name = relative(legacyFile);
+    const expectedHash = legacyCursorRuleHashes.get(name);
+    if (ownedManagedFiles.has(name) && exists(legacyFile)) {
+      if (sha256(read(legacyFile)) === expectedHash) {
+        fs.rmSync(legacyFile);
+        console.log(`Removed legacy managed ${name}`);
+      } else {
+        console.warn(`Preserved changed legacy ${name}; it no longer matches the agent-config-generated content.`);
+      }
+    }
+  }
 
   for (const [destination, source, enabled] of managedFiles) {
     const name = relative(destination);
@@ -265,15 +292,16 @@ const status = () => {
   console.log(`Project: ${projectRoot}`);
   console.log(`Detected: runtime=${runtime}, typescript=${isTypeScript}, vue=${isVue}`);
   console.log(`Source policy revision: ${revision}`);
-  for (const file of [policyFile, claudeFile, cursorBridgeFile, prettierIgnoreFile, configFile, checkScript]) {
+  const statusFiles = [policyFile, claudeFile, cursorBridgeFile, prettierIgnoreFile, configFile, ...managedFiles.filter(([, , enabled]) => enabled).map(([destination]) => destination)];
+  for (const file of statusFiles) {
     console.log(`${exists(file) ? 'present' : 'missing'} ${relative(file)}`);
   }
 };
 
 const check = () => {
   const expected = [policyFile, claudeFile, cursorBridgeFile, prettierIgnoreFile, configFile, checkScript, path.join(skillDirectory, 'SKILL.md'), lockFile];
-  if (isTypeScript) expected.push(target('.cursor', 'rules', '10-agent-config-typescript.mdc'), target('.cursor', 'rules', '20-agent-config-domain-module.mdc'));
-  if (isVue) expected.push(target('.cursor', 'rules', '30-agent-config-vue-primevue.mdc'));
+  if (isTypeScript) expected.push(path.join(policyDirectory, 'typescript.md'), path.join(policyDirectory, 'domain-module.md'));
+  if (isVue) expected.push(path.join(policyDirectory, 'vue-primevue.md'));
   const missing = expected.filter((file) => !exists(file));
   if (missing.length) {
     for (const file of missing) console.error(`Missing ${relative(file)}`);

@@ -1,7 +1,3 @@
----
-description: Four-file DDD domain-module convention when present or requested.
----
-
 # Domain module convention
 
 Apply this convention only when the repository already uses it or when the user asks to introduce it. Do not force it into a repository with a different established architecture.

@@ -1,11 +1,6 @@
----
-description: Vue 3, TypeScript, PrimeVue, form, and accessibility conventions.
-globs: ["**/*.vue", "**/composables/**/*.{ts,tsx}"]
----
-
 # Vue 3 + TypeScript + PrimeVue
 
-Apply these rules only in repositories using Vue 3 + TypeScript. Before changing forms, inspect the repository dependencies and the target feature's existing patterns.
+Apply this policy only in repositories using Vue 3 + TypeScript. Before changing forms, inspect the repository dependencies and the target feature's existing patterns.
 
 ## Components
 

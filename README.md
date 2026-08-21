@@ -6,7 +6,7 @@ Cursor, Claude Code, and Codex.
 ## What it provides
 
 - A concise shared completion, verification, safety, and anti-slop policy.
-- Scoped TypeScript, Vue + PrimeVue, and DDD domain-module rules.
+- Conditional TypeScript, Vue + PrimeVue, and DDD domain-module policy packs shared by all harnesses.
 - The `fullstack-typescript-quality` skill for installing and auditing deterministic
   quality tooling.
 - A workspace installer that creates thin Cursor/Claude bridges, portable skills,
@@ -23,12 +23,12 @@ node bin/agent-config.mjs init --project ~/dev/my-webapp
 The installer detects TypeScript and Vue, then creates or updates:
 
 ```text
-AGENTS.md                                  shared policy managed block
-CLAUDE.md                                  thin Claude Code bridge
-.cursor/rules/00-agent-config.mdc          thin Cursor bridge
-.cursor/rules/10-agent-config-typescript.mdc
-.cursor/rules/20-agent-config-domain-module.mdc
-.cursor/rules/30-agent-config-vue-primevue.mdc  Vue workspaces only
+AGENTS.md                                  concise shared policy + conditional pack index
+CLAUDE.md                                  thin Claude Code bridge to AGENTS.md
+.cursor/rules/00-agent-config.mdc          thin Cursor bridge to AGENTS.md
+.agents/policy/typescript.md               TypeScript work, when detected
+.agents/policy/domain-module.md            domain work, when TypeScript is detected
+.agents/policy/vue-primevue.md             Vue work, when detected
 .agents/skills/fullstack-typescript-quality/SKILL.md
 .agents/scripts/agent-check.mjs
 .agents/agent-config.json                  project-owned command/routing map
@@ -58,7 +58,8 @@ them automatically.
 
 ## Ownership model
 
-- **Source-owned:** policy, Cursor bridge/rules, portable skills, and runtime script.
+- **Source-owned:** policy packs, Cursor bridge, portable skills, and runtime script. During
+  migration, the CLI removes only legacy Cursor rule files proven owned by its prior lock file.
 - **Project-owned:** the project architecture section in `AGENTS.md`,
   `.agents/agent-config.json`, package scripts, test configuration, and client-local
   credentials/settings.
@@ -71,5 +72,4 @@ them automatically.
 npm run verify
 ```
 
-This syntax-checks the scripts, renders and validates MCP fragments, and executes
-the installer integration tests.
+This syntax-checks the scripts and executes the installer integration tests.

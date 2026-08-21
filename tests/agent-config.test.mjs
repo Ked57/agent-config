@@ -30,8 +30,10 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
 
   run(project, 'init');
 
-  assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /agent-config:begin shared-policy/);
-  assert.ok(fs.existsSync(path.join(project, '.cursor/rules/30-agent-config-vue-primevue.mdc')));
+  assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /\.agents\/policy\/vue-primevue\.md/);
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.cursor/rules/30-agent-config-vue-primevue.mdc')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/fullstack-typescript-quality/SKILL.md')));
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /# agent-config:begin prettier-ignore/);
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /\.agents\//);
@@ -107,4 +109,63 @@ test('does not mistake a similarly named prettier-ignore block for its own', () 
 
   assert.throws(() => run(project, 'init'));
   assert.match(fs.readFileSync(prettierIgnore, 'utf8'), /KEEP-ME/);
+});
+
+test('migrates lock-owned legacy Cursor rules to shared policy packs', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-legacy-rules-'));
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
+    dependencies: { vue: '^3.5.0' },
+    devDependencies: { typescript: '^5.0.0' }
+  }, null, 2));
+  fs.writeFileSync(path.join(project, 'tsconfig.json'), '{}');
+  const legacyRules = ['.cursor/rules/10-agent-config-typescript.mdc'];
+  const legacyFile = path.join(project, legacyRules[0]);
+  fs.mkdirSync(path.dirname(legacyFile), { recursive: true });
+  fs.copyFileSync(path.join(root, 'tests/fixtures/legacy-typescript.mdc'), legacyFile);
+  const lockFile = path.join(project, '.agents/agent-config.lock.json');
+  fs.mkdirSync(path.dirname(lockFile), { recursive: true });
+  fs.writeFileSync(lockFile, JSON.stringify({
+    version: 1,
+    source: 'Ked57/agent-config',
+    revision: 'b479b77d0f03',
+    installedAt: '2026-08-21T12:00:00.000Z',
+    detected: { runtime: 'npm', typescript: true, vue: true },
+    managedFiles: legacyRules
+  }, null, 2));
+
+  run(project, 'sync');
+
+  for (const rule of legacyRules) assert.ok(!fs.existsSync(path.join(project, rule)));
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/domain-module.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
+  assert.doesNotThrow(() => run(project, 'check'));
+});
+
+test('preserves legacy Cursor rules not owned by a trusted lock', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-unowned-legacy-'));
+  const legacyRule = path.join(project, '.cursor/rules/10-agent-config-typescript.mdc');
+  fs.mkdirSync(path.dirname(legacyRule), { recursive: true });
+  fs.writeFileSync(legacyRule, '# Project-owned legacy rule\n');
+
+  run(project, 'init');
+
+  assert.equal(fs.readFileSync(legacyRule, 'utf8'), '# Project-owned legacy rule\n');
+});
+
+test('preserves matching legacy content when the lock lacks a complete trusted shape', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-partial-lock-'));
+  const legacyRule = path.join(project, '.cursor/rules/10-agent-config-typescript.mdc');
+  fs.mkdirSync(path.dirname(legacyRule), { recursive: true });
+  fs.copyFileSync(path.join(root, 'tests/fixtures/legacy-typescript.mdc'), legacyRule);
+  const lockFile = path.join(project, '.agents/agent-config.lock.json');
+  fs.mkdirSync(path.dirname(lockFile), { recursive: true });
+  fs.writeFileSync(lockFile, JSON.stringify({
+    version: 1,
+    source: 'Ked57/agent-config',
+    managedFiles: ['.cursor/rules/10-agent-config-typescript.mdc']
+  }, null, 2));
+
+  assert.throws(() => run(project, 'sync'));
+  assert.ok(fs.existsSync(legacyRule));
 });
