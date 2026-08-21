@@ -213,3 +213,29 @@ test('does not install framework packs from dependencies alone', () => {
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/domain-module.md')));
 });
+
+test('detects Vue TypeScript source under apps/ monorepo layouts', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-apps-mono-'));
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
+    dependencies: { vue: '^3.5.0', primevue: '^4.0.0' },
+    devDependencies: { typescript: '^5.0.0' },
+    scripts: {
+      'test:component': 'cypress run --component',
+      'verify:fast': 'npm run test:component'
+    }
+  }, null, 2));
+  fs.mkdirSync(path.join(project, 'apps/web/src'), { recursive: true });
+  fs.writeFileSync(
+    path.join(project, 'apps/web/src/App.vue'),
+    '<script setup lang="ts"></script>\n<template><main /></template>\n'
+  );
+
+  const output = run(project, 'init');
+  assert.match(output, /Created \.agents\/policy\/vue-primevue\.md/);
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
+
+  const status = run(project, 'status');
+  assert.match(status, /vue=true/);
+  assert.match(status, /typescript=true/);
+});

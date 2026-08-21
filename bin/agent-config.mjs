@@ -71,7 +71,7 @@ const dependencies = {
   ...(packageJson?.dependencies ?? {}),
   ...(packageJson?.devDependencies ?? {})
 };
-const sourceRoots = ['src', 'app', 'pages', 'components', 'packages']
+const sourceRoots = ['src', 'app', 'apps', 'pages', 'components', 'packages']
   .map((directory) => path.join(projectRoot, directory))
   .filter((directory) => exists(directory) && fs.statSync(directory).isDirectory());
 const ignoredSourceDirectories = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt']);
