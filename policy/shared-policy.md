@@ -43,10 +43,14 @@ Do not claim manual verification was performed when it was not.
 
 ## Conditional guidance
 
-Read the relevant installed policy pack before editing:
+Read the relevant policy pack from the active agent configuration before editing. A
+project-scoped installation keeps these packs under `.agents/policy/`; a user-scoped
+installation includes them in the global policy:
 
 - `.agents/policy/typescript.md` for TypeScript or TSX files.
 - `.agents/policy/vue-primevue.md` for Vue components, composables, PrimeVue UI, or Vue forms.
 - `.agents/policy/domain-module.md` only when the repository already uses the four-file domain convention or the user requests it.
 
-Use `.agents/agent-config.json` to identify the required verification for changed files.
+Use `.agents/agent-config.json` to identify the required verification for changed files
+when a project provides it. Otherwise inspect the repository's package/task-runner
+scripts and run the available checks relevant to the change.

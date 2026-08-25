@@ -1,29 +1,104 @@
 #!/usr/bin/env node
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import process from 'node:process';
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
-const command = args.find((arg) => !arg.startsWith('-')) ?? 'help';
-const projectFlag = args.indexOf('--project');
-if (projectFlag !== -1 && (!args[projectFlag + 1] || args[projectFlag + 1].startsWith('-'))) {
-  console.error('Missing value for --project.');
+const usage = 'Usage: node bin/agent-config.mjs <init|sync|check|status> [--project <path> | --user]';
+const positional = [];
+let projectArgument;
+let userScope = false;
+for (let index = 0; index < args.length; index += 1) {
+  const arg = args[index];
+  if (arg === '--project') {
+    if (projectArgument !== undefined) {
+      console.error(`--project may only be provided once.\n${usage}`);
+      process.exit(1);
+    }
+    const value = args[index + 1];
+    if (!value || value.startsWith('-')) {
+      console.error(`Missing value for --project.\n${usage}`);
+      process.exit(1);
+    }
+    projectArgument = value;
+    index += 1;
+  } else if (arg === '--user') {
+    if (userScope) {
+      console.error(`--user may only be provided once.\n${usage}`);
+      process.exit(1);
+    }
+    userScope = true;
+  } else if (arg === '--help' || arg === '-h') {
+    positional.push('help');
+  } else if (arg.startsWith('-')) {
+    console.error(`Unknown option: ${arg}\n${usage}`);
+    process.exit(1);
+  } else {
+    positional.push(arg);
+  }
+}
+if (userScope && projectArgument !== undefined) {
+  console.error(`--user and --project cannot be used together.\n${usage}`);
   process.exit(1);
 }
-const projectRoot = path.resolve(projectFlag === -1 ? process.cwd() : args[projectFlag + 1]);
+if (positional.length > 1) {
+  console.error(`Unexpected arguments: ${positional.slice(1).join(' ')}\n${usage}`);
+  process.exit(1);
+}
+const command = positional[0] ?? 'help';
+const projectRoot = path.resolve(projectArgument ?? process.cwd());
 
 const read = (file) => fs.readFileSync(file, 'utf8');
 const exists = (file) => fs.existsSync(file);
 const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
-const relative = (file) => path.relative(projectRoot, file) || '.';
-const write = (file, content) => {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, content);
+const createFileOperations = (root, label) => {
+  const relativeToRoot = (file) => path.relative(root, file) || '.';
+  const assertSafe = (file) => {
+    const rootRelative = path.relative(root, file);
+    if (path.isAbsolute(rootRelative) || rootRelative === '..' || rootRelative.startsWith(`..${path.sep}`)) {
+      throw new Error(`Refusing to modify a path outside the ${label}: ${file}`);
+    }
+    let current = root;
+    for (const segment of rootRelative.split(path.sep).filter(Boolean)) {
+      current = path.join(current, segment);
+      try {
+        if (fs.lstatSync(current).isSymbolicLink()) {
+          throw new Error(`Refusing to modify symlinked ${label} path: ${relativeToRoot(current)}`);
+        }
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+    }
+  };
+  const writeFile = (file, content) => {
+    assertSafe(file);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    assertSafe(file);
+    const temporary = path.join(path.dirname(file), `.${path.basename(file)}.agent-config-${process.pid}-${crypto.randomUUID()}.tmp`);
+    try {
+      fs.writeFileSync(temporary, content, { flag: 'wx' });
+      fs.renameSync(temporary, file);
+    } finally {
+      if (exists(temporary)) fs.rmSync(temporary);
+    }
+  };
+  return {
+    assertSafe,
+    copy: (from, to) => writeFile(to, read(from)),
+    relative: relativeToRoot,
+    remove: (file) => {
+      assertSafe(file);
+      fs.rmSync(file);
+    },
+    write: writeFile
+  };
 };
-const copy = (from, to) => write(to, read(from));
+const projectFiles = createFileOperations(projectRoot, 'project');
+const { assertSafe: assertSafeTarget, copy, relative, remove, write } = projectFiles;
 const findExactLine = (value, line) => {
   let index = value.indexOf(line);
   while (index !== -1) {
@@ -64,21 +139,46 @@ const managedSourceFiles = [
   'skills/fullstack-typescript-quality/SKILL.md'
 ];
 const revision = sha256(managedSourceFiles.map((file) => read(path.join(sourceRoot, file))).join('\n--- agent-config source boundary ---\n')).slice(0, 12);
+const userHome = os.homedir();
+const configuredCodexHome = process.env.CODEX_HOME
+  ? path.resolve(process.env.CODEX_HOME)
+  : path.join(userHome, '.codex');
+const userFiles = createFileOperations(userHome, 'user home');
+const codexHomeRelative = path.relative(userHome, configuredCodexHome);
+const codexHomeIsInsideUserHome = !path.isAbsolute(codexHomeRelative)
+  && codexHomeRelative !== '..'
+  && !codexHomeRelative.startsWith(`..${path.sep}`);
+const codexFiles = codexHomeIsInsideUserHome
+  ? userFiles
+  : createFileOperations(configuredCodexHome, 'Codex home');
+const userPolicy = [
+  sharedPolicy,
+  read(path.join(sourceRoot, 'policy/typescript.md')),
+  read(path.join(sourceRoot, 'policy/vue-primevue.md')),
+  read(path.join(sourceRoot, 'policy/domain-module.md'))
+].join('\n\n');
 const packagePath = path.join(projectRoot, 'package.json');
-const packageJson = exists(packagePath) ? JSON.parse(read(packagePath)) : null;
+const packageJson = !userScope && exists(packagePath) ? JSON.parse(read(packagePath)) : null;
 const dependencies = {
   ...(packageJson?.dependencies ?? {}),
   ...(packageJson?.devDependencies ?? {})
 };
 const isVue = Boolean(dependencies.vue || exists(path.join(projectRoot, 'vite.config.ts')) && exists(path.join(projectRoot, 'src/App.vue')));
 const isTypeScript = Boolean(dependencies.typescript || exists(path.join(projectRoot, 'tsconfig.json')));
-const runtime = exists(path.join(projectRoot, 'bun.lockb')) || exists(path.join(projectRoot, 'bun.lock')) ? 'bun' : 'npm';
+const declaredRuntime = typeof packageJson?.packageManager === 'string'
+  ? /^(npm|pnpm|yarn|bun)@/.exec(packageJson.packageManager)?.[1]
+  : undefined;
+const runtime = declaredRuntime
+  ?? (exists(path.join(projectRoot, 'bun.lockb')) || exists(path.join(projectRoot, 'bun.lock')) ? 'bun'
+    : exists(path.join(projectRoot, 'pnpm-lock.yaml')) ? 'pnpm'
+      : exists(path.join(projectRoot, 'yarn.lock')) ? 'yarn'
+        : 'npm');
 const runScript = (name) => `${runtime} run ${name}`;
 const scripts = packageJson?.scripts ?? {};
 const firstScript = (...names) => names.find((name) => scripts[name]);
 const commands = {};
 const candidates = {
-  format: ['format:check', 'format'],
+  format: ['format:check'],
   lint: ['lint'],
   typecheck: ['typecheck', 'check:types'],
   unit: ['test:unit', 'test'],
@@ -95,6 +195,10 @@ for (const [key, names] of Object.entries(candidates)) {
 }
 
 const configured = (...names) => names.filter((name) => commands[name]);
+const requiredChecks = (...specific) => [...new Set(configured(
+  ...specific,
+  ...(commands.fast ? ['fast'] : ['format', 'lint', 'typecheck', 'unit'])
+))];
 const config = {
   version: 1,
   runtime,
@@ -103,16 +207,16 @@ const config = {
     ...(isTypeScript ? [{
       match: ['**/*.ts', '**/*.tsx'],
       except: ['**/*.cy.ts', '**/*.spec.ts', '**/*.test.ts'],
-      required: configured('unit', 'fast'),
+      required: requiredChecks('unit'),
       recommended: configured('mutation')
     }] : []),
     ...(isVue ? [{
       match: ['**/*.vue'],
-      required: configured('component', 'fast')
+      required: requiredChecks('component')
     }] : []),
     {
       match: ['src/domain/**', 'packages/domain/**', 'src/lib/permissions/**'],
-      required: configured('unit', 'fast'),
+      required: requiredChecks('unit'),
       recommended: configured('mutation')
     }
   ]
@@ -146,6 +250,42 @@ const claudeBridgePolicy = 'Read and follow `AGENTS.md`.\n\nProject-specific qua
 const cursorBridgePolicy = 'Read and follow the repository `AGENTS.md`.\n\nUse `.agents/agent-config.json` to identify the required verification for changed files. Repository-specific rules take precedence over global preferences.';
 const cursorBridgeFile = target('.cursor', 'rules', '00-agent-config.mdc');
 
+const userPolicyFile = path.join(configuredCodexHome, 'AGENTS.md');
+const claudeUserFile = path.join(userHome, '.claude', 'CLAUDE.md');
+const cursorPluginDirectory = path.join(userHome, '.cursor', 'plugins', 'local', 'agent-config');
+const cursorPluginManifest = path.join(cursorPluginDirectory, '.cursor-plugin', 'plugin.json');
+const cursorUserRule = path.join(cursorPluginDirectory, 'rules', '00-agent-config.mdc');
+const portableSkillSource = path.join(sourceRoot, 'skills', 'fullstack-typescript-quality', 'SKILL.md');
+const userSkillFiles = [
+  path.join(userHome, '.agents', 'skills', 'fullstack-typescript-quality', 'SKILL.md'),
+  path.join(userHome, '.claude', 'skills', 'fullstack-typescript-quality', 'SKILL.md')
+];
+const userLockFile = path.join(userHome, '.agent-config', 'agent-config.lock.json');
+const userPolicyIntro = 'This managed block is the portable personal baseline shared by Codex, Claude Code, and Cursor. Repository-specific instructions take precedence when they conflict.';
+const claudeUserBridge = `@${userPolicyFile}\n\nRepository-specific instructions take precedence over this personal baseline.`;
+const cursorUserRuleContents = `---
+description: Load the personal cross-harness agent policy.
+alwaysApply: true
+---
+
+Before doing any work, read and follow \`${userPolicyFile}\`.
+
+Repository-specific instructions take precedence when they conflict. If the file cannot be read, report that before continuing.`;
+const cursorPluginManifestContents = `${JSON.stringify({
+  name: 'agent-config',
+  version: '1.0.0',
+  description: 'Personal cross-harness agent policy bridge.'
+}, null, 2)}\n`;
+const userStandaloneFiles = [
+  { key: 'cursor:plugin-manifest', destination: cursorPluginManifest, contents: cursorPluginManifestContents },
+  { key: 'cursor:user-rule', destination: cursorUserRule, contents: cursorUserRuleContents },
+  ...userSkillFiles.map((destination, index) => ({
+    key: index === 0 ? 'portable-skill' : 'claude:portable-skill',
+    destination,
+    contents: read(portableSkillSource)
+  }))
+];
+
 const writeBridge = (file, name, contents, header = '') => {
   if (!exists(file)) {
     write(file, `${header}${marker(name, contents)}`);
@@ -162,6 +302,27 @@ const writeBridge = (file, name, contents, header = '') => {
     console.log(`Updated ${relative(file)}`);
   }
   return true;
+};
+
+const displayUserFile = (file) => {
+  const homeRelative = path.relative(userHome, file);
+  return !path.isAbsolute(homeRelative) && homeRelative !== '..' && !homeRelative.startsWith(`..${path.sep}`)
+    ? path.join('~', homeRelative)
+    : file;
+};
+const writeUserBlock = (file, operations, name, contents, header = '') => {
+  if (!exists(file)) {
+    operations.write(file, `${header}${marker(name, contents)}`);
+    console.log(`Created ${displayUserFile(file)}`);
+    return;
+  }
+  const existing = read(file);
+  const replacement = replaceManagedBlock(existing, name, contents);
+  const next = replacement ?? `${existing.trimEnd()}\n\n${marker(name, contents)}`;
+  if (existing !== next) {
+    operations.write(file, next);
+    console.log(`${replacement === null ? 'Added managed policy to' : 'Updated'} ${displayUserFile(file)}`);
+  }
 };
 
 const writePrettierIgnore = () => {
@@ -190,21 +351,84 @@ const readLock = () => {
     return null;
   }
 };
+const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const isTrustedLock = (lock) => lock?.source === 'Ked57/agent-config'
+  && lock.version === 1
+  && typeof lock.revision === 'string'
+  && /^[a-f0-9]{12}$/.test(lock.revision)
+  && typeof lock.installedAt === 'string'
+  && !Number.isNaN(Date.parse(lock.installedAt))
+  && typeof lock.detected?.runtime === 'string'
+  && typeof lock.detected?.typescript === 'boolean'
+  && typeof lock.detected?.vue === 'boolean'
+  && Array.isArray(lock.managedFiles)
+  && lock.managedFiles.every((file) => typeof file === 'string')
+  && new Set(lock.managedFiles).size === lock.managedFiles.length;
+const isTrustedUserLock = (lock) => lock?.source === 'Ked57/agent-config'
+  && lock.scope === 'user'
+  && lock.version === 1
+  && typeof lock.revision === 'string'
+  && /^[a-f0-9]{12}$/.test(lock.revision)
+  && typeof lock.installedAt === 'string'
+  && !Number.isNaN(Date.parse(lock.installedAt))
+  && Array.isArray(lock.managedFiles)
+  && lock.managedFiles.every((file) => typeof file === 'string')
+  && new Set(lock.managedFiles).size === lock.managedFiles.length;
+const validateProjectConfig = (value) => {
+  const errors = [];
+  if (!isRecord(value)) return ['root must be a JSON object'];
+  if (value.version !== 1) errors.push('version must be 1');
+  if (value.runtime !== undefined && (typeof value.runtime !== 'string' || !value.runtime.trim())) {
+    errors.push('runtime must be a non-empty string when provided');
+  }
+  if (!isRecord(value.commands)) {
+    errors.push('commands must be an object');
+  } else {
+    for (const [name, commandValue] of Object.entries(value.commands)) {
+      if (!name || typeof commandValue !== 'string' || !commandValue.trim()) {
+        errors.push(`commands.${name || '<empty>'} must be a non-empty string`);
+      }
+    }
+  }
+  if (!Array.isArray(value.routing)) {
+    errors.push('routing must be an array');
+    return errors;
+  }
+  const commandNames = new Set(isRecord(value.commands) ? Object.keys(value.commands) : []);
+  for (const [index, route] of value.routing.entries()) {
+    if (!isRecord(route)) {
+      errors.push(`routing[${index}] must be an object`);
+      continue;
+    }
+    for (const field of ['match', 'required']) {
+      if (!Array.isArray(route[field]) || (field === 'match' && route[field].length === 0)
+        || route[field].some((item) => typeof item !== 'string' || !item)) {
+        errors.push(`routing[${index}].${field} must be ${field === 'match' ? 'a non-empty' : 'an'} array of non-empty strings`);
+      }
+    }
+    for (const field of ['except', 'recommended']) {
+      if (route[field] !== undefined && (!Array.isArray(route[field])
+        || route[field].some((item) => typeof item !== 'string' || !item))) {
+        errors.push(`routing[${index}].${field} must be an array of non-empty strings when provided`);
+      }
+    }
+    for (const field of ['required', 'recommended']) {
+      if (!Array.isArray(route[field])) continue;
+      for (const name of route[field]) {
+        if (typeof name === 'string' && !commandNames.has(name)) {
+          errors.push(`routing[${index}].${field} references unknown command: ${name}`);
+        }
+      }
+    }
+  }
+  return errors;
+};
 
 const install = () => {
   if (!exists(projectRoot) || !fs.statSync(projectRoot).isDirectory()) throw new Error(`Project directory not found: ${projectRoot}`);
   let safe = true;
   const previousLock = readLock();
-  const trustedPreviousLock = previousLock?.source === 'Ked57/agent-config'
-    && previousLock.version === 1
-    && typeof previousLock.revision === 'string'
-    && /^[a-f0-9]{12}$/.test(previousLock.revision)
-    && typeof previousLock.installedAt === 'string'
-    && !Number.isNaN(Date.parse(previousLock.installedAt))
-    && typeof previousLock.detected?.runtime === 'string'
-    && typeof previousLock.detected?.typescript === 'boolean'
-    && typeof previousLock.detected?.vue === 'boolean'
-    && Array.isArray(previousLock.managedFiles);
+  const trustedPreviousLock = isTrustedLock(previousLock);
   const ownedManagedFiles = new Set(trustedPreviousLock ? previousLock.managedFiles : []);
   const nextManagedFiles = [];
 
@@ -232,7 +456,7 @@ const install = () => {
     const expectedHash = legacyGeneratedFileHashes.get(name);
     if (ownedManagedFiles.has(name) && exists(legacyFile)) {
       if (sha256(read(legacyFile)) === expectedHash) {
-        fs.rmSync(legacyFile);
+        remove(legacyFile);
         console.log(`Removed legacy managed ${name}`);
       } else {
         console.warn(`Preserved changed legacy ${name}; it no longer matches the agent-config-generated content.`);
@@ -244,7 +468,7 @@ const install = () => {
     const name = relative(destination);
     if (!enabled) {
       if (ownedManagedFiles.has(name) && exists(destination)) {
-        fs.rmSync(destination);
+        remove(destination);
         console.log(`Removed no-longer-applicable ${name}`);
       }
       continue;
@@ -290,7 +514,7 @@ const status = () => {
   console.log(`Project: ${projectRoot}`);
   console.log(`Detected: runtime=${runtime}, typescript=${isTypeScript}, vue=${isVue}`);
   console.log(`Source policy revision: ${revision}`);
-  const statusFiles = [policyFile, claudeFile, cursorBridgeFile, prettierIgnoreFile, configFile, ...managedFiles.filter(([, , enabled]) => enabled).map(([destination]) => destination)];
+  const statusFiles = [policyFile, claudeFile, cursorBridgeFile, prettierIgnoreFile, configFile, lockFile, ...managedFiles.filter(([, , enabled]) => enabled).map(([destination]) => destination)];
   for (const file of statusFiles) {
     console.log(`${exists(file) ? 'present' : 'missing'} ${relative(file)}`);
   }
@@ -303,6 +527,29 @@ const check = () => {
   const missing = expected.filter((file) => !exists(file));
   if (missing.length) {
     for (const file of missing) console.error(`Missing ${relative(file)}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  try {
+    for (const file of expected) assertSafeTarget(file);
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+    return;
+  }
+
+  let projectConfig;
+  try {
+    projectConfig = JSON.parse(read(configFile));
+  } catch (error) {
+    console.error(`Invalid ${relative(configFile)}: ${error.message}`);
+    process.exitCode = 1;
+    return;
+  }
+  const configErrors = validateProjectConfig(projectConfig);
+  if (configErrors.length) {
+    for (const error of configErrors) console.error(`Invalid ${relative(configFile)}: ${error}`);
     process.exitCode = 1;
     return;
   }
@@ -321,18 +568,181 @@ const check = () => {
     return;
   }
 
-  const lock = JSON.parse(read(lockFile));
+  const lock = readLock();
+  if (!isTrustedLock(lock)) {
+    console.error(`Invalid managed lock metadata: ${relative(lockFile)}`);
+    process.exitCode = 1;
+    return;
+  }
   if (lock.revision !== revision) {
     console.error(`Outdated agent-config policy: installed ${lock.revision}, source ${revision}`);
+    process.exitCode = 1;
+    return;
+  }
+  const installedManagedFiles = [...lock.managedFiles].sort();
+  const expectedManagedFiles = managedFiles
+    .filter(([, , enabled]) => enabled)
+    .map(([destination]) => relative(destination))
+    .sort();
+  if (JSON.stringify(installedManagedFiles) !== JSON.stringify(expectedManagedFiles)) {
+    console.error(`Invalid managed file ownership in ${relative(lockFile)}; run sync to repair it.`);
     process.exitCode = 1;
     return;
   }
   console.log(`agent-config check passed for ${projectRoot}`);
 };
 
-if (command === 'init' || command === 'sync') install();
-else if (command === 'check') check();
-else if (command === 'status') status();
-else {
-  console.log(`Usage: node bin/agent-config.mjs <init|sync|check|status> [--project <path>]\n\ninit/sync installs managed configuration without overwriting project-owned instructions or routing.`);
+const readUserLock = () => {
+  if (!exists(userLockFile)) return null;
+  try {
+    return JSON.parse(read(userLockFile));
+  } catch {
+    return null;
+  }
+};
+
+const installUser = () => {
+  if (!exists(userHome) || !fs.statSync(userHome).isDirectory()) throw new Error(`User home directory not found: ${userHome}`);
+  let safe = true;
+  const previousLock = readUserLock();
+  const trustedPreviousLock = isTrustedUserLock(previousLock);
+  const ownedManagedFiles = new Set(trustedPreviousLock ? previousLock.managedFiles : []);
+  const nextManagedFiles = [];
+
+  writeUserBlock(
+    userPolicyFile,
+    codexFiles,
+    'user-policy',
+    `${userPolicyIntro}\n\n${userPolicy}`,
+    '# Personal agent instructions\n\n'
+  );
+  writeUserBlock(
+    claudeUserFile,
+    userFiles,
+    'claude-user-bridge',
+    claudeUserBridge,
+    '# Claude Code personal instructions\n\n'
+  );
+
+  for (const { key, destination, contents } of userStandaloneFiles) {
+    if (exists(destination) && !ownedManagedFiles.has(key)) {
+      if (read(destination) === contents) {
+        console.log(`Adopted matching generated ${displayUserFile(destination)}`);
+      } else {
+        console.warn(`Preserved unmanaged ${displayUserFile(destination)}; move it or merge it manually before agent-config can manage this path.`);
+        safe = false;
+        continue;
+      }
+    }
+    const action = exists(destination) ? 'Synced' : 'Created';
+    userFiles.write(destination, contents);
+    nextManagedFiles.push(key);
+    console.log(`${action} ${displayUserFile(destination)}`);
+  }
+
+  if (exists(userLockFile) && !trustedPreviousLock) {
+    console.warn(`Preserved unmanaged ${displayUserFile(userLockFile)}; move it or merge it manually before agent-config can manage this path.`);
+    safe = false;
+  } else {
+    const lock = {
+      version: 1,
+      source: 'Ked57/agent-config',
+      scope: 'user',
+      revision,
+      installedAt: new Date().toISOString(),
+      managedFiles: nextManagedFiles
+    };
+    userFiles.write(userLockFile, `${JSON.stringify(lock, null, 2)}\n`);
+    console.log(`Wrote ${displayUserFile(userLockFile)}`);
+  }
+
+  if (!safe) process.exitCode = 2;
+};
+
+const statusUser = () => {
+  console.log(`User home: ${userHome}`);
+  console.log(`Codex home: ${configuredCodexHome}`);
+  console.log(`Source policy revision: ${revision}`);
+  for (const file of [
+    userPolicyFile,
+    claudeUserFile,
+    ...userStandaloneFiles.map(({ destination }) => destination),
+    userLockFile
+  ]) {
+    console.log(`${exists(file) ? 'present' : 'missing'} ${displayUserFile(file)}`);
+  }
+};
+
+const checkUser = () => {
+  const expected = [
+    userPolicyFile,
+    claudeUserFile,
+    ...userStandaloneFiles.map(({ destination }) => destination),
+    userLockFile
+  ];
+  const missing = expected.filter((file) => !exists(file));
+  if (missing.length) {
+    for (const file of missing) console.error(`Missing ${displayUserFile(file)}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  try {
+    codexFiles.assertSafe(userPolicyFile);
+    for (const file of expected.filter((candidate) => candidate !== userPolicyFile)) userFiles.assertSafe(file);
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+    return;
+  }
+
+  const stale = [];
+  const expectedUserPolicy = marker('user-policy', `${userPolicyIntro}\n\n${userPolicy}`).trim();
+  if (!read(userPolicyFile).includes(expectedUserPolicy)) stale.push(displayUserFile(userPolicyFile));
+  if (!read(claudeUserFile).includes(marker('claude-user-bridge', claudeUserBridge).trim())) {
+    stale.push(displayUserFile(claudeUserFile));
+  }
+  for (const { destination, contents } of userStandaloneFiles) {
+    if (read(destination) !== contents) stale.push(displayUserFile(destination));
+  }
+  if (stale.length) {
+    for (const file of stale) console.error(`Outdated managed content: ${file}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const lock = readUserLock();
+  if (!isTrustedUserLock(lock)) {
+    console.error(`Invalid managed lock metadata: ${displayUserFile(userLockFile)}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (lock.revision !== revision) {
+    console.error(`Outdated agent-config policy: installed ${lock.revision}, source ${revision}`);
+    process.exitCode = 1;
+    return;
+  }
+  const installedManagedFiles = [...lock.managedFiles].sort();
+  const expectedManagedFiles = userStandaloneFiles.map(({ key }) => key).sort();
+  if (JSON.stringify(installedManagedFiles) !== JSON.stringify(expectedManagedFiles)) {
+    console.error(`Invalid managed file ownership in ${displayUserFile(userLockFile)}; run sync --user to repair it.`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`agent-config user check passed for ${userHome}`);
+};
+
+try {
+  if (command === 'init' || command === 'sync') userScope ? installUser() : install();
+  else if (command === 'check') userScope ? checkUser() : check();
+  else if (command === 'status') userScope ? statusUser() : status();
+  else if (command === 'help') {
+    console.log(`${usage}\n\ninit/sync installs managed configuration without overwriting project-owned instructions or routing. Use --user for personal configuration shared across repositories.`);
+  } else {
+    console.error(`Unknown command: ${command}\n${usage}`);
+    process.exitCode = 1;
+  }
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
 }

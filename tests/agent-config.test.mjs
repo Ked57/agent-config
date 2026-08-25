@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -11,6 +12,98 @@ const cli = path.join(root, 'bin/agent-config.mjs');
 const run = (project, ...args) => execFileSync(process.execPath, [cli, ...args, '--project', project], {
   cwd: root,
   encoding: 'utf8'
+});
+const userEnvironment = (home) => {
+  const environment = { ...process.env, HOME: home };
+  delete environment.CODEX_HOME;
+  return environment;
+};
+const runUser = (home, ...args) => execFileSync(process.execPath, [cli, ...args, '--user'], {
+  cwd: root,
+  encoding: 'utf8',
+  env: userEnvironment(home)
+});
+
+test('installs one personal policy across Codex, Claude Code, and Cursor', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-user-'));
+  const codexPolicy = path.join(home, '.codex/AGENTS.md');
+  const claudePolicy = path.join(home, '.claude/CLAUDE.md');
+  fs.mkdirSync(path.dirname(codexPolicy), { recursive: true });
+  fs.mkdirSync(path.dirname(claudePolicy), { recursive: true });
+  fs.writeFileSync(codexPolicy, '# Existing Codex preference\n');
+  fs.writeFileSync(claudePolicy, '# Existing Claude preference\n');
+
+  runUser(home, 'init');
+
+  const installedPolicy = fs.readFileSync(codexPolicy, 'utf8');
+  assert.match(installedPolicy, /Existing Codex preference/);
+  assert.match(installedPolicy, /agent-config:begin user-policy/);
+  assert.match(installedPolicy, /# TypeScript standards/);
+  assert.match(installedPolicy, /# Vue 3 \+ TypeScript \+ PrimeVue/);
+  assert.match(installedPolicy, /# Domain module convention/);
+
+  const installedClaudePolicy = fs.readFileSync(claudePolicy, 'utf8');
+  assert.match(installedClaudePolicy, /Existing Claude preference/);
+  assert.ok(installedClaudePolicy.includes(`@${codexPolicy}`));
+
+  const cursorPlugin = path.join(home, '.cursor/plugins/local/agent-config');
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(path.join(cursorPlugin, '.cursor-plugin/plugin.json'), 'utf8')),
+    {
+      name: 'agent-config',
+      version: '1.0.0',
+      description: 'Personal cross-harness agent policy bridge.'
+    }
+  );
+  assert.ok(fs.readFileSync(path.join(cursorPlugin, 'rules/00-agent-config.mdc'), 'utf8').includes(codexPolicy));
+  assert.ok(fs.existsSync(path.join(home, '.agents/skills/fullstack-typescript-quality/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(home, '.claude/skills/fullstack-typescript-quality/SKILL.md')));
+
+  assert.doesNotThrow(() => runUser(home, 'check'));
+  runUser(home, 'sync');
+  assert.match(fs.readFileSync(codexPolicy, 'utf8'), /Existing Codex preference/);
+});
+
+test('preserves colliding user-level standalone files', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-user-collision-'));
+  const cursorRule = path.join(home, '.cursor/plugins/local/agent-config/rules/00-agent-config.mdc');
+  fs.mkdirSync(path.dirname(cursorRule), { recursive: true });
+  fs.writeFileSync(cursorRule, '# My existing Cursor rule\n');
+
+  assert.throws(() => runUser(home, 'init'));
+  assert.equal(fs.readFileSync(cursorRule, 'utf8'), '# My existing Cursor rule\n');
+});
+
+test('honours a custom Codex home for the canonical user policy', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-user-custom-home-'));
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-codex-home-'));
+  const environment = { ...userEnvironment(home), CODEX_HOME: codexHome };
+
+  execFileSync(process.execPath, [cli, 'init', '--user'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: environment
+  });
+
+  const canonicalPolicy = path.join(codexHome, 'AGENTS.md');
+  assert.ok(fs.existsSync(canonicalPolicy));
+  assert.ok(fs.readFileSync(path.join(home, '.claude/CLAUDE.md'), 'utf8').includes(`@${canonicalPolicy}`));
+  assert.doesNotThrow(() => execFileSync(process.execPath, [cli, 'check', '--user'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: environment
+  }));
+});
+
+test('refuses to write through a symlinked user configuration path', {
+  skip: process.platform === 'win32'
+}, () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-user-symlink-'));
+  const external = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-user-external-'));
+  fs.symlinkSync(external, path.join(home, '.agents'));
+
+  assert.throws(() => runUser(home, 'init'));
+  assert.deepEqual(fs.readdirSync(external), []);
 });
 
 test('initialises a Vue TypeScript workspace and preserves project-owned routing', () => {
@@ -169,4 +262,89 @@ test('preserves matching legacy content when the lock lacks a complete trusted s
 
   assert.throws(() => run(project, 'sync'));
   assert.ok(fs.existsSync(legacyRule));
+});
+
+test('falls back to individual quality checks and detects pnpm', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-pnpm-'));
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
+    packageManager: 'pnpm@10.0.0',
+    devDependencies: { typescript: '^5.0.0' },
+    scripts: {
+      lint: 'eslint .',
+      typecheck: 'tsc --noEmit',
+      test: 'vitest run'
+    }
+  }, null, 2));
+  fs.writeFileSync(path.join(project, 'tsconfig.json'), '{}');
+
+  run(project, 'init');
+
+  const config = JSON.parse(fs.readFileSync(path.join(project, '.agents/agent-config.json'), 'utf8'));
+  assert.equal(config.runtime, 'pnpm');
+  assert.equal(config.commands.lint, 'pnpm run lint');
+  assert.deepEqual(new Set(config.routing[0].required), new Set(['unit', 'lint', 'typecheck']));
+});
+
+test('check rejects an invalid project-owned routing file', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-invalid-routing-'));
+  run(project, 'init');
+  const configFile = path.join(project, '.agents/agent-config.json');
+  fs.writeFileSync(configFile, '{ definitely not json');
+
+  assert.throws(() => run(project, 'check'));
+
+  fs.writeFileSync(configFile, JSON.stringify({
+    version: 1,
+    commands: {},
+    routing: [{ match: ['**/*.ts'], required: ['missing'] }]
+  }));
+
+  assert.throws(() => run(project, 'check'));
+});
+
+test('check rejects incomplete lock ownership metadata', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-invalid-lock-'));
+  run(project, 'init');
+  const lockFile = path.join(project, '.agents/agent-config.lock.json');
+  const lock = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+  lock.managedFiles = [];
+  fs.writeFileSync(lockFile, `${JSON.stringify(lock, null, 2)}\n`);
+
+  assert.throws(() => run(project, 'check'));
+});
+
+test('refuses to write through a symlinked managed target', {
+  skip: process.platform === 'win32'
+}, () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-symlink-'));
+  run(project, 'init');
+  const skill = path.join(project, '.agents/skills/fullstack-typescript-quality/SKILL.md');
+  const externalFile = path.join(os.tmpdir(), `agent-config-external-${crypto.randomUUID()}.md`);
+  fs.writeFileSync(externalFile, 'project-external content');
+  fs.unlinkSync(skill);
+  fs.symlinkSync(externalFile, skill);
+
+  assert.throws(() => run(project, 'sync'));
+  assert.equal(fs.readFileSync(externalFile, 'utf8'), 'project-external content');
+});
+
+test('rejects unknown commands and accepts options before the command', () => {
+  const unknown = spawnSync(process.execPath, [cli, 'synk'], {
+    cwd: root,
+    encoding: 'utf8'
+  });
+  assert.notEqual(unknown.status, 0);
+
+  const conflictingScopes = spawnSync(process.execPath, [cli, 'status', '--user', '--project', root], {
+    cwd: root,
+    encoding: 'utf8'
+  });
+  assert.notEqual(conflictingScopes.status, 0);
+
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-option-order-'));
+  const output = execFileSync(process.execPath, [cli, '--project', project, 'status'], {
+    cwd: root,
+    encoding: 'utf8'
+  });
+  assert.match(output, /Detected: runtime=/);
 });

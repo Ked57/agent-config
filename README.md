@@ -9,10 +9,44 @@ Cursor, Claude Code, and Codex.
 - Conditional TypeScript, Vue + PrimeVue, and DDD domain-module policy packs shared by all harnesses.
 - The `fullstack-typescript-quality` skill for installing and auditing deterministic
   quality tooling.
-- A workspace installer that creates thin Cursor/Claude bridges, portable skills,
-  and a project-owned verification routing map.
+- A user installer that gives Cursor, Claude Code, and Codex the same personal policy
+  without changing application repositories.
+- An optional workspace installer that detects npm, pnpm, Yarn, or Bun; creates thin
+  client bridges and portable skills; and seeds a project-owned verification routing map.
 
-## Install into a workspace
+## Install for your user
+
+Run once on each machine:
+
+```sh
+node bin/agent-config.mjs init --user
+```
+
+This creates or updates:
+
+```text
+~/.codex/AGENTS.md                         canonical personal policy (managed block)
+~/.claude/CLAUDE.md                       Claude bridge to the canonical policy
+~/.cursor/plugins/local/agent-config/     Cursor plugin with an always-on bridge rule
+~/.agents/skills/fullstack-typescript-quality/SKILL.md
+~/.claude/skills/fullstack-typescript-quality/SKILL.md
+~/.agent-config/agent-config.lock.json
+```
+
+Existing Codex and Claude instructions outside the managed blocks are preserved.
+Standalone generated files are updated only when the user lock proves ownership, and
+the installer refuses to write through symlinked targets. Restart or reload Cursor after
+the first installation so it discovers the local plugin.
+
+```sh
+node bin/agent-config.mjs sync --user
+node bin/agent-config.mjs status --user
+node bin/agent-config.mjs check --user
+```
+
+For persistent remote environments, use [cloud-agent-install.md](cloud-agent-install.md).
+
+## Optional: install into a workspace
 
 From this repository, run:
 
@@ -32,13 +66,15 @@ CLAUDE.md                                  thin Claude Code bridge to AGENTS.md
 .agents/skills/fullstack-typescript-quality/SKILL.md
 .agents/agent-config.json                  project-owned command/routing map
 .agents/agent-config.lock.json
+.prettierignore                            managed ignore block for generated guidance
 ```
 
 `AGENTS.md` and `CLAUDE.md` are updated only inside explicit managed blocks. If a
 workspace already has unmanaged instructions, the installer preserves them and asks
-for a manual merge instead of overwriting them.
+for a manual merge instead of overwriting them. The installer also refuses to modify
+managed targets reached through symlinks.
 
-## Sync, inspect, and validate
+## Sync, inspect, and validate a workspace
 
 ```sh
 node bin/agent-config.mjs sync --project ~/dev/my-webapp
@@ -47,15 +83,19 @@ node bin/agent-config.mjs check --project ~/dev/my-webapp
 ```
 
 Project agents read `.agents/agent-config.json` directly to identify the verification
-commands relevant to their changed files.
+commands relevant to their changed files. `check` validates this file's structure,
+command references, managed content, and lock ownership metadata.
 
 ## Ownership model
 
-- **Source-owned:** policy packs, Cursor bridge, portable skills, and runtime script. During
-  migration, the CLI removes only legacy Cursor rule files proven owned by its prior lock file.
+- **User-owned:** personal instructions outside managed blocks and all client credentials,
+  account state, MCP registration, and IDE preferences.
+- **Source-owned:** policy packs, client bridges, portable skills, and installer implementation.
+  During migration, the CLI removes only legacy Cursor rule files proven owned by its prior
+  lock file.
 - **Project-owned:** the project architecture section in `AGENTS.md`,
-  `.agents/agent-config.json`, package scripts, test configuration, and client-local
-  credentials/settings.
+  `.agents/agent-config.json`, package scripts, test configuration, and unmanaged portions
+  of `.prettierignore` and client-local credentials/settings.
 - **Client-specific:** OAuth, plugins, MCP registration, native hook registration,
   and IDE state.
 
