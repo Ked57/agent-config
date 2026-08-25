@@ -14,7 +14,8 @@ const run = (project, ...args) => execFileSync(process.execPath, [cli, ...args, 
   encoding: 'utf8'
 });
 const userEnvironment = (home) => {
-  const environment = { ...process.env, HOME: home };
+  // Node's os.homedir() prefers USERPROFILE on Windows and ignores HOME.
+  const environment = { ...process.env, HOME: home, USERPROFILE: home };
   delete environment.CODEX_HOME;
   return environment;
 };

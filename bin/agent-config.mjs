@@ -102,9 +102,11 @@ const { assertSafe: assertSafeTarget, copy, relative, remove, write } = projectF
 const findExactLine = (value, line) => {
   let index = value.indexOf(line);
   while (index !== -1) {
-    const isLineStart = index === 0 || value[index - 1] === '\n';
+    const isLineStart = index === 0 || value[index - 1] === '\n' || value[index - 1] === '\r';
     const lineEnd = index + line.length;
-    const isLineEnd = lineEnd === value.length || value[lineEnd] === '\n';
+    const isLineEnd = lineEnd === value.length
+      || value[lineEnd] === '\n'
+      || (value[lineEnd] === '\r' && (lineEnd + 1 === value.length || value[lineEnd + 1] === '\n'));
     if (isLineStart && isLineEnd) return index;
     index = value.indexOf(line, index + 1);
   }
@@ -118,7 +120,7 @@ const replaceManagedBlock = (existing, name, contents) => {
   const startIndex = findExactLine(existing, start);
   const endIndex = findExactLine(existing, end);
   if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) return null;
-  return `${existing.slice(0, startIndex)}${marker(name, contents)}${existing.slice(endIndex + end.length).replace(/^\n?/, '')}`;
+  return `${existing.slice(0, startIndex)}${marker(name, contents)}${existing.slice(endIndex + end.length).replace(/^\r?\n/, '')}`;
 };
 const lineMarker = (name, contents) => `# agent-config:begin ${name}\n${contents.trim()}\n# agent-config:end ${name}\n`;
 const replaceLineManagedBlock = (existing, name, contents) => {
@@ -127,7 +129,7 @@ const replaceLineManagedBlock = (existing, name, contents) => {
   const startIndex = findExactLine(existing, start);
   const endIndex = findExactLine(existing, end);
   if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) return null;
-  return `${existing.slice(0, startIndex)}${lineMarker(name, contents)}${existing.slice(endIndex + end.length).replace(/^\n?/, '')}`;
+  return `${existing.slice(0, startIndex)}${lineMarker(name, contents)}${existing.slice(endIndex + end.length).replace(/^\r?\n/, '')}`;
 };
 
 const sharedPolicy = read(path.join(sourceRoot, 'policy/shared-policy.md'));
@@ -318,11 +320,22 @@ const writeUserBlock = (file, operations, name, contents, header = '') => {
   }
   const existing = read(file);
   const replacement = replaceManagedBlock(existing, name, contents);
-  const next = replacement ?? `${existing.trimEnd()}\n\n${marker(name, contents)}`;
-  if (existing !== next) {
-    operations.write(file, next);
-    console.log(`${replacement === null ? 'Added managed policy to' : 'Updated'} ${displayUserFile(file)}`);
+  if (replacement !== null) {
+    if (existing !== replacement) {
+      operations.write(file, replacement);
+      console.log(`Updated ${displayUserFile(file)}`);
+    }
+    return;
   }
+  const start = `<!-- agent-config:begin ${name} -->`;
+  const end = `<!-- agent-config:end ${name} -->`;
+  if (existing.includes(start) || existing.includes(end)) {
+    console.warn(`Preserved unmanaged ${displayUserFile(file)}; repair the ${name} managed block manually.`);
+    return;
+  }
+  const next = `${existing.trimEnd()}\n\n${marker(name, contents)}`;
+  operations.write(file, next);
+  console.log(`Added managed policy to ${displayUserFile(file)}`);
 };
 
 const writePrettierIgnore = () => {
