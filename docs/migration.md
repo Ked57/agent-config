@@ -1,6 +1,6 @@
 # Cursor migration inventory
 
-Inspected on 2026-08-10 from a local Cursor configuration directory.
+Inspected on 2026-08-10 from `~/.cursor`.
 
 Observed but intentionally kept client-local:
 

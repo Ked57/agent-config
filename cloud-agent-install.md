@@ -6,9 +6,8 @@ fresh cloud agent the same user-level baseline.
 
 ## Idempotent setup script
 
-The cloud environment must be able to read the private `Ked57/agent-config` repository.
-Grant access through the platform's repository integration or secret store; never put a
-token in this file or in a clone URL.
+This repository is public, so the standard HTTPS clone does not require repository
+credentials. The cloud environment only needs outbound access to `github.com`.
 
 ```sh
 set -eu
@@ -30,8 +29,8 @@ node "${AGENT_CONFIG_DIR}/bin/agent-config.mjs" check --user
 ```
 
 The script is safe to run on both a clean build and a resumed cached environment. If
-the platform uses a different authenticated repository URL, change only
-`AGENT_CONFIG_REPOSITORY`; keep credentials in the platform secret store.
+you use a mirror or fork, change only `AGENT_CONFIG_REPOSITORY`. For a private fork,
+keep credentials in the platform secret store and out of the clone URL.
 
 ## Cursor Cloud Agents
 

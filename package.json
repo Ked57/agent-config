@@ -2,6 +2,7 @@
   "name": "@ked57/agent-config",
   "private": true,
   "version": "1.0.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "check": "node --check bin/agent-config.mjs",

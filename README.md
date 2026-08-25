@@ -1,6 +1,6 @@
 # agent-config
 
-Private, version-controlled source for portable coding-agent configuration shared by
+Public, version-controlled source for portable coding-agent configuration shared by
 Cursor, Claude Code, and Codex.
 
 ## What it provides
@@ -117,3 +117,7 @@ npm run verify
 ```
 
 This syntax-checks the scripts and executes the installer integration tests.
+
+## License
+
+[MIT](LICENSE)
