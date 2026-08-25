@@ -1,12 +1,15 @@
 # Cursor migration inventory
 
-Inspected on 2026-08-10 from `/Users/clementfassot/.cursor`.
+Inspected on 2026-08-10 from a local Cursor configuration directory.
 
-Imported into the portable source:
+Observed but intentionally kept client-local:
 
 - MCP servers: `primevue` (stdio wrapper), `Figma` (HTTP), and `atlassian`
   (HTTP).
-- The PrimeVue NVM wrapper, rewritten without a hard-coded home path.
+- The PrimeVue NVM wrapper used by the local MCP registration.
+
+MCP registration and wrappers are managed separately in each client. They are inventory
+notes, not files provided by this portable repository.
 
 Not copied:
 
@@ -19,6 +22,9 @@ Not copied:
 - Authentication, telemetry, project history, extensions, and IDE state:
   these are machine-local and may contain secrets or personal data.
 
-Add any new cross-client skill under `.agents/skills/<skill-name>/SKILL.md`.
-Add a hook script to `hooks/` and a short client-specific registration note in
-the relevant adapter folder.
+Add any new cross-client skill under `skills/<skill-name>/SKILL.md`; the installer copies
+it to user-level client skill directories and, for project installs, the workspace's
+`.agents/skills/` directory when it is part of the managed source list.
+Hooks remain client-specific until this repository defines portable hook support. Document
+client-specific registration in the relevant adapter rather than duplicating shared policy
+inside a hook.
