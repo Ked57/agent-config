@@ -6,7 +6,7 @@ Cursor, Claude Code, and Codex.
 ## What it provides
 
 - A concise shared completion, verification, safety, and anti-slop policy.
-- Conditional TypeScript, Vue + PrimeVue, and DDD domain-module policy packs shared by all harnesses.
+- Conditional TypeScript, React, Vue + PrimeVue, and DDD domain-module policy packs shared by all harnesses.
 - The `fullstack-typescript-quality` skill for installing and auditing deterministic
   quality tooling.
 - A user installer that gives Cursor, Claude Code, and Codex the same personal policy
@@ -54,14 +54,24 @@ From this repository, run:
 node bin/agent-config.mjs init --project ~/dev/my-webapp
 ```
 
-The installer detects TypeScript and Vue, then creates or updates:
+The installer scans actual project source before creating conditional policy packs:
+
+```text
+.agents/policy/typescript.md               only when TypeScript source exists
+.agents/policy/react.md                    only when React source exists
+.agents/policy/vue-primevue.md             only when Vue source exists
+.agents/policy/domain-module.md            only when the four-file convention exists
+```
+
+It then creates or updates the shared files below:
 
 ```text
 AGENTS.md                                  concise shared policy + conditional pack index
 CLAUDE.md                                  thin Claude Code bridge to AGENTS.md
 .cursor/rules/00-agent-config.mdc          thin Cursor bridge to AGENTS.md
 .agents/policy/typescript.md               TypeScript work, when detected
-.agents/policy/domain-module.md            domain work, when TypeScript is detected
+.agents/policy/react.md                    React work, when detected
+.agents/policy/domain-module.md            domain work, when the convention is detected
 .agents/policy/vue-primevue.md             Vue work, when detected
 .agents/skills/fullstack-typescript-quality/SKILL.md
 .agents/agent-config.json                  project-owned command/routing map
@@ -71,8 +81,9 @@ CLAUDE.md                                  thin Claude Code bridge to AGENTS.md
 
 `AGENTS.md` and `CLAUDE.md` are updated only inside explicit managed blocks. If a
 workspace already has unmanaged instructions, the installer preserves them and asks
-for a manual merge instead of overwriting them. The installer also refuses to modify
-managed targets reached through symlinks.
+for a manual merge instead of overwriting them. Conditional packs are installed only
+when matching source code or the domain convention is detected, and the installer
+refuses to modify managed targets reached through symlinks.
 
 ## Sync, inspect, and validate a workspace
 

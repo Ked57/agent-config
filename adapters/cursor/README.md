@@ -24,6 +24,6 @@ node bin/agent-config.mjs init --project /path/to/workspace
 ```
 
 This creates `.cursor/rules/00-agent-config.mdc`, a thin bridge to the workspace
-`AGENTS.md`. The shared TypeScript, domain, and Vue/PrimeVue conditional policy packs
+`AGENTS.md`. The shared TypeScript, React, domain, and Vue/PrimeVue conditional policy packs
 live under `.agents/policy/`, so Codex, Claude Code, and Cursor follow the same source
 of truth. These repository files are intended to be committed.

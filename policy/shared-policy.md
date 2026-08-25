@@ -44,11 +44,12 @@ Do not claim manual verification was performed when it was not.
 ## Conditional guidance
 
 Read the relevant policy pack from the active agent configuration before editing. A
-project-scoped installation keeps these packs under `.agents/policy/`; a user-scoped
-installation inlines the same packs later in this global policy file—use those
-inlined sections instead of looking for `.agents/policy/` paths that are not present:
+project-scoped installation keeps only the detected packs under `.agents/policy/`; a
+user-scoped installation inlines all packs later in the global policy file. Use the
+inlined sections instead of looking for project paths that are not present:
 
 - TypeScript or TSX files: `.agents/policy/typescript.md`, or the TypeScript standards section below.
+- React JSX or TSX files: `.agents/policy/react.md`, or the React section below.
 - Vue components, composables, PrimeVue UI, or Vue forms: `.agents/policy/vue-primevue.md`, or the Vue section below.
 - Domain modules: `.agents/policy/domain-module.md`, or the domain module section below, only when the repository already uses the four-file domain convention or the user requests it.
 

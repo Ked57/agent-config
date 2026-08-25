@@ -40,6 +40,7 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   assert.match(installedPolicy, /Existing Codex preference/);
   assert.match(installedPolicy, /agent-config:begin user-policy/);
   assert.match(installedPolicy, /# TypeScript standards/);
+  assert.match(installedPolicy, /# React \+ TypeScript/);
   assert.match(installedPolicy, /# Vue 3 \+ TypeScript \+ PrimeVue/);
   assert.match(installedPolicy, /# Domain module convention/);
 
@@ -121,12 +122,16 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
     }
   }, null, 2));
   fs.writeFileSync(path.join(project, 'tsconfig.json'), '{}');
+  fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'src/App.vue'), '<script setup lang="ts"></script>\n<template><main /></template>\n');
 
   run(project, 'init');
 
-  assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /\.agents\/policy\/vue-primevue\.md/);
+  assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /vue-primevue\.md/);
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/react.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/domain-module.md')));
   assert.ok(!fs.existsSync(path.join(project, '.cursor/rules/30-agent-config-vue-primevue.mdc')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/fullstack-typescript-quality/SKILL.md')));
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /# agent-config:begin prettier-ignore/);
@@ -207,6 +212,11 @@ test('migrates lock-owned legacy Cursor rules to shared policy packs', () => {
     devDependencies: { typescript: '^5.0.0' }
   }, null, 2));
   fs.writeFileSync(path.join(project, 'tsconfig.json'), '{}');
+  fs.mkdirSync(path.join(project, 'src/domain'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'src/App.vue'), '<template><main /></template>\n');
+  for (const part of ['model', 'interface', 'service', 'mock']) {
+    fs.writeFileSync(path.join(project, `src/domain/counter.${part}.ts`), 'export {};\n');
+  }
   const legacyRules = [
     '.cursor/rules/10-agent-config-typescript.mdc',
     '.agents/scripts/agent-check.mjs'
@@ -277,6 +287,8 @@ test('falls back to individual quality checks and detects pnpm', () => {
     }
   }, null, 2));
   fs.writeFileSync(path.join(project, 'tsconfig.json'), '{}');
+  fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'src/index.ts'), 'export {};\n');
 
   run(project, 'init');
 
@@ -348,4 +360,64 @@ test('rejects unknown commands and accepts options before the command', () => {
     encoding: 'utf8'
   });
   assert.match(output, /Detected: runtime=/);
+});
+
+test('installs React guidance only when React source exists', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-react-'));
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
+    dependencies: { react: '^19.0.0', 'react-dom': '^19.0.0' },
+    devDependencies: { typescript: '^5.0.0' }
+  }, null, 2));
+  fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'src/App.tsx'), 'export const App = () => <main />;\n');
+
+  run(project, 'init');
+
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/react.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/domain-module.md')));
+});
+
+test('does not install framework packs from dependencies alone', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-no-framework-source-'));
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
+    dependencies: { react: '^19.0.0', vue: '^3.5.0' },
+    devDependencies: { typescript: '^5.0.0' }
+  }, null, 2));
+  fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'src/index.js'), 'console.log("no framework source");\n');
+
+  run(project, 'init');
+
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/react.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/domain-module.md')));
+});
+
+test('detects Vue TypeScript source under apps/ monorepo layouts', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-apps-mono-'));
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
+    dependencies: { vue: '^3.5.0', primevue: '^4.0.0' },
+    devDependencies: { typescript: '^5.0.0' },
+    scripts: {
+      'test:component': 'cypress run --component',
+      'verify:fast': 'npm run test:component'
+    }
+  }, null, 2));
+  fs.mkdirSync(path.join(project, 'apps/web/src'), { recursive: true });
+  fs.writeFileSync(
+    path.join(project, 'apps/web/src/App.vue'),
+    '<script setup lang="ts"></script>\n<template><main /></template>\n'
+  );
+
+  const output = run(project, 'init');
+  assert.match(output, /Created \.agents\/policy\/vue-primevue\.md/);
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
+
+  const status = run(project, 'status');
+  assert.match(status, /vue=true/);
+  assert.match(status, /typescript=true/);
 });

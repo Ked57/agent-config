@@ -136,6 +136,7 @@ const sharedPolicy = read(path.join(sourceRoot, 'policy/shared-policy.md'));
 const managedSourceFiles = [
   'policy/shared-policy.md',
   'policy/typescript.md',
+  'policy/react.md',
   'policy/domain-module.md',
   'policy/vue-primevue.md',
   'skills/fullstack-typescript-quality/SKILL.md'
@@ -156,6 +157,7 @@ const codexFiles = codexHomeIsInsideUserHome
 const userPolicy = [
   sharedPolicy,
   read(path.join(sourceRoot, 'policy/typescript.md')),
+  read(path.join(sourceRoot, 'policy/react.md')),
   read(path.join(sourceRoot, 'policy/vue-primevue.md')),
   read(path.join(sourceRoot, 'policy/domain-module.md'))
 ].join('\n\n');
@@ -165,8 +167,39 @@ const dependencies = {
   ...(packageJson?.dependencies ?? {}),
   ...(packageJson?.devDependencies ?? {})
 };
-const isVue = Boolean(dependencies.vue || exists(path.join(projectRoot, 'vite.config.ts')) && exists(path.join(projectRoot, 'src/App.vue')));
-const isTypeScript = Boolean(dependencies.typescript || exists(path.join(projectRoot, 'tsconfig.json')));
+const sourceRoots = ['src', 'app', 'apps', 'pages', 'components', 'packages']
+  .map((directory) => path.join(projectRoot, directory))
+  .filter((directory) => exists(directory) && fs.statSync(directory).isDirectory());
+const ignoredSourceDirectories = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt']);
+const sourceFiles = [];
+const collectSourceFiles = (directory) => {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (!ignoredSourceDirectories.has(entry.name)) collectSourceFiles(path.join(directory, entry.name));
+    } else if (entry.isFile()) {
+      sourceFiles.push(path.join(directory, entry.name));
+    }
+  }
+};
+for (const directory of sourceRoots) collectSourceFiles(directory);
+const hasExtension = (...extensions) => sourceFiles.some((file) => extensions.includes(path.extname(file)));
+const sourceContains = (pattern) => sourceFiles.some((file) => {
+  if (!['.js', '.jsx', '.mjs', '.ts', '.tsx', '.mts', '.vue'].includes(path.extname(file))) return false;
+  return pattern.test(read(file));
+});
+const hasTypeScriptSource = hasExtension('.ts', '.tsx', '.mts') || sourceFiles.some((file) => path.extname(file) === '.vue' && /<script\b[^>]*\blang\s*=\s*["']ts["']/.test(read(file)));
+const hasVueSource = hasExtension('.vue') || sourceContains(/from\s*['"]vue(?:\/|['"])/);
+const hasReactSource = Boolean(dependencies.react || dependencies['react-dom'] || dependencies.next)
+  && (hasExtension('.tsx', '.jsx') || sourceContains(/from\s*['"]react(?:\/|['"])/) || sourceContains(/require\(\s*['"]react(?:\/|['"])/));
+const domainModuleParts = new Map();
+for (const file of sourceFiles) {
+  const match = file.match(/^(.*\/domain\/.*)\.(model|interface|service|mock)\.ts$/);
+  if (match) domainModuleParts.set(match[1], (domainModuleParts.get(match[1]) ?? new Set()).add(match[2]));
+}
+const hasDomainConvention = [...domainModuleParts.values()].some((parts) => parts.size === 4);
+const isVue = hasVueSource;
+const isReact = hasReactSource;
+const isTypeScript = hasTypeScriptSource;
 const declaredRuntime = typeof packageJson?.packageManager === 'string'
   ? /^(npm|pnpm|yarn|bun)@/.exec(packageJson.packageManager)?.[1]
   : undefined;
@@ -212,6 +245,10 @@ const config = {
       required: requiredChecks('unit'),
       recommended: configured('mutation')
     }] : []),
+    ...(isReact ? [{
+      match: ['**/*.tsx', '**/*.jsx'],
+      required: configured('component', 'fast')
+    }] : []),
     ...(isVue ? [{
       match: ['**/*.vue'],
       required: requiredChecks('component')
@@ -243,7 +280,8 @@ const legacyGeneratedFileHashes = new Map([
 const legacyGeneratedFiles = [...legacyGeneratedFileHashes.keys()].map((file) => target(...file.split('/')));
 const managedFiles = [
   [path.join(policyDirectory, 'typescript.md'), path.join(sourceRoot, 'policy/typescript.md'), isTypeScript],
-  [path.join(policyDirectory, 'domain-module.md'), path.join(sourceRoot, 'policy/domain-module.md'), isTypeScript],
+  [path.join(policyDirectory, 'react.md'), path.join(sourceRoot, 'policy/react.md'), isReact],
+  [path.join(policyDirectory, 'domain-module.md'), path.join(sourceRoot, 'policy/domain-module.md'), hasDomainConvention],
   [path.join(policyDirectory, 'vue-primevue.md'), path.join(sourceRoot, 'policy/vue-primevue.md'), isVue],
   [path.join(skillDirectory, 'SKILL.md'), path.join(sourceRoot, 'skills/fullstack-typescript-quality/SKILL.md'), true]
 ];
@@ -375,6 +413,7 @@ const isTrustedLock = (lock) => lock?.source === 'Ked57/agent-config'
   && typeof lock.detected?.runtime === 'string'
   && typeof lock.detected?.typescript === 'boolean'
   && typeof lock.detected?.vue === 'boolean'
+  && (lock.detected.react === undefined || typeof lock.detected.react === 'boolean')
   && Array.isArray(lock.managedFiles)
   && lock.managedFiles.every((file) => typeof file === 'string')
   && new Set(lock.managedFiles).size === lock.managedFiles.length;
@@ -482,8 +521,12 @@ const install = () => {
     const name = relative(destination);
     if (!enabled) {
       if (ownedManagedFiles.has(name) && exists(destination)) {
-        remove(destination);
-        console.log(`Removed no-longer-applicable ${name}`);
+        if (sha256(read(destination)) === sha256(read(source))) {
+          remove(destination);
+          console.log(`Removed no-longer-applicable ${name}`);
+        } else {
+          console.warn(`Preserved changed ${name}; it no longer applies but does not match the agent-config-generated content.`);
+        }
       }
       continue;
     }
@@ -514,7 +557,7 @@ const install = () => {
       source: 'Ked57/agent-config',
       revision,
       installedAt: new Date().toISOString(),
-      detected: { runtime, typescript: isTypeScript, vue: isVue },
+      detected: { runtime, typescript: isTypeScript, react: isReact, vue: isVue },
       managedFiles: nextManagedFiles
     };
     write(lockFile, `${JSON.stringify(lock, null, 2)}\n`);
@@ -526,7 +569,7 @@ const install = () => {
 
 const status = () => {
   console.log(`Project: ${projectRoot}`);
-  console.log(`Detected: runtime=${runtime}, typescript=${isTypeScript}, vue=${isVue}`);
+  console.log(`Detected: runtime=${runtime}, typescript=${isTypeScript}, react=${isReact}, vue=${isVue}, domainConvention=${hasDomainConvention}`);
   console.log(`Source policy revision: ${revision}`);
   const statusFiles = [policyFile, claudeFile, cursorBridgeFile, prettierIgnoreFile, configFile, lockFile, ...managedFiles.filter(([, , enabled]) => enabled).map(([destination]) => destination)];
   for (const file of statusFiles) {
@@ -536,7 +579,9 @@ const status = () => {
 
 const check = () => {
   const expected = [policyFile, claudeFile, cursorBridgeFile, prettierIgnoreFile, configFile, path.join(skillDirectory, 'SKILL.md'), lockFile];
-  if (isTypeScript) expected.push(path.join(policyDirectory, 'typescript.md'), path.join(policyDirectory, 'domain-module.md'));
+  if (isTypeScript) expected.push(path.join(policyDirectory, 'typescript.md'));
+  if (isReact) expected.push(path.join(policyDirectory, 'react.md'));
+  if (hasDomainConvention) expected.push(path.join(policyDirectory, 'domain-module.md'));
   if (isVue) expected.push(path.join(policyDirectory, 'vue-primevue.md'));
   const missing = expected.filter((file) => !exists(file));
   if (missing.length) {
