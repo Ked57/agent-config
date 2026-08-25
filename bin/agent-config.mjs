@@ -247,7 +247,7 @@ const config = {
     }] : []),
     ...(isReact ? [{
       match: ['**/*.tsx', '**/*.jsx'],
-      required: configured('component', 'fast')
+      required: requiredChecks('component')
     }] : []),
     ...(isVue ? [{
       match: ['**/*.vue'],
