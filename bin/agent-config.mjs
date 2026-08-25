@@ -316,7 +316,7 @@ const writeUserBlock = (file, operations, name, contents, header = '') => {
   if (!exists(file)) {
     operations.write(file, `${header}${marker(name, contents)}`);
     console.log(`Created ${displayUserFile(file)}`);
-    return;
+    return true;
   }
   const existing = read(file);
   const replacement = replaceManagedBlock(existing, name, contents);
@@ -325,17 +325,18 @@ const writeUserBlock = (file, operations, name, contents, header = '') => {
       operations.write(file, replacement);
       console.log(`Updated ${displayUserFile(file)}`);
     }
-    return;
+    return true;
   }
   const start = `<!-- agent-config:begin ${name} -->`;
   const end = `<!-- agent-config:end ${name} -->`;
   if (existing.includes(start) || existing.includes(end)) {
     console.warn(`Preserved unmanaged ${displayUserFile(file)}; repair the ${name} managed block manually.`);
-    return;
+    return false;
   }
   const next = `${existing.trimEnd()}\n\n${marker(name, contents)}`;
   operations.write(file, next);
   console.log(`Added managed policy to ${displayUserFile(file)}`);
+  return true;
 };
 
 const writePrettierIgnore = () => {
@@ -622,20 +623,20 @@ const installUser = () => {
   const ownedManagedFiles = new Set(trustedPreviousLock ? previousLock.managedFiles : []);
   const nextManagedFiles = [];
 
-  writeUserBlock(
+  safe = writeUserBlock(
     userPolicyFile,
     codexFiles,
     'user-policy',
     `${userPolicyIntro}\n\n${userPolicy}`,
     '# Personal agent instructions\n\n'
-  );
-  writeUserBlock(
+  ) && safe;
+  safe = writeUserBlock(
     claudeUserFile,
     userFiles,
     'claude-user-bridge',
     claudeUserBridge,
     '# Claude Code personal instructions\n\n'
-  );
+  ) && safe;
 
   for (const { key, destination, contents } of userStandaloneFiles) {
     if (exists(destination) && !ownedManagedFiles.has(key)) {
