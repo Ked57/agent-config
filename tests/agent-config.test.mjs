@@ -60,6 +60,11 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   assert.ok(fs.readFileSync(path.join(cursorPlugin, 'rules/00-agent-config.mdc'), 'utf8').includes(codexPolicy));
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/fullstack-typescript-quality/SKILL.md')));
   assert.ok(fs.existsSync(path.join(home, '.claude/skills/fullstack-typescript-quality/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(home, '.agents/skills/frontend-design/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(home, '.agents/skills/frontend-design/LICENSE.txt')));
+  assert.ok(fs.existsSync(path.join(home, '.claude/skills/frontend-design/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(home, '.agents/skills/figma-design-to-code/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(home, '.claude/skills/figma-design-to-code/SKILL.md')));
 
   assert.doesNotThrow(() => runUser(home, 'check'));
   runUser(home, 'sync');
@@ -134,6 +139,9 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/domain-module.md')));
   assert.ok(!fs.existsSync(path.join(project, '.cursor/rules/30-agent-config-vue-primevue.mdc')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/fullstack-typescript-quality/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/skills/frontend-design/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/skills/frontend-design/LICENSE.txt')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/skills/figma-design-to-code/SKILL.md')));
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /# agent-config:begin prettier-ignore/);
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /\.agents\//);
 
@@ -184,6 +192,20 @@ test('preserves colliding unmanaged generated-target files', () => {
 
   assert.throws(() => run(project, 'sync'));
   assert.equal(fs.readFileSync(collision, 'utf8'), '// Project-owned implementation\n');
+});
+
+test('frontend skills keep distinct triggers and required completion contracts', () => {
+  const frontendSkill = fs.readFileSync(path.join(root, 'skills/frontend-design/SKILL.md'), 'utf8');
+  const figmaSkill = fs.readFileSync(path.join(root, 'skills/figma-design-to-code/SKILL.md'), 'utf8');
+
+  assert.match(frontendSkill, /without a supplied source-of-truth design/);
+  assert.match(frontendSkill, /existing design system.*rather than replacing it/s);
+  assert.match(frontendSkill, /screenshots at representative narrow and wide viewports/);
+
+  assert.match(figmaSkill, /supplied Figma node/);
+  assert.match(figmaSkill, /structured design context for that node before editing code/);
+  assert.match(figmaSkill, /Reuse matching components, tokens, icons, and assets/);
+  assert.match(figmaSkill, /visually compared with Figma at the reference viewport/);
 });
 
 test('preserves a colliding project-owned lock file', () => {
@@ -413,7 +435,7 @@ test('detects Vue TypeScript source under apps/ monorepo layouts', () => {
   );
 
   const output = run(project, 'init');
-  assert.match(output, /Created \.agents\/policy\/vue-primevue\.md/);
+  assert.match(output, /Created \.agents[\\/]policy[\\/]vue-primevue\.md/);
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
 

@@ -7,7 +7,7 @@ node bin/agent-config.mjs init --user
 ```
 
 The installer adds a managed block to `~/.claude/CLAUDE.md` that imports the canonical
-Codex user policy. It also installs the portable skill under `~/.claude/skills/`.
+Codex user policy. It also installs the portable skills under `~/.claude/skills/`.
 Repository instructions have higher priority than user memory.
 
 Use project-scoped installation only when the team wants the guidance committed:

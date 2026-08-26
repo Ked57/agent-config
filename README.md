@@ -7,8 +7,8 @@ Cursor, Claude Code, and Codex.
 
 - A concise shared completion, verification, safety, and anti-slop policy.
 - Conditional TypeScript, React, Vue + PrimeVue, and DDD domain-module policy packs shared by all harnesses.
-- The `fullstack-typescript-quality` skill for installing and auditing deterministic
-  quality tooling.
+- Portable skills for distinctive frontend design, high-fidelity Figma implementation,
+  and deterministic full-stack TypeScript quality tooling.
 - A user installer that gives Cursor, Claude Code, and Codex the same personal policy
   without changing application repositories.
 - An optional workspace installer that detects npm, pnpm, Yarn, or Bun; creates thin
@@ -28,8 +28,8 @@ This creates or updates:
 ~/.codex/AGENTS.md                         canonical personal policy (managed block)
 ~/.claude/CLAUDE.md                       Claude bridge to the canonical policy
 ~/.cursor/plugins/local/agent-config/     Cursor plugin with an always-on bridge rule
-~/.agents/skills/fullstack-typescript-quality/SKILL.md
-~/.claude/skills/fullstack-typescript-quality/SKILL.md
+~/.agents/skills/{frontend-design,figma-design-to-code,fullstack-typescript-quality}/
+~/.claude/skills/{frontend-design,figma-design-to-code,fullstack-typescript-quality}/
 ~/.agent-config/agent-config.lock.json
 ```
 
@@ -73,7 +73,9 @@ CLAUDE.md                                  thin Claude Code bridge to AGENTS.md
 .agents/policy/react.md                    React work, when detected
 .agents/policy/domain-module.md            domain work, when the convention is detected
 .agents/policy/vue-primevue.md             Vue work, when detected
-.agents/skills/fullstack-typescript-quality/SKILL.md
+.agents/skills/frontend-design/
+.agents/skills/figma-design-to-code/
+.agents/skills/fullstack-typescript-quality/
 .agents/agent-config.json                  project-owned command/routing map
 .agents/agent-config.lock.json
 .prettierignore                            managed ignore block for generated guidance
@@ -96,6 +98,18 @@ node bin/agent-config.mjs check --project ~/dev/my-webapp
 Project agents read `.agents/agent-config.json` directly to identify the verification
 commands relevant to their changed files. `check` validates this file's structure,
 command references, managed content, and lock ownership metadata.
+
+## Frontend skill scopes
+
+- `frontend-design` owns original visual direction and substantial redesigns. It grounds
+  palette, typography, composition, and motion in the product while preserving an
+  existing design system when one is in scope.
+- `figma-design-to-code` owns faithful implementation of a supplied Figma node. It
+  requires structured node context, repository component and token reuse, and rendered
+  comparison with the Figma reference.
+
+Use both only when a Figma design leaves a real implementation gap, such as responsive
+reflow or an unspecified state. Defined Figma details remain the source of truth.
 
 ## Ownership model
 

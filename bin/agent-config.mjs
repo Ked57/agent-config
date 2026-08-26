@@ -133,13 +133,23 @@ const replaceLineManagedBlock = (existing, name, contents) => {
 };
 
 const sharedPolicy = read(path.join(sourceRoot, 'policy/shared-policy.md'));
+const portableSkills = [
+  { name: 'fullstack-typescript-quality', files: ['SKILL.md'] },
+  { name: 'frontend-design', files: ['SKILL.md', 'LICENSE.txt'] },
+  { name: 'figma-design-to-code', files: ['SKILL.md'] }
+];
+const portableSkillFiles = portableSkills.flatMap(({ name, files }) => files.map((file) => ({
+  name,
+  file,
+  source: path.join(sourceRoot, 'skills', name, file)
+})));
 const managedSourceFiles = [
   'policy/shared-policy.md',
   'policy/typescript.md',
   'policy/react.md',
   'policy/domain-module.md',
   'policy/vue-primevue.md',
-  'skills/fullstack-typescript-quality/SKILL.md'
+  ...portableSkillFiles.map(({ name, file }) => `skills/${name}/${file}`)
 ];
 const revision = sha256(managedSourceFiles.map((file) => read(path.join(sourceRoot, file))).join('\n--- agent-config source boundary ---\n')).slice(0, 12);
 const userHome = os.homedir();
@@ -193,7 +203,7 @@ const hasReactSource = Boolean(dependencies.react || dependencies['react-dom'] |
   && (hasExtension('.tsx', '.jsx') || sourceContains(/from\s*['"]react(?:\/|['"])/) || sourceContains(/require\(\s*['"]react(?:\/|['"])/));
 const domainModuleParts = new Map();
 for (const file of sourceFiles) {
-  const match = file.match(/^(.*\/domain\/.*)\.(model|interface|service|mock)\.ts$/);
+  const match = file.match(/^(.*[\\/]domain[\\/].*)\.(model|interface|service|mock)\.ts$/);
   if (match) domainModuleParts.set(match[1], (domainModuleParts.get(match[1]) ?? new Set()).add(match[2]));
 }
 const hasDomainConvention = [...domainModuleParts.values()].some((parts) => parts.size === 4);
@@ -270,7 +280,7 @@ const configFile = target('.agents', 'agent-config.json');
 const prettierIgnoreFile = target('.prettierignore');
 const prettierIgnoreContents = '.agents/\n.cursor/rules/\nAGENTS.md\nCLAUDE.md';
 const policyDirectory = target('.agents', 'policy');
-const skillDirectory = target('.agents', 'skills', 'fullstack-typescript-quality');
+const skillsDirectory = target('.agents', 'skills');
 const legacyGeneratedFileHashes = new Map([
   ['.cursor/rules/10-agent-config-typescript.mdc', '9a85ebe11e8c80867e17dab4fe8275f4881b2f2a2e722367c9bd0ee86543815d'],
   ['.cursor/rules/20-agent-config-domain-module.mdc', '61a6642ed1ba8bcb688ecdc2be987c42f90f277ff72dfb5985ed91b4876c51e7'],
@@ -283,7 +293,7 @@ const managedFiles = [
   [path.join(policyDirectory, 'react.md'), path.join(sourceRoot, 'policy/react.md'), isReact],
   [path.join(policyDirectory, 'domain-module.md'), path.join(sourceRoot, 'policy/domain-module.md'), hasDomainConvention],
   [path.join(policyDirectory, 'vue-primevue.md'), path.join(sourceRoot, 'policy/vue-primevue.md'), isVue],
-  [path.join(skillDirectory, 'SKILL.md'), path.join(sourceRoot, 'skills/fullstack-typescript-quality/SKILL.md'), true]
+  ...portableSkillFiles.map(({ name, file, source }) => [path.join(skillsDirectory, name, file), source, true])
 ];
 
 const claudeBridgePolicy = 'Read and follow `AGENTS.md`.\n\nProject-specific quality routing is in `.agents/agent-config.json`. Before reporting implementation work complete, run the required verification for the changed files.';
@@ -295,11 +305,6 @@ const claudeUserFile = path.join(userHome, '.claude', 'CLAUDE.md');
 const cursorPluginDirectory = path.join(userHome, '.cursor', 'plugins', 'local', 'agent-config');
 const cursorPluginManifest = path.join(cursorPluginDirectory, '.cursor-plugin', 'plugin.json');
 const cursorUserRule = path.join(cursorPluginDirectory, 'rules', '00-agent-config.mdc');
-const portableSkillSource = path.join(sourceRoot, 'skills', 'fullstack-typescript-quality', 'SKILL.md');
-const userSkillFiles = [
-  path.join(userHome, '.agents', 'skills', 'fullstack-typescript-quality', 'SKILL.md'),
-  path.join(userHome, '.claude', 'skills', 'fullstack-typescript-quality', 'SKILL.md')
-];
 const userLockFile = path.join(userHome, '.agent-config', 'agent-config.lock.json');
 const userPolicyIntro = 'This managed block is the portable personal baseline shared by Codex, Claude Code, and Cursor. Repository-specific instructions take precedence when they conflict.';
 const claudeUserBridge = `@${userPolicyFile}\n\nRepository-specific instructions take precedence over this personal baseline.`;
@@ -319,11 +324,22 @@ const cursorPluginManifestContents = `${JSON.stringify({
 const userStandaloneFiles = [
   { key: 'cursor:plugin-manifest', destination: cursorPluginManifest, contents: cursorPluginManifestContents },
   { key: 'cursor:user-rule', destination: cursorUserRule, contents: cursorUserRuleContents },
-  ...userSkillFiles.map((destination, index) => ({
-    key: index === 0 ? 'portable-skill' : 'claude:portable-skill',
-    destination,
-    contents: read(portableSkillSource)
-  }))
+  ...portableSkillFiles.flatMap(({ name, file, source }) => [
+    {
+      key: name === 'fullstack-typescript-quality' && file === 'SKILL.md'
+        ? 'portable-skill'
+        : `skill:${name}:${file}`,
+      destination: path.join(userHome, '.agents', 'skills', name, file),
+      contents: read(source)
+    },
+    {
+      key: name === 'fullstack-typescript-quality' && file === 'SKILL.md'
+        ? 'claude:portable-skill'
+        : `claude:skill:${name}:${file}`,
+      destination: path.join(userHome, '.claude', 'skills', name, file),
+      contents: read(source)
+    }
+  ])
 ];
 
 const writeBridge = (file, name, contents, header = '') => {
@@ -505,10 +521,10 @@ const install = () => {
   safe = writePrettierIgnore() && safe;
 
   for (const legacyFile of legacyGeneratedFiles) {
-    const name = relative(legacyFile);
+    const name = relative(legacyFile).split(path.sep).join('/');
     const expectedHash = legacyGeneratedFileHashes.get(name);
     if (ownedManagedFiles.has(name) && exists(legacyFile)) {
-      if (sha256(read(legacyFile)) === expectedHash) {
+      if (sha256(read(legacyFile).replace(/\r\n/g, '\n')) === expectedHash) {
         remove(legacyFile);
         console.log(`Removed legacy managed ${name}`);
       } else {
@@ -578,7 +594,15 @@ const status = () => {
 };
 
 const check = () => {
-  const expected = [policyFile, claudeFile, cursorBridgeFile, prettierIgnoreFile, configFile, path.join(skillDirectory, 'SKILL.md'), lockFile];
+  const expected = [
+    policyFile,
+    claudeFile,
+    cursorBridgeFile,
+    prettierIgnoreFile,
+    configFile,
+    ...portableSkillFiles.map(({ name, file }) => path.join(skillsDirectory, name, file)),
+    lockFile
+  ];
   if (isTypeScript) expected.push(path.join(policyDirectory, 'typescript.md'));
   if (isReact) expected.push(path.join(policyDirectory, 'react.md'));
   if (hasDomainConvention) expected.push(path.join(policyDirectory, 'domain-module.md'));
