@@ -9,6 +9,45 @@ import test from 'node:test';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cli = path.join(root, 'bin/agent-config.mjs');
+const mattPocockSkills = [
+  'ask-matt',
+  'claude-handoff',
+  'code-review',
+  'codebase-design',
+  'diagnosing-bugs',
+  'domain-modeling',
+  'git-guardrails-claude-code',
+  'grill-me',
+  'grill-with-docs',
+  'grilling',
+  'handoff',
+  'implement',
+  'implement-spec',
+  'improve-codebase-architecture',
+  'loop-me',
+  'migrate-to-shoehorn',
+  'prototype',
+  'research',
+  'resolving-merge-conflicts',
+  'retro',
+  'scaffold-exercises',
+  'setup-matt-pocock-skills',
+  'setup-pre-commit',
+  'setup-ts-deep-modules',
+  'tdd',
+  'teach',
+  'to-questionnaire',
+  'to-spec',
+  'to-tickets',
+  'triage',
+  'wait-what',
+  'wayfinder',
+  'wizard',
+  'writing-beats',
+  'writing-for-agents',
+  'writing-fragments',
+  'writing-shape'
+];
 const run = (project, ...args) => execFileSync(process.execPath, [cli, ...args, '--project', project], {
   cwd: root,
   encoding: 'utf8'
@@ -65,6 +104,16 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   assert.ok(fs.existsSync(path.join(home, '.claude/skills/frontend-design/SKILL.md')));
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/figma-design-to-code/SKILL.md')));
   assert.ok(fs.existsSync(path.join(home, '.claude/skills/figma-design-to-code/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(home, '.agents/skills/tdd/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(home, '.agents/skills/tdd/tests.md')));
+  assert.ok(fs.existsSync(path.join(home, '.agents/skills/tdd/LICENSE.txt')));
+  assert.ok(fs.existsSync(path.join(home, '.claude/skills/tdd/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(home, '.agents/skills/setup-matt-pocock-skills/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(home, '.agents/skills/writing-for-agents/SKILL-MECHANICS.md')));
+  for (const name of mattPocockSkills) {
+    assert.ok(fs.existsSync(path.join(home, '.agents/skills', name, 'SKILL.md')), `missing user skill ${name}`);
+    assert.ok(fs.existsSync(path.join(home, '.claude/skills', name, 'SKILL.md')), `missing claude skill ${name}`);
+  }
 
   assert.doesNotThrow(() => runUser(home, 'check'));
   runUser(home, 'sync');
@@ -142,6 +191,10 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/frontend-design/SKILL.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/frontend-design/LICENSE.txt')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/figma-design-to-code/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/skills/tdd/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/skills/tdd/tests.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/skills/grilling/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/skills/wizard/template.sh')));
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /# agent-config:begin prettier-ignore/);
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /\.agents\//);
 
@@ -192,6 +245,30 @@ test('preserves colliding unmanaged generated-target files', () => {
 
   assert.throws(() => run(project, 'sync'));
   assert.equal(fs.readFileSync(collision, 'utf8'), '// Project-owned implementation\n');
+});
+
+test('vendors Matt Pocock skills with licenses and supporting files', () => {
+  const originalSkills = new Set(['frontend-design', 'figma-design-to-code', 'fullstack-typescript-quality']);
+  const discovered = fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !originalSkills.has(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+  assert.deepEqual(discovered, [...mattPocockSkills]);
+
+  for (const name of mattPocockSkills) {
+    const skillDirectory = path.join(root, 'skills', name);
+    assert.ok(fs.existsSync(path.join(skillDirectory, 'SKILL.md')), `missing ${name}/SKILL.md`);
+    const license = fs.readFileSync(path.join(skillDirectory, 'LICENSE.txt'), 'utf8');
+    assert.match(license, /Copyright \(c\) 2026 Matt Pocock/);
+  }
+
+  assert.ok(fs.existsSync(path.join(root, 'skills/tdd/tests.md')));
+  assert.ok(fs.existsSync(path.join(root, 'skills/tdd/mocking.md')));
+  assert.ok(fs.existsSync(path.join(root, 'skills/writing-for-agents/SKILL-MECHANICS.md')));
+  assert.ok(fs.existsSync(path.join(root, 'skills/codebase-design/DEEPENING.md')));
+  assert.ok(fs.existsSync(path.join(root, 'skills/wizard/template.sh')));
+  assert.ok(fs.existsSync(path.join(root, 'skills/diagnosing-bugs/scripts/hitl-loop.template.sh')));
+  assert.ok(fs.existsSync(path.join(root, 'skills/setup-ts-deep-modules/dependency-cruiser.config.cjs')));
 });
 
 test('frontend skills keep distinct triggers and required completion contracts', () => {

@@ -133,15 +133,33 @@ const replaceLineManagedBlock = (existing, name, contents) => {
 };
 
 const sharedPolicy = read(path.join(sourceRoot, 'policy/shared-policy.md'));
-const portableSkills = [
-  { name: 'fullstack-typescript-quality', files: ['SKILL.md'] },
-  { name: 'frontend-design', files: ['SKILL.md', 'LICENSE.txt'] },
-  { name: 'figma-design-to-code', files: ['SKILL.md'] }
-];
+const listSkillFiles = (directory) => {
+  const files = [];
+  const visit = (current, prefix) => {
+    const entries = fs.readdirSync(current, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      const relativePath = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+      if (entry.isDirectory()) visit(path.join(current, entry.name), relativePath);
+      else if (entry.isFile()) files.push(relativePath);
+    }
+  };
+  visit(directory, '');
+  return files;
+};
+const skillsRoot = path.join(sourceRoot, 'skills');
+const portableSkills = fs.readdirSync(skillsRoot, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => ({
+    name: entry.name,
+    files: listSkillFiles(path.join(skillsRoot, entry.name))
+  }))
+  .filter((skill) => skill.files.includes('SKILL.md'))
+  .sort((left, right) => left.name.localeCompare(right.name));
 const portableSkillFiles = portableSkills.flatMap(({ name, files }) => files.map((file) => ({
   name,
   file,
-  source: path.join(sourceRoot, 'skills', name, file)
+  source: path.join(sourceRoot, 'skills', name, ...file.split('/'))
 })));
 const managedSourceFiles = [
   'policy/shared-policy.md',

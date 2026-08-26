@@ -8,7 +8,8 @@ Cursor, Claude Code, and Codex.
 - A concise shared completion, verification, safety, and anti-slop policy.
 - Conditional TypeScript, React, Vue + PrimeVue, and DDD domain-module policy packs shared by all harnesses.
 - Portable skills for distinctive frontend design, high-fidelity Figma implementation,
-  and deterministic full-stack TypeScript quality tooling.
+  deterministic full-stack TypeScript quality tooling, and Matt Pocock's engineering
+  and productivity workflows.
 - A user installer that gives Cursor, Claude Code, and Codex the same personal policy
   without changing application repositories.
 - An optional workspace installer that detects npm, pnpm, Yarn, or Bun; creates thin
@@ -28,8 +29,8 @@ This creates or updates:
 ~/.codex/AGENTS.md                         canonical personal policy (managed block)
 ~/.claude/CLAUDE.md                       Claude bridge to the canonical policy
 ~/.cursor/plugins/local/agent-config/     Cursor plugin with an always-on bridge rule
-~/.agents/skills/{frontend-design,figma-design-to-code,fullstack-typescript-quality}/
-~/.claude/skills/{frontend-design,figma-design-to-code,fullstack-typescript-quality}/
+~/.agents/skills/<portable-skill>/
+~/.claude/skills/<portable-skill>/
 ~/.agent-config/agent-config.lock.json
 ```
 
@@ -73,9 +74,7 @@ CLAUDE.md                                  thin Claude Code bridge to AGENTS.md
 .agents/policy/react.md                    React work, when detected
 .agents/policy/domain-module.md            domain work, when the convention is detected
 .agents/policy/vue-primevue.md             Vue work, when detected
-.agents/skills/frontend-design/
-.agents/skills/figma-design-to-code/
-.agents/skills/fullstack-typescript-quality/
+.agents/skills/<portable-skill>/
 .agents/agent-config.json                  project-owned command/routing map
 .agents/agent-config.lock.json
 .prettierignore                            managed ignore block for generated guidance
@@ -98,6 +97,16 @@ node bin/agent-config.mjs check --project ~/dev/my-webapp
 Project agents read `.agents/agent-config.json` directly to identify the verification
 commands relevant to their changed files. `check` validates this file's structure,
 command references, managed content, and lock ownership metadata.
+
+## Portable skills
+
+The installer copies every `skills/<name>/` directory that contains a `SKILL.md`. That
+includes this repository's frontend and quality skills, plus Matt Pocock's skills
+vendored from [`mattpocock/skills`](https://github.com/mattpocock/skills) under the MIT
+License. Each vendored skill keeps its original files and a `LICENSE.txt`.
+
+Run `setup-matt-pocock-skills` once in a repository before using the engineering
+workflow skills (issue tracker, triage labels, and domain-doc layout).
 
 ## Frontend skill scopes
 
