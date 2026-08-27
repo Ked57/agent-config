@@ -39,7 +39,15 @@ Do not claim manual verification was performed when it was not.
 - Inspect existing dependencies and local patterns before adding a package. Do not add, replace, or upgrade dependencies solely to fit a preferred pattern.
 - Treat generated files, lockfiles, migrations, environment variables, and public API contracts as deliberate changes; update them only when the task requires it.
 - Keep secrets out of source, tests, fixtures, logs, and agent configuration.
-- For quality-stack installation, upgrades, or audits, follow the `fullstack-typescript-quality` skill when it is available.
+
+## Skill routing
+
+Load the named skill before acting when the task matches. Installed copies live with the agent configuration; each skill's description is the detailed trigger.
+
+- **Exact spec:** a supplied Figma node, Code Connect mapping, approved design screenshot, or other exact visual spec → `figma-design-to-code`. The spec wins over taste.
+- **Original UI:** designing or substantially reshaping an interface with no supplied spec → `frontend-design`.
+- **Complexity:** auditing or reducing cyclomatic complexity, nested branching, or a function that is hard to test because of too many paths → `complexity-audit`.
+- **Quality stack:** installing or auditing TypeScript formatting, lint, tests, coverage, hooks, or CI → `fullstack-typescript-quality`.
 
 ## Conditional guidance
 

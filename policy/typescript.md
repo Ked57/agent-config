@@ -14,7 +14,7 @@ Apply this policy when editing TypeScript or TSX files.
 ## Code design
 
 - Use clear names that describe behaviour and domain meaning.
-- Keep functions and watchers focused on one responsibility.
+- Keep functions and watchers focused on one responsibility. When branching, nesting, or path count is the problem, follow `complexity-audit`.
 - Prefer pure functions for business rules and transformations.
 - Separate domain logic from framework, UI, and transport concerns.
 - Use dependency injection at I/O boundaries when it materially improves testability; do not add abstraction layers without a concrete benefit.

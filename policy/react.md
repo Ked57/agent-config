@@ -9,6 +9,7 @@ Apply this policy when editing React components, hooks, JSX, or TSX files. Befor
 - Derive values from props and state during render. Do not store a value in state merely because it can be calculated from existing props or state.
 - Put user-initiated work in the event handler or form action that caused it. Do not introduce state plus an Effect solely to react to a click, submit, toggle, or input change.
 - Use the repository's established approach for server state, forms, client state, routing, styling, i18n, and component primitives. Do not add a competing library or provider without an explicit requirement.
+- When the repository uses shadcn/ui, reuse those primitives and, if present, the official `shadcn` skill or registry MCP rather than inventing parallel components.
 
 ## Effects are an external-system escape hatch
 
