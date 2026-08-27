@@ -8,8 +8,8 @@ Cursor, Claude Code, and Codex.
 - A concise shared completion, verification, safety, and anti-slop policy.
 - Conditional TypeScript, React, Vue + PrimeVue, and DDD domain-module policy packs shared by all harnesses.
 - Portable skills for distinctive frontend design, high-fidelity Figma implementation,
-  deterministic full-stack TypeScript quality tooling, and Matt Pocock's engineering
-  and productivity workflows.
+  complexity audits, deterministic full-stack TypeScript quality tooling, and Matt Pocock's
+  engineering and productivity workflows.
 - A user installer that gives Cursor, Claude Code, and Codex the same personal policy
   without changing application repositories.
 - An optional workspace installer that detects npm, pnpm, Yarn, or Bun; creates thin
@@ -112,13 +112,21 @@ workflow skills (issue tracker, triage labels, and domain-doc layout).
 
 - `frontend-design` owns original visual direction and substantial redesigns. It grounds
   palette, typography, composition, and motion in the product while preserving an
-  existing design system when one is in scope.
-- `figma-design-to-code` owns faithful implementation of a supplied Figma node. It
-  requires structured node context, repository component and token reuse, and rendered
-  comparison with the Figma reference.
+  existing design system when one is in scope. Stack exemplars live in its `EXAMPLES.md`.
+- `figma-design-to-code` owns faithful implementation of a supplied Figma node or other
+  exact visual spec. It requires structured target context, repository component and
+  token reuse, and rendered comparison with the spec.
+- `complexity-audit` owns measuring and reducing cyclomatic complexity. Metrics come
+  from a tool; extracts must stay behaviour-preserving and pass the deletion test.
 
-Use both only when a Figma design leaves a real implementation gap, such as responsive
-reflow or an unspecified state. Defined Figma details remain the source of truth.
+Always-on routing for these skills lives in `policy/shared-policy.md`, which the installer
+inlines into user and project `AGENTS.md`. Conditional packs add stack-specific pointers
+(`shadcn` in the React pack, PrimeVue composition in the Vue pack, `complexity-audit` in
+the TypeScript pack).
+
+Use `frontend-design` and `figma-design-to-code` together only when a spec leaves a real
+implementation gap, such as responsive reflow or an unspecified state. Defined spec
+details remain the source of truth.
 
 ## Ownership model
 
