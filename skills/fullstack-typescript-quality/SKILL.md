@@ -79,7 +79,8 @@ Use deterministic tools for rules that should not rely on agent memory:
 - `@typescript-eslint/no-explicit-any`;
 - `@typescript-eslint/switch-exhaustiveness-check` where type-aware linting is configured;
 - import/order or equivalent formatting/linting rules matching project conventions;
-- CI checks that run independently of an agent.
+- CI checks that run independently of an agent;
+- ESLint `complexity` and `max-depth` when the repository wants a branch-count floor (hotspot reduction follows `complexity-audit`).
 
 Do not add a custom rule simply to enforce a stylistic preference that the repository does not share.
 

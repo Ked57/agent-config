@@ -1,6 +1,6 @@
 ---
 name: frontend-design
-description: Use when designing or substantially reshaping a web interface without a supplied source-of-truth design. Establishes a product-specific visual direction and production-ready implementation. For faithful implementation of an existing Figma node, use figma-design-to-code instead.
+description: Use when designing or substantially reshaping a web interface without a supplied source-of-truth design. Do not use when a Figma node, Code Connect mapping, approved screenshot, or other exact visual spec is the source of truth; use figma-design-to-code instead.
 license: Apache-2.0; see LICENSE.txt
 ---
 
@@ -8,7 +8,9 @@ license: Apache-2.0; see LICENSE.txt
 
 Create a coherent interface that belongs to this product, audience, and task. Use this skill for original design and significant visual reinterpretation. When an existing design system or approved visual language is in scope, extend it deliberately rather than replacing it.
 
-This skill may complement `figma-design-to-code` only for decisions the supplied design leaves open, such as responsive reflow or an unspecified empty state. Figma remains the source of truth for every defined detail.
+This skill may complement `figma-design-to-code` only for decisions the supplied design leaves open, such as responsive reflow or an unspecified empty state. The supplied spec remains the source of truth for every defined detail.
+
+When the user needs to choose among looks rather than ship one, follow `prototype` (UI branch) instead of committing a single direction.
 
 ## Ground the direction
 
@@ -33,6 +35,8 @@ Define the smallest useful system before implementation:
 
 Critique the plan against the brief. Replace any choice that could be transplanted unchanged into a generic product in the same category. Spend visual boldness in one place and keep supporting elements disciplined.
 
+Then read [EXAMPLES.md](EXAMPLES.md) for the repository's stack (shadcn, PrimeVue, or vanilla) before writing markup. Match structure, density, and state coverage from those exemplars; copy a palette only when the brief left color unspecified.
+
 ## Build production UI
 
 - Follow the repository's framework, component library, styling system, assets, and conventions.
@@ -48,6 +52,16 @@ Run the interface and inspect screenshots at representative narrow and wide view
 
 Completion requires a working, responsive interface, passing repository checks, and visual inspection of the rendered result when the environment supports it. State any viewport, interaction, or browser path that could not be verified.
 
+## Companion skills when present
+
+Load at most one extra companion, and only if it is installed. Skip any that are missing. Do not load taste companions when `figma-design-to-code` owns the task.
+
+- `create-design-md` when the product has a visual language that is not yet written down.
+- `baseline-ui` for a polish pass on an existing product surface, not for original visual invention.
+- `improve-ui` when auditing an existing surface against its own design evidence.
+- `ui-skills-root` only to route to a more specific ui-skills skill.
+- Official `shadcn` skill or registry MCP when the repository already uses shadcn/ui.
+
 ## Provenance
 
-Adapted from Anthropic's [`frontend-design`](https://github.com/anthropics/skills/tree/main/skills/frontend-design) skill under the Apache License 2.0. This version adds cross-agent portability, repository design-system precedence, and an explicit boundary with Figma implementation.
+Adapted from Anthropic's [`frontend-design`](https://github.com/anthropics/skills/tree/main/skills/frontend-design) skill under the Apache License 2.0. This version adds cross-agent portability, repository design-system precedence, stack exemplars, and an explicit boundary with exact-spec implementation.
