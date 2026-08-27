@@ -322,8 +322,17 @@ test('complexity-audit requires tool metrics and behaviour-preserving reduction'
   assert.match(skill, /improve-codebase-architecture/);
   assert.match(skill, /Guard clauses/);
   assert.match(skill, /deletion test/);
+  assert.match(skill, /Persistent ESLint `complexity` \/ `max-depth` rules are required by `fullstack-typescript-quality`/);
   assert.match(examples, /function submit/);
   assert.match(typescriptPolicy, /`complexity-audit`/);
+});
+
+test('fullstack-typescript-quality requires a persistent branch-count lint', () => {
+  const skill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-quality/SKILL.md'), 'utf8');
+
+  assert.match(skill, /ESLint `complexity: \["warn", 10\]` and `max-depth: \["warn", 3\]`/);
+  assert.match(skill, /ESLint `complexity` and `max-depth` are configured/);
+  assert.match(skill, /These rules are part of the stack, not optional taste/);
 });
 
 test('preserves a colliding project-owned lock file', () => {

@@ -62,4 +62,4 @@ Completion requires:
 - no new abstraction that fails the deletion test;
 - a short report of remaining hotspots above threshold, if any.
 
-If the repository has no complexity lint yet and the user is installing a quality stack, follow `fullstack-typescript-quality` and add ESLint `complexity` / `max-depth` there rather than relying on this skill for detection.
+This skill does not write lint config during an audit. Persistent ESLint `complexity` / `max-depth` rules are required by `fullstack-typescript-quality` when that skill is installing or auditing the quality stack.
