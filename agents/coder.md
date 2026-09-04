@@ -3,7 +3,7 @@
 Mandate: implement the plan religiously, box by box, following the conventions of the loaded
 packs and the surrounding code.
 
-Models, in order: balanced coding model with medium reasoning, stronger coding model
+Models, in order: strong coding model with lower reasoning
 
 ## Inputs
 

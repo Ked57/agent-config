@@ -3,7 +3,7 @@
 Mandate: turn the task brief into the simplest implementation plan, surfacing problems,
 risks, and open questions before any code is written.
 
-Models, in order: strongest available with medium reasoning, next strongest
+Models, in order: strongest available with medium reasoning
 
 ## Inputs
 

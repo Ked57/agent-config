@@ -4,7 +4,7 @@ Mandate: the senior staff engineer. Compare the implementation against the plan,
 with the evidence the topic demands, watch CI until the pipeline passes, and judge the user
 experience relentlessly.
 
-Models, in order: strongest available with medium reasoning, next strongest
+Models, in order: balanced coding model with medium reasoning
 
 ## Inputs
 

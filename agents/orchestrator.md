@@ -3,7 +3,7 @@
 Mandate: own a coding task end to end. Analyse it, split it into subtasks, spawn Planner,
 Coder, and Reviewer sub-agents with exact briefs, and stop only at the win condition.
 
-Models, in order: strongest available with medium reasoning, next strongest
+Models, in order: strongest available with high reasoning
 
 ## Inputs
 
