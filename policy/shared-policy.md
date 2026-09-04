@@ -1,3 +1,14 @@
+# Start here
+
+You are reading `~/.agents/AGENTS.md` (user-scoped) or the `shared-policy` managed block
+in a project `AGENTS.md`.
+
+1. Read `~/.agents/policy/routing.md` and route the task on its three axes: tech, skill, topic.
+2. Coding task → read `~/.agents/policy/orchestration.md` and run the task through its roles. Non-coding task → answer directly with what routing loaded.
+
+Paths are user-scoped; a project-scoped install carries the same files under `.agents/` in
+the repository root. Use whichever exists.
+
 # Core completion contract
 
 ## Definition of done
@@ -18,6 +29,7 @@ Do not claim manual verification was performed when it was not.
 - Prefer the smallest change that satisfies the current requirement.
 - Fix failures introduced by the change before moving on.
 - Use existing repository scripts and test conventions; do not invent replacement commands when the repository already defines them.
+- Use `.agents/agent-config.json` to identify the required verification for changed files when the project provides it; otherwise inspect the repository's package/task-runner scripts and run the checks relevant to the change.
 - Run narrow, relevant checks during implementation, then the required project quality gate before completion.
 - Do not weaken tests, coverage thresholds, lint configuration, type checks, or CI configuration merely to make a change pass.
 - Do not bypass Git or quality checks unless explicitly authorised.
@@ -39,20 +51,3 @@ Do not claim manual verification was performed when it was not.
 - Inspect existing dependencies and local patterns before adding a package. Do not add, replace, or upgrade dependencies solely to fit a preferred pattern.
 - Treat generated files, lockfiles, migrations, environment variables, and public API contracts as deliberate changes; update them only when the task requires it.
 - Keep secrets out of source, tests, fixtures, logs, and agent configuration.
-- For quality-stack installation, upgrades, or audits, follow the `fullstack-typescript-quality` skill when it is available.
-
-## Conditional guidance
-
-Read the relevant policy pack from the active agent configuration before editing. A
-project-scoped installation keeps only the detected packs under `.agents/policy/`; a
-user-scoped installation inlines all packs later in the global policy file. Use the
-inlined sections instead of looking for project paths that are not present:
-
-- TypeScript or TSX files: `.agents/policy/typescript.md`, or the TypeScript standards section below.
-- React JSX or TSX files: `.agents/policy/react.md`, or the React section below.
-- Vue components, composables, PrimeVue UI, or Vue forms: `.agents/policy/vue-primevue.md`, or the Vue section below.
-- Domain modules: `.agents/policy/domain-module.md`, or the domain module section below, only when the repository already uses the four-file domain convention or the user requests it.
-
-Use `.agents/agent-config.json` to identify the required verification for changed files
-when a project provides it. Otherwise inspect the repository's package/task-runner
-scripts and run the available checks relevant to the change.

@@ -37,9 +37,9 @@ keep credentials in the platform secret store and out of the clone URL.
 First, add this **User Rule** in Cursor Settings:
 
 ```text
-Before doing any work, read and follow ~/.codex/AGENTS.md.
+Before doing any work, read and follow ~/.agents/AGENTS.md.
 Repository-specific instructions take precedence when they conflict.
-If ~/.codex/AGENTS.md cannot be read, report that before continuing.
+If ~/.agents/AGENTS.md cannot be read, report that before continuing.
 ```
 
 Cursor documents User Rules as applying to your Cloud Agent sessions across all
@@ -76,8 +76,8 @@ After saving or rebuilding an environment:
 1. Start a new cloud-agent session, not a session that predates the install.
 2. Run `node ~/.cache/agent-config/bin/agent-config.mjs status --user`.
 3. Run `node ~/.cache/agent-config/bin/agent-config.mjs check --user`.
-4. Ask the agent which personal policy file it loaded and confirm it reports the active
-   Codex-home `AGENTS.md` path.
+4. Ask the agent which personal policy file it loaded and confirm it reports
+   `~/.agents/AGENTS.md` (Codex also loads the managed block in the Codex-home `AGENTS.md`).
 
 Repository instructions remain authoritative when they conflict with this personal
 baseline.
