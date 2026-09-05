@@ -19,6 +19,9 @@ Codex, and Claude Code.
   `~/.agents/policy/<pack>.md`, `~/.agents/agents/<role>.md`,
   `~/.agents/skills/<name>/SKILL.md`). This repository's `AGENTS.md` is tooling-repo
   guidance, not the user-scoped shared policy.
+- Installed agents discover self-invoking skills from `policy/routing.md` skill
+  routing and each skill's description. Update both when adding a skill that should
+  fire on its own.
 - Do not add credentials, access tokens, session files, or absolute user-home
   paths. MCP registration is intentionally managed separately in each client.
 - Keep `adapters/` as client-specific registration documentation, not the

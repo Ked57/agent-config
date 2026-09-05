@@ -23,7 +23,7 @@ Use existing form state, error display, i18n, and PrimeVue patterns. Keep schema
 
 ## UI, accessibility, and tests
 
-- Reuse established PrimeVue components and local UI primitives.
+- Reuse established PrimeVue components, the repository token preset, and local UI primitives. For original UI composition patterns, read `frontend-design` EXAMPLES.md.
 - Use i18n for user-facing text unless the local convention explicitly differs.
 - Represent loading, empty, error, and success states where relevant.
 - Prefer user-facing selectors: role, then label, then visible text; use stable test IDs only when needed.

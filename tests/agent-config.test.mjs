@@ -173,6 +173,15 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   assert.ok(fs.existsSync(path.join(home, '.claude/skills/frontend-design/SKILL.md')));
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/figma-design-to-code/SKILL.md')));
   assert.ok(fs.existsSync(path.join(home, '.claude/skills/figma-design-to-code/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(home, '.agents/skills/frontend-design/EXAMPLES.md')));
+  assert.ok(fs.existsSync(path.join(home, '.agents/skills/complexity-audit/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(home, '.agents/skills/complexity-audit/references/typescript-before-after.md')));
+  assert.ok(fs.existsSync(path.join(home, '.claude/skills/complexity-audit/SKILL.md')));
+  const installedRouting = fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8');
+  assert.match(installedRouting, /## 2\. Skill/);
+  assert.match(installedRouting, /Exact visual spec:.*`figma-design-to-code`/s);
+  assert.match(installedRouting, /Original UI:.*`frontend-design`/s);
+  assert.match(installedRouting, /Complexity:.*`complexity-audit`/s);
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/tdd/SKILL.md')));
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/tdd/tests.md')));
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/tdd/LICENSE.txt')));
@@ -280,6 +289,13 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/frontend-design/SKILL.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/frontend-design/LICENSE.txt')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/figma-design-to-code/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/skills/frontend-design/EXAMPLES.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/skills/complexity-audit/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/skills/complexity-audit/references/typescript-before-after.md')));
+  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /## 2\. Skill/);
+  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /Exact visual spec:.*`figma-design-to-code`/s);
+  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /Original UI:.*`frontend-design`/s);
+  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /Complexity:.*`complexity-audit`/s);
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/tdd/SKILL.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/tdd/tests.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/grilling/SKILL.md')));
@@ -365,7 +381,7 @@ test('preserves colliding unmanaged generated-target files', () => {
 });
 
 test('vendors Matt Pocock skills with licenses and supporting files', () => {
-  const originalSkills = new Set(['frontend-design', 'figma-design-to-code', 'fullstack-typescript-quality']);
+  const originalSkills = new Set(['complexity-audit', 'frontend-design', 'figma-design-to-code', 'fullstack-typescript-quality']);
   const discovered = fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !originalSkills.has(entry.name) && !jakubKrehelSkills.includes(entry.name))
     .map((entry) => entry.name)
@@ -467,7 +483,7 @@ test('routes interface skills at precise task and role boundaries', () => {
   assert.match(routing, /A branch, pull request, commit range, or working-tree review.*starts only when the user explicitly invokes `interface-review`.*hands the cross-discipline audit to `better-interface`/s);
   assert.match(routing, /`break`, `explain-interface`, `interface-review`, and `variant` are explicitly user-invoked/);
   assert.match(routing, /`frontend-design` remains the.*original visual direction or substantial redesign/s);
-  assert.match(routing, /`figma-design-to-code` remains the.*faithful implementation of a supplied.*Figma node/s);
+  assert.match(routing, /`figma-design-to-code` remains the.*faithful implementation of a supplied.*Figma node or other exact visual spec/s);
 
   for (const name of focusedSkills) {
     const exactPath = `~/.agents/skills/${name}/SKILL.md`;
@@ -492,15 +508,53 @@ test('routes interface skills at precise task and role boundaries', () => {
 test('frontend skills keep distinct triggers and required completion contracts', () => {
   const frontendSkill = fs.readFileSync(path.join(root, 'skills/frontend-design/SKILL.md'), 'utf8');
   const figmaSkill = fs.readFileSync(path.join(root, 'skills/figma-design-to-code/SKILL.md'), 'utf8');
+  const examples = fs.readFileSync(path.join(root, 'skills/frontend-design/EXAMPLES.md'), 'utf8');
+  const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
 
   assert.match(frontendSkill, /without a supplied source-of-truth design/);
   assert.match(frontendSkill, /existing design system.*rather than replacing it/s);
   assert.match(frontendSkill, /screenshots at representative narrow and wide viewports/);
+  assert.match(frontendSkill, /\[EXAMPLES\.md\]\(EXAMPLES\.md\)/);
 
   assert.match(figmaSkill, /supplied Figma node/);
-  assert.match(figmaSkill, /structured design context for that node before editing code/);
+  assert.match(figmaSkill, /other exact visual spec/);
+  assert.match(figmaSkill, /structured design context before editing code/);
   assert.match(figmaSkill, /Reuse matching components, tokens, icons, and assets/);
-  assert.match(figmaSkill, /visually compared with Figma at the reference viewport/);
+  assert.match(figmaSkill, /visually compared with the spec at the reference viewport/);
+
+  assert.match(examples, /Origin UI/);
+  assert.match(examples, /Sakai Vue/);
+  assert.match(examples, /Every Layout/);
+
+  assert.match(routing, /## 2\. Skill/);
+  assert.match(routing, /Exact visual spec:.*`figma-design-to-code`/s);
+  assert.match(routing, /Original UI:.*`frontend-design`/s);
+  assert.match(routing, /Complexity:.*`complexity-audit`/s);
+});
+
+test('complexity-audit requires tool metrics and behaviour-preserving reduction', () => {
+  const skill = fs.readFileSync(path.join(root, 'skills/complexity-audit/SKILL.md'), 'utf8');
+  const examples = fs.readFileSync(
+    path.join(root, 'skills/complexity-audit/references/typescript-before-after.md'),
+    'utf8'
+  );
+  const typescriptPolicy = fs.readFileSync(path.join(root, 'policy/typescript.md'), 'utf8');
+
+  assert.match(skill, /Hand-counting `if`s is a last resort/);
+  assert.match(skill, /improve-codebase-architecture/);
+  assert.match(skill, /Guard clauses/);
+  assert.match(skill, /deletion test/);
+  assert.match(skill, /Persistent ESLint `complexity` \/ `max-depth` rules are required by `fullstack-typescript-quality`/);
+  assert.match(examples, /function submit/);
+  assert.match(typescriptPolicy, /`complexity-audit`/);
+});
+
+test('fullstack-typescript-quality requires a persistent branch-count lint', () => {
+  const skill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-quality/SKILL.md'), 'utf8');
+
+  assert.match(skill, /ESLint `complexity: \["warn", 10\]` and `max-depth: \["warn", 3\]`/);
+  assert.match(skill, /ESLint `complexity` and `max-depth` are configured/);
+  assert.match(skill, /These rules are part of the stack, not optional taste/);
 });
 
 test('preserves a colliding project-owned lock file', () => {
@@ -692,6 +746,7 @@ test('installs React guidance only when React source exists', () => {
 
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/react.md')));
+  assert.match(fs.readFileSync(path.join(project, '.agents/policy/react.md'), 'utf8'), /shadcn\/ui/);
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/domain-module.md')));
 });

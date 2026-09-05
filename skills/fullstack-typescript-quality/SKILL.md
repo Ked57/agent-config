@@ -40,6 +40,7 @@ Do not replace an established equivalent tool just to match this skill. Do not i
 | Vue/PrimeVue component behaviour | Cypress Component Testing | Primary component-test layer when already used. |
 | Critical user journeys | Cypress E2E | Keep the suite small and valuable. |
 | Coverage | Unit-test coverage | Apply meaningful per-layer thresholds. |
+| Branch count | ESLint `complexity` / `max-depth` | Warn at 10 / 3. Keep an existing equivalent. Reduction follows `complexity-audit`. |
 | Mutation testing | Stryker on selected domain logic | Never pre-commit; targeted CI/nightly/manual hardening. |
 
 ## Test-layer rules
@@ -79,9 +80,10 @@ Use deterministic tools for rules that should not rely on agent memory:
 - `@typescript-eslint/no-explicit-any`;
 - `@typescript-eslint/switch-exhaustiveness-check` where type-aware linting is configured;
 - import/order or equivalent formatting/linting rules matching project conventions;
-- CI checks that run independently of an agent.
+- CI checks that run independently of an agent;
+- ESLint `complexity: ["warn", 10]` and `max-depth: ["warn", 3]`. Keep an already-configured equivalent (existing ESLint values, Sonar, or another branch-count check) instead of duplicating it. Reducing reported hotspots follows `complexity-audit`.
 
-Do not add a custom rule simply to enforce a stylistic preference that the repository does not share.
+These rules are part of the stack, not optional taste. Do not add a custom rule simply to enforce a stylistic preference that the repository does not share.
 
 ## Routing contract
 
@@ -126,6 +128,7 @@ Example:
 Before declaring the setup complete:
 
 - [ ] Every declared script exists and exits successfully at least once.
+- [ ] ESLint `complexity` and `max-depth` are configured, or an existing equivalent branch-count check is kept.
 - [ ] A deliberate lint or type error is caught by the applicable configuration, then removed.
 - [ ] Unit, component, and E2E commands have been run when configured.
 - [ ] Coverage output is generated and exclusions are justified.

@@ -25,6 +25,9 @@ same files under `.agents/` in the repository root. Use whichever exists.
 - Reading legwork against primary sources → `research`.
 - Steps only a human can perform → `wizard`.
 - In-progress merge or rebase conflict → `resolving-merge-conflicts`.
+- Exact visual spec: a supplied Figma node, Code Connect mapping, approved design screenshot, or other exact visual spec → `figma-design-to-code`. The spec wins over taste.
+- Original UI: designing or substantially reshaping an interface with no supplied spec → `frontend-design`.
+- Complexity: auditing or reducing cyclomatic complexity, nested branching, or a function that is hard to test because of too many paths → `complexity-audit`.
 - Quality tooling install, upgrade, or audit → `fullstack-typescript-quality`.
 - Writing skills, `AGENTS.md`, or agent-facing docs → `writing-for-agents`.
 - Cross-discipline audit of an existing screen, flow, or repository → `better-interface`.
@@ -45,7 +48,7 @@ scope and hands the cross-discipline audit to `better-interface`.
 named workflows; route to them only when the user names one. `frontend-design` remains the
 route for original visual direction or substantial redesign without a source-of-truth
 design; `figma-design-to-code` remains the route for faithful implementation of a supplied
-Figma node.
+Figma node or other exact visual spec.
 
 `ask-matt` is the human-invoked full map of these skills and their flows; agents route with this table instead.
 
