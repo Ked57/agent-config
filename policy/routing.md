@@ -38,6 +38,11 @@ same files under `.agents/` in the repository root. Use whichever exists.
 - Surfaces, icons, visual polish, or optional motion → `better-ui`.
 - Product copy, labels, errors, empty states, voice, or terminology → `better-writing`.
 
+`fullstack-typescript-quality` owns quality-tooling orchestration; it loads
+`fullstack-typescript-static`, `fullstack-typescript-tests`, and
+`fullstack-typescript-mutation`. Static analysis, tests/coverage, and mutation rules belong
+to those siblings.
+
 `better-interface` owns review orchestration only; implementation and remediation route to the focused
 `better-accessibility`, `better-colors`, `better-layout`, `better-typography`, `better-ui`,
 or `better-writing` skill. A branch, pull request, commit range, or working-tree review

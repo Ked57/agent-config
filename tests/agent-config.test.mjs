@@ -381,7 +381,15 @@ test('preserves colliding unmanaged generated-target files', () => {
 });
 
 test('vendors Matt Pocock skills with licenses and supporting files', () => {
-  const originalSkills = new Set(['complexity-audit', 'frontend-design', 'figma-design-to-code', 'fullstack-typescript-quality']);
+  const originalSkills = new Set([
+    'complexity-audit',
+    'frontend-design',
+    'figma-design-to-code',
+    'fullstack-typescript-quality',
+    'fullstack-typescript-static',
+    'fullstack-typescript-tests',
+    'fullstack-typescript-mutation'
+  ]);
   const discovered = fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !originalSkills.has(entry.name) && !jakubKrehelSkills.includes(entry.name))
     .map((entry) => entry.name)
@@ -544,17 +552,18 @@ test('complexity-audit requires tool metrics and behaviour-preserving reduction'
   assert.match(skill, /improve-codebase-architecture/);
   assert.match(skill, /Guard clauses/);
   assert.match(skill, /deletion test/);
-  assert.match(skill, /Persistent ESLint `complexity` \/ `max-depth` rules are required by `fullstack-typescript-quality`/);
+  assert.match(skill, /Persistent ESLint complexity gates are required by `fullstack-typescript-static`/);
   assert.match(examples, /function submit/);
   assert.match(typescriptPolicy, /`complexity-audit`/);
 });
 
-test('fullstack-typescript-quality requires a persistent branch-count lint', () => {
-  const skill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-quality/SKILL.md'), 'utf8');
+test('fullstack-typescript-static requires persistent complexity gates', () => {
+  const staticSkill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-static/SKILL.md'), 'utf8');
+  const qualitySkill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-quality/SKILL.md'), 'utf8');
 
-  assert.match(skill, /ESLint `complexity: \["warn", 10\]` and `max-depth: \["warn", 3\]`/);
-  assert.match(skill, /ESLint `complexity` and `max-depth` are configured/);
-  assert.match(skill, /These rules are part of the stack, not optional taste/);
+  assert.match(staticSkill, /Cyclomatic complexity under 22 \(`complexity` with `max: 21`\)/);
+  assert.match(qualitySkill, /Branch count.*`fullstack-typescript-static`.*`complexity-audit`/s);
+  assert.match(qualitySkill, /Sibling owners were loaded and their gates applied/);
 });
 
 test('preserves a colliding project-owned lock file', () => {
