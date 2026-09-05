@@ -48,6 +48,35 @@ const mattPocockSkills = [
   'writing-fragments',
   'writing-shape'
 ];
+const modelInvokedJakubKrehelSkills = [
+  'better-accessibility',
+  'better-colors',
+  'better-interface',
+  'better-layout',
+  'better-typography',
+  'better-ui',
+  'better-writing'
+];
+const userInvokedJakubKrehelSkills = [
+  'break',
+  'explain-interface',
+  'interface-review',
+  'variant'
+];
+const jakubKrehelSkills = [
+  ...modelInvokedJakubKrehelSkills,
+  ...userInvokedJakubKrehelSkills
+].sort();
+const jakubKrehelLock = JSON.parse(fs.readFileSync(path.join(root, 'skills/jakubkrehel-skills.lock.json'), 'utf8'));
+const policyPacks = fs.readdirSync(path.join(root, 'policy'))
+  .filter((name) => name.endsWith('.md') && name !== 'shared-policy.md')
+  .map((name) => name.slice(0, -'.md'.length))
+  .sort();
+const roleFiles = fs.readdirSync(path.join(root, 'agents'))
+  .filter((name) => name.endsWith('.md'))
+  .map((name) => name.slice(0, -'.md'.length))
+  .sort();
+const sharedPolicySource = fs.readFileSync(path.join(root, 'policy/shared-policy.md'), 'utf8');
 const run = (project, ...args) => execFileSync(process.execPath, [cli, ...args, '--project', project], {
   cwd: root,
   encoding: 'utf8'
@@ -63,6 +92,28 @@ const runUser = (home, ...args) => execFileSync(process.execPath, [cli, ...args,
   encoding: 'utf8',
   env: userEnvironment(home)
 });
+const listFiles = (directory, relativeDirectory = '') => fs.readdirSync(path.join(directory, relativeDirectory), {
+  withFileTypes: true
+}).flatMap((entry) => {
+  const relativePath = path.join(relativeDirectory, entry.name);
+  return entry.isDirectory() ? listFiles(directory, relativePath) : [relativePath];
+}).sort();
+const assertInstalledSkillTree = (installationRoot, name) => {
+  const source = path.join(root, 'skills', name);
+  const destination = path.join(installationRoot, name);
+  assert.deepEqual(listFiles(destination), listFiles(source), `incomplete installed skill ${name}`);
+  for (const file of listFiles(source)) {
+    assert.equal(
+      fs.readFileSync(path.join(destination, file), 'utf8'),
+      fs.readFileSync(path.join(source, file), 'utf8'),
+      `stale installed skill file ${name}/${file}`
+    );
+  }
+};
+const normalizedContent = (file) => fs.readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
+const normalizedContentSha256 = (file) => crypto.createHash('sha256')
+  .update(normalizedContent(file))
+  .digest('hex');
 
 test('installs one personal policy across Codex, Claude Code, and Cursor', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-user-'));
@@ -78,14 +129,37 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   const installedPolicy = fs.readFileSync(codexPolicy, 'utf8');
   assert.match(installedPolicy, /Existing Codex preference/);
   assert.match(installedPolicy, /agent-config:begin user-policy/);
-  assert.match(installedPolicy, /# TypeScript standards/);
-  assert.match(installedPolicy, /# React \+ TypeScript/);
-  assert.match(installedPolicy, /# Vue 3 \+ TypeScript \+ PrimeVue/);
-  assert.match(installedPolicy, /# Domain module convention/);
+  assert.match(installedPolicy, /# Start here/);
+  assert.match(installedPolicy, /~\/\.agents\/policy\/routing\.md/);
+  assert.match(installedPolicy, /~\/\.agents\/policy\/orchestration\.md/);
+  assert.doesNotMatch(installedPolicy, /# TypeScript standards/);
+  const userAgentsMd = path.join(home, '.agents/AGENTS.md');
+  assert.ok(fs.existsSync(userAgentsMd), 'missing ~/.agents/AGENTS.md');
+  assert.equal(fs.readFileSync(userAgentsMd, 'utf8'), sharedPolicySource);
+  assert.match(fs.readFileSync(userAgentsMd, 'utf8'), /~\/\.agents\/AGENTS\.md/);
+  assert.ok(!fs.existsSync(path.join(home, '.agents/policy/shared-policy.md')));
+  assert.deepEqual(policyPacks, ['domain-module', 'orchestration', 'react', 'routing', 'typescript', 'vue-primevue']);
+  for (const pack of policyPacks) {
+    const installedPack = path.join(home, '.agents/policy', `${pack}.md`);
+    assert.ok(fs.existsSync(installedPack), `missing user pack ${pack}`);
+    assert.equal(fs.readFileSync(installedPack, 'utf8'), fs.readFileSync(path.join(root, 'policy', `${pack}.md`), 'utf8'));
+  }
+  for (const role of roleFiles) {
+    const installedRole = path.join(home, '.agents/agents', `${role}.md`);
+    assert.ok(fs.existsSync(installedRole), `missing user role ${role}`);
+    const installed = fs.readFileSync(installedRole, 'utf8');
+    assert.match(installed, /^<!-- agent-config:managed -->\n/);
+    assert.equal(
+      installed.replace(/^<!-- agent-config:managed -->\n/, ''),
+      fs.readFileSync(path.join(root, 'agents', `${role}.md`), 'utf8').replace(/\r\n/g, '\n')
+    );
+  }
+  assert.match(fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8'), /~\/\.agents\/policy\/orchestration\.md/);
+  assert.match(fs.readFileSync(path.join(home, '.agents/policy/orchestration.md'), 'utf8'), /~\/\.agents\/agents\/orchestrator\.md/);
 
   const installedClaudePolicy = fs.readFileSync(claudePolicy, 'utf8');
   assert.match(installedClaudePolicy, /Existing Claude preference/);
-  assert.ok(installedClaudePolicy.includes(`@${codexPolicy}`));
+  assert.ok(installedClaudePolicy.includes(`@${userAgentsMd}`));
 
   const cursorPlugin = path.join(home, '.cursor/plugins/local/agent-config');
   assert.deepEqual(
@@ -96,7 +170,7 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
       description: 'Personal cross-harness agent policy bridge.'
     }
   );
-  assert.ok(fs.readFileSync(path.join(cursorPlugin, 'rules/00-agent-config.mdc'), 'utf8').includes(codexPolicy));
+  assert.match(fs.readFileSync(path.join(cursorPlugin, 'rules/00-agent-config.mdc'), 'utf8'), /~\/\.agents\/AGENTS\.md/);
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/fullstack-typescript-quality/SKILL.md')));
   assert.ok(fs.existsSync(path.join(home, '.claude/skills/fullstack-typescript-quality/SKILL.md')));
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/frontend-design/SKILL.md')));
@@ -108,10 +182,11 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/complexity-audit/SKILL.md')));
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/complexity-audit/references/typescript-before-after.md')));
   assert.ok(fs.existsSync(path.join(home, '.claude/skills/complexity-audit/SKILL.md')));
-  assert.match(installedPolicy, /## Skill routing/);
-  assert.match(installedPolicy, /`figma-design-to-code`/);
-  assert.match(installedPolicy, /`frontend-design`/);
-  assert.match(installedPolicy, /`complexity-audit`/);
+  const installedRouting = fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8');
+  assert.match(installedRouting, /## 2\. Skill/);
+  assert.match(installedRouting, /Exact visual spec:.*`figma-design-to-code`/s);
+  assert.match(installedRouting, /Original UI:.*`frontend-design`/s);
+  assert.match(installedRouting, /Complexity:.*`complexity-audit`/s);
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/tdd/SKILL.md')));
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/tdd/tests.md')));
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/tdd/LICENSE.txt')));
@@ -122,10 +197,18 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
     assert.ok(fs.existsSync(path.join(home, '.agents/skills', name, 'SKILL.md')), `missing user skill ${name}`);
     assert.ok(fs.existsSync(path.join(home, '.claude/skills', name, 'SKILL.md')), `missing claude skill ${name}`);
   }
+  for (const name of jakubKrehelSkills) {
+    assertInstalledSkillTree(path.join(home, '.agents/skills'), name);
+    assertInstalledSkillTree(path.join(home, '.claude/skills'), name);
+  }
 
   assert.doesNotThrow(() => runUser(home, 'check'));
+  fs.rmSync(userAgentsMd);
+  assert.throws(() => runUser(home, 'check'));
   runUser(home, 'sync');
+  assert.equal(fs.readFileSync(userAgentsMd, 'utf8'), sharedPolicySource);
   assert.match(fs.readFileSync(codexPolicy, 'utf8'), /Existing Codex preference/);
+  assert.doesNotThrow(() => runUser(home, 'check'));
 });
 
 test('preserves colliding user-level standalone files', () => {
@@ -150,8 +233,10 @@ test('honours a custom Codex home for the canonical user policy', () => {
   });
 
   const canonicalPolicy = path.join(codexHome, 'AGENTS.md');
+  const userAgentsMd = path.join(home, '.agents/AGENTS.md');
   assert.ok(fs.existsSync(canonicalPolicy));
-  assert.ok(fs.readFileSync(path.join(home, '.claude/CLAUDE.md'), 'utf8').includes(`@${canonicalPolicy}`));
+  assert.equal(fs.readFileSync(userAgentsMd, 'utf8'), sharedPolicySource);
+  assert.ok(fs.readFileSync(path.join(home, '.claude/CLAUDE.md'), 'utf8').includes(`@${userAgentsMd}`));
   assert.doesNotThrow(() => execFileSync(process.execPath, [cli, 'check', '--user'], {
     cwd: root,
     encoding: 'utf8',
@@ -189,7 +274,17 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
 
   run(project, 'init');
 
-  assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /vue-primevue\.md/);
+  assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /# Start here/);
+  assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /~\/\.agents\/policy\/routing\.md/);
+  assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /~\/\.agents\/policy\/orchestration\.md/);
+  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /vue-primevue\.md/);
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/routing.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/orchestration.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/shared-policy.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/AGENTS.md')));
+  for (const role of roleFiles) {
+    assert.ok(fs.existsSync(path.join(project, '.agents/agents', `${role}.md`)), `missing project role ${role}`);
+  }
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/react.md')));
@@ -202,11 +297,17 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/frontend-design/EXAMPLES.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/complexity-audit/SKILL.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/complexity-audit/references/typescript-before-after.md')));
-  assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /## Skill routing/);
+  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /## 2\. Skill/);
+  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /Exact visual spec:.*`figma-design-to-code`/s);
+  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /Original UI:.*`frontend-design`/s);
+  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /Complexity:.*`complexity-audit`/s);
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/tdd/SKILL.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/tdd/tests.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/grilling/SKILL.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/wizard/template.sh')));
+  for (const name of jakubKrehelSkills) {
+    assertInstalledSkillTree(path.join(project, '.agents/skills'), name);
+  }
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /# agent-config:begin prettier-ignore/);
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /\.agents\//);
 
@@ -221,6 +322,31 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   assert.equal(JSON.parse(fs.readFileSync(configPath, 'utf8')).commands.fast, 'custom fast');
 
   run(project, 'check');
+
+  fs.rmSync(path.join(project, '.agents/agents/coder.md'));
+  assert.throws(() => run(project, 'check'));
+  run(project, 'sync');
+  run(project, 'check');
+});
+
+test('role files are self-contained and the router chain resolves to them', () => {
+  const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
+  const orchestration = fs.readFileSync(path.join(root, 'policy/orchestration.md'), 'utf8');
+  assert.match(routing, /~\/\.agents\/policy\/orchestration\.md/);
+  assert.doesNotMatch(orchestration, /## Workflow graph|Skill router|Topic router/);
+  for (const role of roleFiles) {
+    assert.match(orchestration, new RegExp(`~/\\.agents/agents/${role}\\.md`));
+    const contents = fs.readFileSync(path.join(root, 'agents', `${role}.md`), 'utf8');
+    assert.match(contents, /^Models, in order: /m, `${role} lacks a model fallback list`);
+    assert.match(contents, /## Inputs/);
+    assert.match(contents, /## Output|## Handoffs received/);
+    assert.match(contents, /## Exit/);
+    assert.doesNotMatch(contents, /`\.agents\/(policy|agents|skills)\//, `${role} uses a project-relative path`);
+  }
+  const orchestrator = fs.readFileSync(path.join(root, 'agents/orchestrator.md'), 'utf8');
+  assert.match(orchestrator, /## Workflow graph/);
+  assert.match(orchestrator, /## Win condition/);
+  assert.match(orchestrator, /Read `~\/\.agents\/agents\/<role>\.md`/);
 });
 
 test('preserves an unmanaged AGENTS.md instead of overwriting it', () => {
@@ -260,9 +386,17 @@ test('preserves colliding unmanaged generated-target files', () => {
 });
 
 test('vendors Matt Pocock skills with licenses and supporting files', () => {
-  const originalSkills = new Set(['complexity-audit', 'frontend-design', 'figma-design-to-code', 'fullstack-typescript-quality']);
+  const originalSkills = new Set([
+    'complexity-audit',
+    'frontend-design',
+    'figma-design-to-code',
+    'fullstack-typescript-quality',
+    'fullstack-typescript-static',
+    'fullstack-typescript-tests',
+    'fullstack-typescript-mutation'
+  ]);
   const discovered = fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && !originalSkills.has(entry.name))
+    .filter((entry) => entry.isDirectory() && !originalSkills.has(entry.name) && !jakubKrehelSkills.includes(entry.name))
     .map((entry) => entry.name)
     .sort();
   assert.deepEqual(discovered, [...mattPocockSkills]);
@@ -283,11 +417,112 @@ test('vendors Matt Pocock skills with licenses and supporting files', () => {
   assert.ok(fs.existsSync(path.join(root, 'skills/setup-ts-deep-modules/dependency-cruiser.config.cjs')));
 });
 
+test('locks every vendored Jakub Krehel file and license to its upstream commit', () => {
+  assert.equal(jakubKrehelLock.version, 1);
+  assert.equal(jakubKrehelLock.source, 'https://github.com/jakubkrehel/skills');
+  assert.equal(jakubKrehelLock.commit, '267330e1adfc66a718fb65fa6918c1f06d0a689e');
+  assert.equal(jakubKrehelLock.license.sourcePath, 'LICENSE');
+  assert.equal(jakubKrehelLock.license.installedAs, 'LICENSE.txt');
+  assert.deepEqual(Object.keys(jakubKrehelLock.skills).sort(), jakubKrehelSkills);
+
+  let canonicalLicense;
+  for (const name of jakubKrehelSkills) {
+    const skillDirectory = path.join(root, 'skills', name);
+    const lockedSkill = jakubKrehelLock.skills[name];
+    assert.equal(lockedSkill.upstreamPath, `skills/${name}`);
+    const lockedFiles = Object.keys(lockedSkill.files).map((file) => file.split(/[\\\\/]/).join('/')).sort();
+    const installedFiles = listFiles(skillDirectory)
+      .map((file) => file.split(path.sep).join('/'))
+      .sort();
+    assert.deepEqual(
+      installedFiles,
+      [...lockedFiles, jakubKrehelLock.license.installedAs].sort(),
+      `vendored inventory drifted for ${name}`
+    );
+
+    for (const file of lockedFiles) {
+      const lockedFileKey = Object.keys(lockedSkill.files).find((key) => key.split(/[\\\\/]/).join('/') === file);
+      assert.equal(
+        normalizedContentSha256(path.join(skillDirectory, file)),
+        lockedSkill.files[lockedFileKey],
+        `vendored content drifted for ${name}/${file}`
+      );
+    }
+
+    const licenseFile = path.join(skillDirectory, jakubKrehelLock.license.installedAs);
+    assert.equal(
+      normalizedContentSha256(licenseFile),
+      jakubKrehelLock.license.normalizedSha256,
+      `license drifted for ${name}`
+    );
+    canonicalLicense ??= normalizedContent(licenseFile);
+    assert.equal(normalizedContent(licenseFile), canonicalLicense, `license content differs for ${name}`);
+  }
+});
+
+test('keeps Jakub Krehel model and user invocation boundaries', () => {
+  for (const name of modelInvokedJakubKrehelSkills) {
+    const skill = fs.readFileSync(path.join(root, 'skills', name, 'SKILL.md'), 'utf8');
+    const openAiMetadata = fs.readFileSync(path.join(root, 'skills', name, 'agents/openai.yaml'), 'utf8');
+    assert.equal((skill.match(/^disable-model-invocation: true$/gm) ?? []).length, 0, `${name} must remain model-invoked`);
+    assert.equal((openAiMetadata.match(/^\s*allow_implicit_invocation: false$/gm) ?? []).length, 0, `${name} must allow implicit invocation`);
+  }
+
+  for (const name of userInvokedJakubKrehelSkills) {
+    const skill = fs.readFileSync(path.join(root, 'skills', name, 'SKILL.md'), 'utf8');
+    const openAiMetadata = fs.readFileSync(path.join(root, 'skills', name, 'agents/openai.yaml'), 'utf8');
+    assert.equal((skill.match(/^disable-model-invocation: true$/gm) ?? []).length, 1, `${name} must remain user-invoked`);
+    assert.equal((openAiMetadata.match(/^\s*allow_implicit_invocation: false$/gm) ?? []).length, 1, `${name} must reject implicit invocation`);
+  }
+});
+
+test('routes interface skills at precise task and role boundaries', () => {
+  const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
+  const planner = fs.readFileSync(path.join(root, 'agents/planner.md'), 'utf8');
+  const coder = fs.readFileSync(path.join(root, 'agents/coder.md'), 'utf8');
+  const reviewer = fs.readFileSync(path.join(root, 'agents/reviewer.md'), 'utf8');
+
+  const focusedSkills = modelInvokedJakubKrehelSkills.filter((name) => name !== 'better-interface');
+  for (const route of [
+    /- Cross-discipline audit of an existing screen, flow, or repository → `better-interface`\./,
+    /- Semantic HTML, keyboard or focus behaviour, forms, or assistive technology → `better-accessibility`\./,
+    /- Palettes, color tokens or formats, or measured contrast → `better-colors`\./,
+    /- Grouping, alignment, spacing, responsive structure, or spatial RTL → `better-layout`\./,
+    /- Type systems, fonts, wrapping, truncation, or rendered text → `better-typography`\./,
+    /- Surfaces, icons, visual polish, or optional motion → `better-ui`\./,
+    /- Product copy, labels, errors, empty states, voice, or terminology → `better-writing`\./
+  ]) assert.match(routing, route);
+  assert.match(routing, /`better-interface` owns review orchestration only; implementation and remediation route to the focused/s);
+  assert.match(routing, /A branch, pull request, commit range, or working-tree review.*starts only when the user explicitly invokes `interface-review`.*hands the cross-discipline audit to `better-interface`/s);
+  assert.match(routing, /`break`, `explain-interface`, `interface-review`, and `variant` are explicitly user-invoked/);
+  assert.match(routing, /`frontend-design` remains the.*original visual direction or substantial redesign/s);
+  assert.match(routing, /`figma-design-to-code` remains the.*faithful implementation of a supplied.*Figma node or other exact visual spec/s);
+
+  for (const name of focusedSkills) {
+    const exactPath = `~/.agents/skills/${name}/SKILL.md`;
+    assert.ok(planner.includes(exactPath), `planner does not load ${exactPath}`);
+    assert.ok(coder.includes(exactPath), `coder does not load ${exactPath}`);
+    assert.ok(reviewer.includes(exactPath), `reviewer does not load ${exactPath}`);
+  }
+  assert.doesNotMatch(planner, /skills\/better-interface\/SKILL\.md/);
+  assert.doesNotMatch(coder, /skills\/better-interface\/SKILL\.md/);
+  assert.match(reviewer, /skills\/better-interface\/SKILL\.md.*screen, flow, or repository.*interface-review.*hands off/s);
+  assert.match(coder, /skills\/break\/SKILL\.md.*skills\/variant\/SKILL\.md.*only when the user explicitly invokes/s);
+  assert.doesNotMatch(planner, /skills\/(break|variant)\/SKILL\.md/);
+  assert.doesNotMatch(reviewer, /skills\/(break|variant)\/SKILL\.md/);
+  assert.match(reviewer, /skills\/interface-review\/SKILL\.md.*only when the user explicitly invokes/s);
+  assert.doesNotMatch(planner, /skills\/interface-review\/SKILL\.md/);
+  assert.doesNotMatch(coder, /skills\/interface-review\/SKILL\.md/);
+  for (const role of [planner, coder, reviewer]) {
+    assert.doesNotMatch(role, /skills\/explain-interface/);
+  }
+});
+
 test('frontend skills keep distinct triggers and required completion contracts', () => {
   const frontendSkill = fs.readFileSync(path.join(root, 'skills/frontend-design/SKILL.md'), 'utf8');
   const figmaSkill = fs.readFileSync(path.join(root, 'skills/figma-design-to-code/SKILL.md'), 'utf8');
   const examples = fs.readFileSync(path.join(root, 'skills/frontend-design/EXAMPLES.md'), 'utf8');
-  const sharedPolicy = fs.readFileSync(path.join(root, 'policy/shared-policy.md'), 'utf8');
+  const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
 
   assert.match(frontendSkill, /without a supplied source-of-truth design/);
   assert.match(frontendSkill, /existing design system.*rather than replacing it/s);
@@ -304,10 +539,10 @@ test('frontend skills keep distinct triggers and required completion contracts',
   assert.match(examples, /Sakai Vue/);
   assert.match(examples, /Every Layout/);
 
-  assert.match(sharedPolicy, /## Skill routing/);
-  assert.match(sharedPolicy, /Exact spec:.*`figma-design-to-code`/s);
-  assert.match(sharedPolicy, /Original UI:.*`frontend-design`/s);
-  assert.match(sharedPolicy, /Complexity:.*`complexity-audit`/s);
+  assert.match(routing, /## 2\. Skill/);
+  assert.match(routing, /Exact visual spec:.*`figma-design-to-code`/s);
+  assert.match(routing, /Original UI:.*`frontend-design`/s);
+  assert.match(routing, /Complexity:.*`complexity-audit`/s);
 });
 
 test('complexity-audit requires tool metrics and behaviour-preserving reduction', () => {
@@ -322,17 +557,18 @@ test('complexity-audit requires tool metrics and behaviour-preserving reduction'
   assert.match(skill, /improve-codebase-architecture/);
   assert.match(skill, /Guard clauses/);
   assert.match(skill, /deletion test/);
-  assert.match(skill, /Persistent ESLint `complexity` \/ `max-depth` rules are required by `fullstack-typescript-quality`/);
+  assert.match(skill, /Persistent ESLint complexity gates are required by `fullstack-typescript-static`/);
   assert.match(examples, /function submit/);
   assert.match(typescriptPolicy, /`complexity-audit`/);
 });
 
-test('fullstack-typescript-quality requires a persistent branch-count lint', () => {
-  const skill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-quality/SKILL.md'), 'utf8');
+test('fullstack-typescript-static requires persistent complexity gates', () => {
+  const staticSkill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-static/SKILL.md'), 'utf8');
+  const qualitySkill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-quality/SKILL.md'), 'utf8');
 
-  assert.match(skill, /ESLint `complexity: \["warn", 10\]` and `max-depth: \["warn", 3\]`/);
-  assert.match(skill, /ESLint `complexity` and `max-depth` are configured/);
-  assert.match(skill, /These rules are part of the stack, not optional taste/);
+  assert.match(staticSkill, /Cyclomatic complexity under 22 \(`complexity` with `max: 21`\)/);
+  assert.match(qualitySkill, /Branch count.*`fullstack-typescript-static`.*`complexity-audit`/s);
+  assert.match(qualitySkill, /Sibling owners were loaded and their gates applied/);
 });
 
 test('preserves a colliding project-owned lock file', () => {
@@ -540,6 +776,7 @@ test('does not install framework packs from dependencies alone', () => {
 
   run(project, 'init');
 
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/orchestration.md')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/react.md')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));

@@ -62,4 +62,4 @@ Completion requires:
 - no new abstraction that fails the deletion test;
 - a short report of remaining hotspots above threshold, if any.
 
-This skill does not write lint config during an audit. Persistent ESLint `complexity` / `max-depth` rules are required by `fullstack-typescript-quality` when that skill is installing or auditing the quality stack.
+This skill does not write lint config during an audit. Persistent ESLint complexity gates are required by `fullstack-typescript-static` (loaded by `fullstack-typescript-quality`) when that stack is installing or auditing.

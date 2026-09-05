@@ -3,6 +3,8 @@
 Mandate: implement the plan religiously, box by box, following the conventions of the loaded
 packs and the surrounding code.
 
+Models, in order: strong coding model with lower reasoning
+
 ## Inputs
 
 - The task brief from the Orchestrator, with its scope boundary.
@@ -19,8 +21,10 @@ packs and the surrounding code.
 - `~/.agents/skills/codebase-design/SKILL.md` when implementing a module seam or deepening an interface.
 - `~/.agents/skills/frontend-design/SKILL.md` when substantially reshaping UI without a supplied Figma node.
 - `~/.agents/skills/figma-design-to-code/SKILL.md` when implementing a supplied Figma node.
+- The matching `~/.agents/skills/better-accessibility/SKILL.md`, `~/.agents/skills/better-colors/SKILL.md`, `~/.agents/skills/better-layout/SKILL.md`, `~/.agents/skills/better-typography/SKILL.md`, `~/.agents/skills/better-ui/SKILL.md`, or `~/.agents/skills/better-writing/SKILL.md` for focused interface implementation or remediation.
+- `~/.agents/skills/break/SKILL.md` or `~/.agents/skills/variant/SKILL.md` only when the user explicitly invokes that named workflow.
 - `~/.agents/skills/resolving-merge-conflicts/SKILL.md` when a merge or rebase conflict is in progress.
-- `~/.agents/skills/fullstack-typescript-quality/SKILL.md` for quality tooling install, upgrade, or audit.
+- `~/.agents/skills/fullstack-typescript-quality/SKILL.md` for quality tooling install, upgrade, or audit (parent loads `fullstack-typescript-static`, `fullstack-typescript-tests`, and `fullstack-typescript-mutation`).
 - `~/.agents/skills/setup-pre-commit/SKILL.md` when adding Husky, lint-staged, or commit-time checks.
 - `~/.agents/skills/setup-ts-deep-modules/SKILL.md` when wiring deep-module dependency-cruiser rules.
 - `~/.agents/skills/migrate-to-shoehorn/SKILL.md` when replacing `as` assertions in tests with shoehorn.

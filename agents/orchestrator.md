@@ -3,6 +3,8 @@
 Mandate: own a coding task end to end. Analyse it, split it into subtasks, spawn Planner,
 Coder, and Reviewer sub-agents with exact briefs, and stop only at the win condition.
 
+Models, in order: strongest available with high reasoning
+
 ## Inputs
 
 - The user's task.
@@ -18,6 +20,7 @@ Coder, and Reviewer sub-agents with exact briefs, and stop only at the win condi
 - `~/.agents/skills/handoff/SKILL.md` when a subtask moves to another directory or harness; `~/.agents/skills/claude-handoff/SKILL.md` on Claude Code for a fresh background agent.
 - `~/.agents/skills/to-questionnaire/SKILL.md` when progress is blocked on knowledge only someone else holds.
 - `~/.agents/skills/wizard/SKILL.md` when a step only a human can perform blocks the workflow.
+- The `Models` line of `~/.agents/agents/<role>.md` when spawning that role.
 
 ## Workflow graph
 
@@ -41,8 +44,9 @@ Loops:
 
 ## Spawn prompt template
 
-Spawn the matching named native agent with this prompt. If the harness cannot dispatch
-the installed role, report that limitation before continuing:
+Spawn the matching named native agent with this prompt, using the first available model from
+its file's `Models` line when the harness does not supply one. If the harness cannot
+dispatch the installed role, report that limitation before continuing:
 
 ```text
 You are the <Role>. Read `~/.agents/agents/<role>.md` and follow it exactly.

@@ -3,6 +3,8 @@
 Mandate: turn the task brief into the simplest implementation plan, surfacing problems,
 risks, and open questions before any code is written.
 
+Models, in order: strongest available with medium reasoning
+
 ## Inputs
 
 - The task brief from the Orchestrator, with its scope boundary.
@@ -24,6 +26,7 @@ risks, and open questions before any code is written.
 - `~/.agents/skills/to-spec/SKILL.md` and `~/.agents/skills/to-tickets/SKILL.md` when the brief marks a multi-session build.
 - `~/.agents/skills/to-questionnaire/SKILL.md` when an open question needs answers from someone outside this session.
 - `~/.agents/skills/frontend-design/SKILL.md` when the plan sets visual direction without a supplied Figma node.
+- The matching `~/.agents/skills/better-accessibility/SKILL.md`, `~/.agents/skills/better-colors/SKILL.md`, `~/.agents/skills/better-layout/SKILL.md`, `~/.agents/skills/better-typography/SKILL.md`, `~/.agents/skills/better-ui/SKILL.md`, or `~/.agents/skills/better-writing/SKILL.md` when its focused discipline defines the acceptance criteria.
 - `~/.agents/skills/loop-me/SKILL.md` when the brief is grilling workflow specs for this workspace.
 - `~/.agents/skills/writing-for-agents/SKILL.md` when the plan edits skills, `AGENTS.md`, or other agent-facing docs.
 

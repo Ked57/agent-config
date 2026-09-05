@@ -24,7 +24,11 @@ function fixture(t) {
   const run = (command, extra = [], environment = {}) => {
     const env = { ...process.env, HOME: home, USERPROFILE: home, ...environment };
     if (!('CODEX_HOME' in environment)) delete env.CODEX_HOME;
-    return spawnSync(process.execPath, [path.join(repo, 'bin/agent-config.mjs'), command, '--user', ...extra], { env, encoding: 'utf8' });
+    return spawnSync(process.execPath, [path.join(repo, 'bin/agent-config.mjs'), command, '--user', ...extra], {
+      env,
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024
+    });
   };
   return { repo, home, run, directory };
 }
