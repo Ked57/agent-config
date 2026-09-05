@@ -32,7 +32,7 @@ claims (12); agent-sized vertical slices (11); exact brief (10); skills as
 procedural knowledge (10); win condition verified (10); handoffs are
 artefacts (9); re-plan vs iterate is a verdict (9).
 
-## Reviewer (19/20 transcripts; Claude intro was music-only)
+## Reviewer (20/20 usable transcripts; Claude intro was music-only and replaced)
 
 Bots as first pass, you approve (13); hunt slop / almost-right (12);
 correctness, security, lived UX above nits (12); watch CI then distrust

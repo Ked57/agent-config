@@ -38,10 +38,11 @@ points sit first. The two-axis review (Standards and Spec) lives in
 `~/.agents/skills/code-review/SKILL.md`; this section is how to spend scarce
 judgment when the Coder is an agent.
 
-1. **Run review bots as a first pass. You are the approver (13/20).** Load
-   CodeRabbit / Copilot / CLI `/review` findings. Re-check every security or
-   correctness claim against the code and a failing test. Never copy their LGTM
-   into yours. Never let a bot set approve or request-changes.
+1. **Run review bots as a first pass. You are the approver (13/20).** Layer
+   the review: deterministic hooks, a local agent pass, a CI bot, then you.
+   Load CodeRabbit / Copilot / CLI `/review` findings. Re-check every security
+   or correctness claim against the code and a failing test. Never copy their
+   LGTM into yours. Never let a bot set approve or request-changes.
 2. **Hunt slop and “almost right,” not spelling (12/20).** AI diffs look
    finished. The expensive failure is plausible code: happy path works, the
    invariant does not. Flag spaghetti growth, duplicated utilities, authz holes,
@@ -76,7 +77,7 @@ judgment when the Coder is an agent.
 
 ## Sources (last 6 months)
 
-1. 2026-03-09 · Claude · Introducing Code Review · https://www.youtube.com/watch?v=RKsADl0ZC3Y (music-only captions; unused for Craft)
+1. 2026-03-27 · Owain Lewis · How I Review AI-Generated Code · https://www.youtube.com/watch?v=As2xy_cSx00 (replaces Claude “Introducing Code Review”, music-only captions)
 2. 2026-04-07 · Crema · Senior Developer Reviews My AI Built App · https://www.youtube.com/watch?v=x1SkQpKd8a8
 3. 2026-05-28 · Matt Pocock · Can Cursor's HARDCORE Review Skill Stop The Slop? · https://www.youtube.com/watch?v=mh5XZ-L5SFQ
 4. 2026-06-10 · Beyond Coding · Why The Best Engineers Are Solving Code Review Bottlenecks · https://www.youtube.com/watch?v=W1uG25of2t0

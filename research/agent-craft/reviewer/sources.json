@@ -4,20 +4,17 @@
     "start": "2026-03-05",
     "end": "2026-09-05"
   },
-  "selection_method": "Date window 2026-03-05 to 2026-09-05 from watch-page publishDate. On-topic title match for the role. Ranked by view count. Off-topic viral and unrelated-domain videos dropped.",
+  "selection_method": "Date window 2026-03-05 to 2026-09-05 from watch-page publishDate. On-topic title match for the role. Ranked by view count. Off-topic viral and unrelated-domain videos dropped. Claude Introducing Code Review (RKsADl0ZC3Y) had music-only captions and was replaced by the next on-topic in-window video with a usable transcript (As2xy_cSx00).",
   "candidate_count": 205,
   "in_window_count": 114,
   "selected": [
     {
-      "id": "RKsADl0ZC3Y",
-      "title": "Introducing Code Review",
-      "channel": "Claude",
-      "view_count": 375425,
-      "published": "2026-03-09",
-      "url": "https://www.youtube.com/watch?v=RKsADl0ZC3Y",
-      "queries": [
-        "code review best practices 2026"
-      ]
+      "id": "As2xy_cSx00",
+      "title": "How I Review AI-Generated Code",
+      "channel": "Owain Lewis",
+      "view_count": 30581,
+      "published": "2026-03-27",
+      "url": "https://www.youtube.com/watch?v=As2xy_cSx00"
     },
     {
       "id": "x1SkQpKd8a8",
@@ -25,11 +22,7 @@
       "channel": "Crema",
       "view_count": 289561,
       "published": "2026-04-07",
-      "url": "https://www.youtube.com/watch?v=x1SkQpKd8a8",
-      "queries": [
-        "senior developer PR review 2026",
-        "how senior developers review PRs 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=x1SkQpKd8a8"
     },
     {
       "id": "mh5XZ-L5SFQ",
@@ -37,10 +30,7 @@
       "channel": "Matt Pocock",
       "view_count": 85212,
       "published": "2026-05-28",
-      "url": "https://www.youtube.com/watch?v=mh5XZ-L5SFQ",
-      "queries": [
-        "effective code reviews 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=mh5XZ-L5SFQ"
     },
     {
       "id": "W1uG25of2t0",
@@ -48,18 +38,7 @@
       "channel": "Beyond Coding",
       "view_count": 81555,
       "published": "2026-06-10",
-      "url": "https://www.youtube.com/watch?v=W1uG25of2t0",
-      "queries": [
-        "code review best practices 2026",
-        "effective code reviews 2026",
-        "AI code review 2026",
-        "code review as a senior engineer 2026",
-        "reviewing AI generated code 2026",
-        "staff software engineer code review",
-        "how senior developers review PRs 2026",
-        "code review bottlenecks 2026",
-        "human code review with AI tools 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=W1uG25of2t0"
     },
     {
       "id": "c57vAe-mMLo",
@@ -67,27 +46,7 @@
       "channel": "IBM Technology and IBM Developer",
       "view_count": 55786,
       "published": "2026-08-31",
-      "url": "https://www.youtube.com/watch?v=c57vAe-mMLo",
-      "queries": [
-        "AI code review 2026"
-      ]
-    },
-    {
-      "id": "As2xy_cSx00",
-      "title": "How I Review AI-Generated Code",
-      "channel": "Owain Lewis",
-      "view_count": 30581,
-      "published": "2026-03-27",
-      "url": "https://www.youtube.com/watch?v=As2xy_cSx00",
-      "queries": [
-        "code review best practices 2026",
-        "effective code reviews 2026",
-        "code review as a senior engineer 2026",
-        "reviewing AI generated code 2026",
-        "how senior developers review PRs 2026",
-        "code review bottlenecks 2026",
-        "human code review with AI tools 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=c57vAe-mMLo"
     },
     {
       "id": "6tZ_R4m_Oc4",
@@ -95,12 +54,7 @@
       "channel": "Syntax",
       "view_count": 28585,
       "published": "2026-07-08",
-      "url": "https://www.youtube.com/watch?v=6tZ_R4m_Oc4",
-      "queries": [
-        "effective code reviews 2026",
-        "reviewing AI generated code 2026",
-        "code review bottlenecks 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=6tZ_R4m_Oc4"
     },
     {
       "id": "gR1HmrfcaIo",
@@ -108,10 +62,7 @@
       "channel": "Beau Carnes",
       "view_count": 27674,
       "published": "2026-04-02",
-      "url": "https://www.youtube.com/watch?v=gR1HmrfcaIo",
-      "queries": [
-        "effective code reviews 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=gR1HmrfcaIo"
     },
     {
       "id": "fFIjrtH6qjc",
@@ -119,12 +70,7 @@
       "channel": "The Serious CTO",
       "view_count": 27263,
       "published": "2026-04-16",
-      "url": "https://www.youtube.com/watch?v=fFIjrtH6qjc",
-      "queries": [
-        "code review best practices 2026",
-        "effective code reviews 2026",
-        "reviewing AI generated code 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=fFIjrtH6qjc"
     },
     {
       "id": "JmraS29Kqgs",
@@ -132,11 +78,7 @@
       "channel": "Convex",
       "view_count": 12608,
       "published": "2026-03-10",
-      "url": "https://www.youtube.com/watch?v=JmraS29Kqgs",
-      "queries": [
-        "effective code reviews 2026",
-        "code review bottlenecks 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=JmraS29Kqgs"
     },
     {
       "id": "6AxuSfSe4BA",
@@ -144,10 +86,7 @@
       "channel": "Modern Software Engineering",
       "view_count": 10248,
       "published": "2026-05-01",
-      "url": "https://www.youtube.com/watch?v=6AxuSfSe4BA",
-      "queries": [
-        "staff software engineer code review"
-      ]
+      "url": "https://www.youtube.com/watch?v=6AxuSfSe4BA"
     },
     {
       "id": "U2p01LVC5Oo",
@@ -155,10 +94,7 @@
       "channel": "Beyond Coding",
       "view_count": 10108,
       "published": "2026-07-29",
-      "url": "https://www.youtube.com/watch?v=U2p01LVC5Oo",
-      "queries": [
-        "code review bottlenecks 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=U2p01LVC5Oo"
     },
     {
       "id": "LnZDY6XC5pA",
@@ -166,21 +102,7 @@
       "channel": "NDC Conferences",
       "view_count": 5263,
       "published": "2026-07-31",
-      "url": "https://www.youtube.com/watch?v=LnZDY6XC5pA",
-      "queries": [
-        "reviewing AI generated code 2026"
-      ]
-    },
-    {
-      "id": "03VwVUadsRM",
-      "title": "How I Review AI-Written Code Without Reading a Single Line",
-      "channel": "DevOps & AI Toolkit",
-      "view_count": 3600,
-      "published": "2026-07-13",
-      "url": "https://www.youtube.com/watch?v=03VwVUadsRM",
-      "queries": [
-        "reviewing AI generated code 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=LnZDY6XC5pA"
     },
     {
       "id": "3rlvB_cxmTQ",
@@ -188,10 +110,7 @@
       "channel": "AI Coding Daily",
       "view_count": 3056,
       "published": "2026-09-01",
-      "url": "https://www.youtube.com/watch?v=3rlvB_cxmTQ",
-      "queries": [
-        "code review bottlenecks 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=3rlvB_cxmTQ"
     },
     {
       "id": "b8btDwbVL-c",
@@ -199,10 +118,7 @@
       "channel": "Technocratic Podcast",
       "view_count": 2993,
       "published": "2026-07-15",
-      "url": "https://www.youtube.com/watch?v=b8btDwbVL-c",
-      "queries": [
-        "reviewing AI generated code 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=b8btDwbVL-c"
     },
     {
       "id": "UZSrMcsiaSI",
@@ -210,10 +126,7 @@
       "channel": "Gerald Versluis",
       "view_count": 2411,
       "published": "2026-03-06",
-      "url": "https://www.youtube.com/watch?v=UZSrMcsiaSI",
-      "queries": [
-        "effective code reviews 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=UZSrMcsiaSI"
     },
     {
       "id": "TJPInBjhE4Q",
@@ -221,23 +134,7 @@
       "channel": "AI Engineer",
       "view_count": 1961,
       "published": "2026-07-12",
-      "url": "https://www.youtube.com/watch?v=TJPInBjhE4Q",
-      "queries": [
-        "how staff engineers review pull requests 2026",
-        "how I review pull requests staff engineer 2026",
-        "how senior developers review PRs 2026"
-      ]
-    },
-    {
-      "id": "tv8sQMUi25Q",
-      "title": "You don't need to review AI-generated code if you do this..",
-      "channel": "Software Developer Diaries",
-      "view_count": 1831,
-      "published": "2026-09-03",
-      "url": "https://www.youtube.com/watch?v=tv8sQMUi25Q",
-      "queries": [
-        "reviewing AI generated code 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=TJPInBjhE4Q"
     },
     {
       "id": "87bvmczUdwg",
@@ -245,12 +142,31 @@
       "channel": "JavaScript Conferences by GitNation",
       "view_count": 1624,
       "published": "2026-06-22",
-      "url": "https://www.youtube.com/watch?v=87bvmczUdwg",
-      "queries": [
-        "how staff engineers review pull requests 2026",
-        "how I review pull requests staff engineer 2026",
-        "code review bottlenecks 2026"
-      ]
+      "url": "https://www.youtube.com/watch?v=87bvmczUdwg"
+    },
+    {
+      "id": "UpYxUQqZ_pA",
+      "title": "How to Approve Pull Requests in GitHub - Complete Tutorial 2026",
+      "channel": "Saltfish",
+      "view_count": 1324,
+      "published": "2026-03-30",
+      "url": "https://www.youtube.com/watch?v=UpYxUQqZ_pA"
+    },
+    {
+      "id": "TW7ogv1U_Ek",
+      "title": "Code Reviews Are Becoming A Bottleneck w/ Sunita Verma | Episode 203",
+      "channel": "The Software Leaders Uncensored Podcast",
+      "view_count": 814,
+      "published": "2026-07-15",
+      "url": "https://www.youtube.com/watch?v=TW7ogv1U_Ek"
+    },
+    {
+      "id": "J4Q2lXQch7c",
+      "title": "The Bottleneck Moved: Why Code Review Is Now Worth Billions",
+      "channel": "Remote Ree",
+      "view_count": 482,
+      "published": "2026-08-20",
+      "url": "https://www.youtube.com/watch?v=J4Q2lXQch7c"
     }
   ]
 }
