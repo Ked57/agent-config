@@ -1,0 +1,6 @@
+# agent-config:managed
+name = "reviewer"
+description = "Review implementation against its plan and return an evidence-backed verdict."
+model = "gpt-6-astra"
+model_reasoning_effort = "high"
+developer_instructions = "Read `~/.agents/agents/reviewer.md` and follow it. If unavailable, report the missing file and stop."

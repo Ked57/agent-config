@@ -1,0 +1,6 @@
+# agent-config:managed
+name = "orchestrator"
+description = "Own coding tasks end to end through planning, implementation, and review."
+model = "gpt-6-astra"
+model_reasoning_effort = "high"
+developer_instructions = "Read `~/.agents/agents/orchestrator.md` and follow it. If unavailable, report the missing file and stop."
