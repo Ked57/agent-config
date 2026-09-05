@@ -789,6 +789,17 @@ const planUser = () => {
     hashes: Object.fromEntries(userStandaloneFiles.map(({ key, contents }) => [key, sha256(contents)]))
   };
   add(userLockFile, `${JSON.stringify(lock, null, 2)}\n`);
+  // A missing destination may still be a parent needed by another planned
+  // file. Detect those collisions before execution creates any directories.
+  const normalizeDestination = (file) => process.platform === 'win32' ? file.toLowerCase() : file;
+  const plannedFiles = new Set(actions.map(({ destination }) => normalizeDestination(destination)));
+  for (const { destination } of actions) {
+    let parent = path.dirname(normalizeDestination(destination));
+    while (parent !== path.dirname(parent)) {
+      if (plannedFiles.has(parent)) throw new Error(`Conflicting configuration destinations: ${parent} is a parent of ${destination}`);
+      parent = path.dirname(parent);
+    }
+  }
   return actions;
 };
 const showUserActions = (actions, preview = false) => {

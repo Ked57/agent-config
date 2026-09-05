@@ -238,3 +238,12 @@ test('validates Cursor model options before writes', (t) => {
   assert.notEqual(run('sync').status, 0);
   assert.deepEqual(snapshot(home), []);
 });
+
+test('rejects Codex roots that overlap planned files before writing anything', (t) => {
+  for (const relative of ['.agents/agents/coder.md', '.agent-config/agent-config.lock.json']) {
+    const { home, run } = fixture(t);
+    const result = run('sync', [], { CODEX_HOME: path.join(home, relative) });
+    assert.notEqual(result.status, 0);
+    assert.deepEqual(snapshot(home), [], `partial writes for ${relative}`);
+  }
+});
