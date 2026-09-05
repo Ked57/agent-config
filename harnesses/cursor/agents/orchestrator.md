@@ -1,7 +1,7 @@
 ---
 name: "orchestrator"
 description: "Own coding tasks end to end through planning, implementation, and review."
-model: "claude-opus-5[effort=high]"
+model: "auto[effort=high]"
 ---
 
 <!-- agent-config:managed -->

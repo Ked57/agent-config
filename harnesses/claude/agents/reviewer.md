@@ -2,7 +2,7 @@
 name: "reviewer"
 description: "Review implementation against its plan and return an evidence-backed verdict."
 model: "opus"
-effort: "high"
+effort: "medium"
 ---
 
 <!-- agent-config:managed -->

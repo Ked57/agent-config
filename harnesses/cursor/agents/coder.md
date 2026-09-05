@@ -1,7 +1,7 @@
 ---
 name: "coder"
 description: "Implement a scoped plan and return verification evidence."
-model: "gpt-5.6-sol[effort=low]"
+model: "auto[effort=low]"
 ---
 
 <!-- agent-config:managed -->

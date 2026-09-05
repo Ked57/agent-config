@@ -1,7 +1,7 @@
 ---
 name: "planner"
 description: "Turn a task brief into a scoped checklist plan with completion checks."
-model: "claude-opus-5[effort=medium]"
+model: "auto[effort=medium]"
 ---
 
 <!-- agent-config:managed -->

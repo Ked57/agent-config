@@ -1,7 +1,7 @@
 ---
 name: "reviewer"
 description: "Review implementation against its plan and return an evidence-backed verdict."
-model: "claude-opus-5[effort=high]"
+model: "auto[effort=high]"
 ---
 
 <!-- agent-config:managed -->

@@ -1,6 +1,6 @@
 # agent-config:managed
 name = "planner"
 description = "Turn a task brief into a scoped checklist plan with completion checks."
-model = "gpt-6-astra"
+model = "gpt-5.6-terra"
 model_reasoning_effort = "medium"
 developer_instructions = "Read `~/.agents/agents/planner.md` and follow it. If unavailable, report the missing file and stop."
