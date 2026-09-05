@@ -133,6 +133,11 @@ const replaceLineManagedBlock = (existing, name, contents) => {
 };
 
 const sharedPolicy = read(path.join(sourceRoot, 'policy/shared-policy.md'));
+// Human and checkout-only markdown is not installed as agent policy:
+// README.md, adapters/*/README.md, docs/, cloud-agent-install.md, and this
+// repository's AGENTS.md (tooling-repo guidance). policy/shared-policy.md is the
+// body of ~/.agents/AGENTS.md (user) and of the project AGENTS.md managed block;
+// it is not copied into .agents/policy/.
 const listSkillFiles = (directory) => {
   const files = [];
   const visit = (current, prefix) => {
@@ -161,12 +166,22 @@ const portableSkillFiles = portableSkills.flatMap(({ name, files }) => files.map
   file,
   source: path.join(sourceRoot, 'skills', name, ...file.split('/'))
 })));
+const policyRoot = path.join(sourceRoot, 'policy');
+const policyPacks = fs.readdirSync(policyRoot, { withFileTypes: true })
+  .filter((entry) => entry.isFile() && entry.name.endsWith('.md') && entry.name !== 'shared-policy.md')
+  .map((entry) => ({
+    name: entry.name.slice(0, -'.md'.length),
+    source: path.join(policyRoot, entry.name)
+  }))
+  .sort((left, right) => left.name.localeCompare(right.name));
+const roleFiles = fs.readdirSync(path.join(sourceRoot, 'agents'), { withFileTypes: true })
+  .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+  .map((entry) => ({ name: entry.name, source: path.join(sourceRoot, 'agents', entry.name) }))
+  .sort((left, right) => left.name.localeCompare(right.name));
 const managedSourceFiles = [
   'policy/shared-policy.md',
-  'policy/typescript.md',
-  'policy/react.md',
-  'policy/domain-module.md',
-  'policy/vue-primevue.md',
+  ...policyPacks.map(({ name }) => `policy/${name}.md`),
+  ...roleFiles.map(({ name }) => `agents/${name}`),
   ...portableSkillFiles.map(({ name, file }) => `skills/${name}/${file}`)
 ];
 const revision = sha256(managedSourceFiles.map((file) => read(path.join(sourceRoot, file))).join('\n--- agent-config source boundary ---\n')).slice(0, 12);
@@ -182,13 +197,10 @@ const codexHomeIsInsideUserHome = !path.isAbsolute(codexHomeRelative)
 const codexFiles = codexHomeIsInsideUserHome
   ? userFiles
   : createFileOperations(configuredCodexHome, 'Codex home');
-const userPolicy = [
-  sharedPolicy,
-  read(path.join(sourceRoot, 'policy/typescript.md')),
-  read(path.join(sourceRoot, 'policy/react.md')),
-  read(path.join(sourceRoot, 'policy/vue-primevue.md')),
-  read(path.join(sourceRoot, 'policy/domain-module.md'))
-].join('\n\n');
+// Codex keeps a managed block in ~/.codex/AGENTS.md. The same shared-policy body is
+// also written to ~/.agents/AGENTS.md so ~/.agents/... pointers resolve. Packs and
+// role files are standalone files under ~/.agents/.
+const userPolicy = sharedPolicy;
 const packagePath = path.join(projectRoot, 'package.json');
 const packageJson = !userScope && exists(packagePath) ? JSON.parse(read(packagePath)) : null;
 const dependencies = {
@@ -298,6 +310,7 @@ const configFile = target('.agents', 'agent-config.json');
 const prettierIgnoreFile = target('.prettierignore');
 const prettierIgnoreContents = '.agents/\n.cursor/rules/\nAGENTS.md\nCLAUDE.md';
 const policyDirectory = target('.agents', 'policy');
+const agentsDirectory = target('.agents', 'agents');
 const skillsDirectory = target('.agents', 'skills');
 const legacyGeneratedFileHashes = new Map([
   ['.cursor/rules/10-agent-config-typescript.mdc', '9a85ebe11e8c80867e17dab4fe8275f4881b2f2a2e722367c9bd0ee86543815d'],
@@ -306,11 +319,23 @@ const legacyGeneratedFileHashes = new Map([
   ['.agents/scripts/agent-check.mjs', '48536eb05c360225af97230a10edb66dfa352e01c316d19e06b761d935b74fa0']
 ]);
 const legacyGeneratedFiles = [...legacyGeneratedFileHashes.keys()].map((file) => target(...file.split('/')));
+const projectPackDetector = {
+  routing: true,
+  orchestration: true,
+  typescript: isTypeScript,
+  react: isReact,
+  'domain-module': hasDomainConvention,
+  'vue-primevue': isVue
+};
+const projectPackEnabled = Object.fromEntries(policyPacks.map(({ name }) => [
+  name,
+  // Packs without a detector install in every project so a new policy/*.md cannot
+  // silently skip the project installer.
+  projectPackDetector[name] ?? true
+]));
 const managedFiles = [
-  [path.join(policyDirectory, 'typescript.md'), path.join(sourceRoot, 'policy/typescript.md'), isTypeScript],
-  [path.join(policyDirectory, 'react.md'), path.join(sourceRoot, 'policy/react.md'), isReact],
-  [path.join(policyDirectory, 'domain-module.md'), path.join(sourceRoot, 'policy/domain-module.md'), hasDomainConvention],
-  [path.join(policyDirectory, 'vue-primevue.md'), path.join(sourceRoot, 'policy/vue-primevue.md'), isVue],
+  ...policyPacks.map(({ name, source }) => [path.join(policyDirectory, `${name}.md`), source, projectPackEnabled[name]]),
+  ...roleFiles.map(({ name, source }) => [path.join(agentsDirectory, name), source, true]),
   ...portableSkillFiles.map(({ name, file, source }) => [path.join(skillsDirectory, name, file), source, true])
 ];
 
@@ -319,19 +344,20 @@ const cursorBridgePolicy = 'Read and follow the repository `AGENTS.md`.\n\nUse `
 const cursorBridgeFile = target('.cursor', 'rules', '00-agent-config.mdc');
 
 const userPolicyFile = path.join(configuredCodexHome, 'AGENTS.md');
+const userAgentsFile = path.join(userHome, '.agents', 'AGENTS.md');
 const claudeUserFile = path.join(userHome, '.claude', 'CLAUDE.md');
 const cursorPluginDirectory = path.join(userHome, '.cursor', 'plugins', 'local', 'agent-config');
 const cursorPluginManifest = path.join(cursorPluginDirectory, '.cursor-plugin', 'plugin.json');
 const cursorUserRule = path.join(cursorPluginDirectory, 'rules', '00-agent-config.mdc');
 const userLockFile = path.join(userHome, '.agent-config', 'agent-config.lock.json');
 const userPolicyIntro = 'This managed block is the portable personal baseline shared by Codex, Claude Code, and Cursor. Repository-specific instructions take precedence when they conflict.';
-const claudeUserBridge = `@${userPolicyFile}\n\nRepository-specific instructions take precedence over this personal baseline.`;
+const claudeUserBridge = `@${userAgentsFile}\n\nRepository-specific instructions take precedence over this personal baseline.`;
 const cursorUserRuleContents = `---
 description: Load the personal cross-harness agent policy.
 alwaysApply: true
 ---
 
-Before doing any work, read and follow \`${userPolicyFile}\`.
+Before doing any work, read and follow \`~/.agents/AGENTS.md\`.
 
 Repository-specific instructions take precedence when they conflict. If the file cannot be read, report that before continuing.`;
 const cursorPluginManifestContents = `${JSON.stringify({
@@ -342,6 +368,17 @@ const cursorPluginManifestContents = `${JSON.stringify({
 const userStandaloneFiles = [
   { key: 'cursor:plugin-manifest', destination: cursorPluginManifest, contents: cursorPluginManifestContents },
   { key: 'cursor:user-rule', destination: cursorUserRule, contents: cursorUserRuleContents },
+  { key: 'agents:AGENTS.md', destination: userAgentsFile, contents: sharedPolicy },
+  ...policyPacks.map(({ name, source }) => ({
+    key: `policy:${name}`,
+    destination: path.join(userHome, '.agents', 'policy', `${name}.md`),
+    contents: read(source)
+  })),
+  ...roleFiles.map(({ name, source }) => ({
+    key: `agent:${name}`,
+    destination: path.join(userHome, '.agents', 'agents', name),
+    contents: read(source)
+  })),
   ...portableSkillFiles.flatMap(({ name, file, source }) => [
     {
       key: name === 'fullstack-typescript-quality' && file === 'SKILL.md'
@@ -618,13 +655,9 @@ const check = () => {
     cursorBridgeFile,
     prettierIgnoreFile,
     configFile,
-    ...portableSkillFiles.map(({ name, file }) => path.join(skillsDirectory, name, file)),
+    ...managedFiles.filter(([, , enabled]) => enabled).map(([destination]) => destination),
     lockFile
   ];
-  if (isTypeScript) expected.push(path.join(policyDirectory, 'typescript.md'));
-  if (isReact) expected.push(path.join(policyDirectory, 'react.md'));
-  if (hasDomainConvention) expected.push(path.join(policyDirectory, 'domain-module.md'));
-  if (isVue) expected.push(path.join(policyDirectory, 'vue-primevue.md'));
   const missing = expected.filter((file) => !exists(file));
   if (missing.length) {
     for (const file of missing) console.error(`Missing ${relative(file)}`);
