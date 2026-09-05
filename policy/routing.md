@@ -3,6 +3,7 @@
 Read this first for every task. Route on the three axes below, load only what matches, then
 take the exit. Paths are user-scoped (`~/.agents/...`); a project-scoped install carries the
 same files under `.agents/` in the repository root. Use whichever exists.
+Repository-specific instructions take precedence.
 
 ## 1. Tech (files touched → pack)
 

@@ -44,7 +44,9 @@ Loops:
 
 ## Spawn prompt template
 
-Spawn each role on the first available model from its file's `Models` line, with this prompt:
+Spawn the matching named native agent with this prompt, using the first available model from
+its file's `Models` line when the harness does not supply one. If the harness cannot
+dispatch the installed role, report that limitation before continuing:
 
 ```text
 You are the <Role>. Read `~/.agents/agents/<role>.md` and follow it exactly.

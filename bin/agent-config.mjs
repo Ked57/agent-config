@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import crypto from 'node:crypto';
+import { discoverAgents } from './native-agents.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +13,7 @@ const usage = 'Usage: node bin/agent-config.mjs <init|sync|check|status> [--proj
 const positional = [];
 let projectArgument;
 let userScope = false;
+let dryRun = false;
 for (let index = 0; index < args.length; index += 1) {
   const arg = args[index];
   if (arg === '--project') {
@@ -26,6 +28,8 @@ for (let index = 0; index < args.length; index += 1) {
     }
     projectArgument = value;
     index += 1;
+  } else if (arg === '--dry-run') {
+    dryRun = true;
   } else if (arg === '--user') {
     if (userScope) {
       console.error(`--user may only be provided once.\n${usage}`);
@@ -51,6 +55,10 @@ if (positional.length > 1) {
 }
 const command = positional[0] ?? 'help';
 const projectRoot = path.resolve(projectArgument ?? process.cwd());
+if (dryRun && (!userScope || !['init', 'sync'].includes(command))) {
+  console.error('--dry-run requires init or sync --user');
+  process.exit(1);
+}
 
 const read = (file) => fs.readFileSync(file, 'utf8');
 const exists = (file) => fs.existsSync(file);
@@ -366,17 +374,13 @@ const cursorPluginManifestContents = `${JSON.stringify({
   description: 'Personal cross-harness agent policy bridge.'
 }, null, 2)}\n`;
 const userStandaloneFiles = [
+  ...(userScope ? discoverAgents(sourceRoot, userHome, configuredCodexHome) : []),
   { key: 'cursor:plugin-manifest', destination: cursorPluginManifest, contents: cursorPluginManifestContents },
   { key: 'cursor:user-rule', destination: cursorUserRule, contents: cursorUserRuleContents },
   { key: 'agents:AGENTS.md', destination: userAgentsFile, contents: sharedPolicy },
   ...policyPacks.map(({ name, source }) => ({
     key: `policy:${name}`,
     destination: path.join(userHome, '.agents', 'policy', `${name}.md`),
-    contents: read(source)
-  })),
-  ...roleFiles.map(({ name, source }) => ({
-    key: `agent:${name}`,
-    destination: path.join(userHome, '.agents', 'agents', name),
     contents: read(source)
   })),
   ...portableSkillFiles.flatMap(({ name, file, source }) => [
@@ -421,33 +425,6 @@ const displayUserFile = (file) => {
     ? path.join('~', homeRelative)
     : file;
 };
-const writeUserBlock = (file, operations, name, contents, header = '') => {
-  if (!exists(file)) {
-    operations.write(file, `${header}${marker(name, contents)}`);
-    console.log(`Created ${displayUserFile(file)}`);
-    return true;
-  }
-  const existing = read(file);
-  const replacement = replaceManagedBlock(existing, name, contents);
-  if (replacement !== null) {
-    if (existing !== replacement) {
-      operations.write(file, replacement);
-      console.log(`Updated ${displayUserFile(file)}`);
-    }
-    return true;
-  }
-  const start = `<!-- agent-config:begin ${name} -->`;
-  const end = `<!-- agent-config:end ${name} -->`;
-  if (existing.includes(start) || existing.includes(end)) {
-    console.warn(`Preserved unmanaged ${displayUserFile(file)}; repair the ${name} managed block manually.`);
-    return false;
-  }
-  const next = `${existing.trimEnd()}\n\n${marker(name, contents)}`;
-  operations.write(file, next);
-  console.log(`Added managed policy to ${displayUserFile(file)}`);
-  return true;
-};
-
 const writePrettierIgnore = () => {
   if (!exists(prettierIgnoreFile)) {
     write(prettierIgnoreFile, lineMarker('prettier-ignore', prettierIgnoreContents));
@@ -735,135 +712,156 @@ const readUserLock = () => {
   }
 };
 
-const installUser = () => {
+const userOperationFor = (file) => {
+  const relative = path.relative(configuredCodexHome, file);
+  return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative) ? codexFiles : userFiles;
+};
+const userDestinationForKey = (key) => {
+  const current = userStandaloneFiles.find((file) => file.key === key);
+  if (current) return current.destination;
+  const agent = /^(?:(codex|claude|cursor):)?agent:([a-z][a-z0-9-]*)\.(md|toml)$/.exec(key);
+  if (agent && agent[3] === (agent[1] === 'codex' ? 'toml' : 'md')) return path.join(agent[1] === 'codex' ? configuredCodexHome : path.join(userHome, `.${agent[1] ?? 'agents'}`), 'agents', `${agent[2]}.${agent[3]}`);
+  const skill = /^(claude:)?skill:([a-z][a-z0-9-]*):([a-zA-Z0-9_./-]+)$/.exec(key);
+  if (skill && skill[3].split('/').every((part) => part && part !== '.' && part !== '..')) return path.join(userHome, skill[1] ? '.claude' : '.agents', 'skills', skill[2], skill[3]);
+  throw new Error(`Invalid managed ownership key: ${key}`);
+};
+const planUser = () => {
   if (!exists(userHome) || !fs.statSync(userHome).isDirectory()) throw new Error(`User home directory not found: ${userHome}`);
-  let safe = true;
-  const previousLock = readUserLock();
-  const trustedPreviousLock = isTrustedUserLock(previousLock);
-  const ownedManagedFiles = new Set(trustedPreviousLock ? previousLock.managedFiles : []);
-  const nextManagedFiles = [];
-
-  safe = writeUserBlock(
-    userPolicyFile,
-    codexFiles,
-    'user-policy',
-    `${userPolicyIntro}\n\n${userPolicy}`,
-    '# Personal agent instructions\n\n'
-  ) && safe;
-  safe = writeUserBlock(
-    claudeUserFile,
-    userFiles,
-    'claude-user-bridge',
-    claudeUserBridge,
-    '# Claude Code personal instructions\n\n'
-  ) && safe;
-
-  for (const { key, destination, contents } of userStandaloneFiles) {
-    if (exists(destination) && !ownedManagedFiles.has(key)) {
-      if (read(destination) === contents) {
-        console.log(`Adopted matching generated ${displayUserFile(destination)}`);
-      } else {
-        console.warn(`Preserved unmanaged ${displayUserFile(destination)}; move it or merge it manually before agent-config can manage this path.`);
-        safe = false;
-        continue;
-      }
+  // Inspect root components too: an explicitly configured root can itself be a
+  // junction, and checking only its descendants would miss that escape.
+  const inspectPath = (file) => {
+    let current = path.parse(file).root;
+    const parts = file.slice(current.length).split(path.sep).filter(Boolean);
+    for (const [index, part] of parts.entries()) {
+      current = path.join(current, part);
+      try {
+        const stat = fs.lstatSync(current);
+        if (stat.isSymbolicLink()) throw new Error(`Refusing symlinked configuration path: ${current}`);
+        if (index < parts.length - 1 && !stat.isDirectory()) throw new Error(`Configuration parent is not a directory: ${current}`);
+        if (index === parts.length - 1 && !stat.isFile()) throw new Error(`Configuration destination is not a regular file: ${current}`);
+      } catch (error) { if (error.code !== 'ENOENT') throw error; }
     }
-    const action = exists(destination) ? 'Synced' : 'Created';
-    userFiles.write(destination, contents);
-    nextManagedFiles.push(key);
+    userOperationFor(file).assertSafe(file);
+  };
+  if (configuredCodexHome === path.parse(configuredCodexHome).root || configuredCodexHome === userHome || (process.env.CODEX_HOME && !path.isAbsolute(process.env.CODEX_HOME))) throw new Error('CODEX_HOME must be an absolute dedicated configuration directory');
+  inspectPath(userLockFile);
+  const previous = readUserLock();
+  const trustedV2 = previous?.version === 2
+    && isTrustedUserLock({ ...previous, version: 1 })
+    && typeof previous.codexHome === 'string' && path.isAbsolute(previous.codexHome)
+    && isRecord(previous.hashes)
+    && Object.keys(previous.hashes).length === previous.managedFiles.length
+    && previous.managedFiles.every((key) => /^[a-f0-9]{64}$/.test(previous.hashes[key]));
+  if (exists(userLockFile) && !(isTrustedUserLock(previous) || trustedV2)) throw new Error('Invalid managed user lock metadata');
+  const owned = new Set(previous?.managedFiles ?? []);
+  // Ownership belongs to the installation root as well as the role name. A new
+  // CODEX_HOME must not inherit permission to overwrite another installation.
+  if (previous?.version === 2 && path.resolve(previous.codexHome) !== configuredCodexHome) {
+    for (const key of owned) if (key.startsWith('codex:agent:')) owned.delete(key);
+  }
+  for (const key of owned) inspectPath(userDestinationForKey(key));
+  const actions = [];
+  const add = (destination, contents) => {
+    inspectPath(destination);
+    const before = exists(destination) ? read(destination) : null;
+    actions.push({ destination, before, contents, action: before === contents ? 'unchanged' : before === null ? 'created' : 'updated' });
+  };
+  const block = (file, name, contents, header) => {
+    inspectPath(file);
+    const existing = exists(file) ? read(file) : null;
+    if (existing === null) return add(file, `${header}${marker(name, contents)}`);
+    const start = `<!-- agent-config:begin ${name} -->`;
+    const end = `<!-- agent-config:end ${name} -->`;
+    const occurrences = (token) => existing.split(token).length - 1;
+    if (occurrences(start) > 1 || occurrences(end) > 1) throw new Error(`Duplicate managed block: ${file}`);
+    const replacement = replaceManagedBlock(existing, name, contents);
+    if (replacement !== null) return add(file, replacement);
+    if (existing.includes(start) || existing.includes(end)) throw new Error(`Invalid managed block: ${file}`);
+    add(file, `${existing.trimEnd()}\n\n${marker(name, contents)}`);
+  };
+  block(userPolicyFile, 'user-policy', `${userPolicyIntro}\n\n${userPolicy}`, '# Personal agent instructions\n\n');
+  block(claudeUserFile, 'claude-user-bridge', claudeUserBridge, '# Claude Code personal instructions\n\n');
+  const destinations = new Set([userPolicyFile.toLowerCase(), claudeUserFile.toLowerCase(), userLockFile.toLowerCase()]);
+  for (const { key, destination, contents } of userStandaloneFiles) {
+    if (destinations.has(destination.toLowerCase())) throw new Error(`Duplicate destination: ${destination}`);
+    destinations.add(destination.toLowerCase());
+    inspectPath(destination);
+    if (exists(destination) && !owned.has(key) && read(destination) !== contents) throw new Error(`Preserved unmanaged ${displayUserFile(destination)}; move or merge it before synchronization.`);
+    add(destination, contents);
+  }
+  const keys = userStandaloneFiles.map(({ key }) => key);
+  for (const key of owned) {
+    if (keys.includes(key)) continue;
+    const destination = userDestinationForKey(key);
+    if (!exists(destination)) continue;
+    const before = read(destination);
+    const isAgent = /^(?:(codex|claude|cursor):)?agent:/.test(key);
+    const hasMarker = /^(?:# agent-config:managed|<!-- agent-config:managed -->)$/m.test(before.replace(/\r\n/g, '\n'));
+    const removable = isAgent && hasMarker && previous.version === 2 && sha256(before) === previous.hashes[key];
+    actions.push({ destination, before, contents: removable ? null : before, action: removable ? 'removed' : 'preserved' });
+  }
+  const lock = {
+    version: 2,
+    source: 'Ked57/agent-config',
+    scope: 'user',
+    codexHome: configuredCodexHome,
+    revision: sha256(userStandaloneFiles.map(({ key, contents }) => `${key}\n${contents}`).join('\n') + userPolicy).slice(0, 12),
+    installedAt: previous?.installedAt ?? new Date().toISOString(),
+    managedFiles: keys,
+    hashes: Object.fromEntries(userStandaloneFiles.map(({ key, contents }) => [key, sha256(contents)]))
+  };
+  add(userLockFile, `${JSON.stringify(lock, null, 2)}\n`);
+  // A missing destination may still be a parent needed by another planned
+  // file. Detect those collisions before execution creates any directories.
+  const normalizeDestination = (file) => process.platform === 'win32' ? file.toLowerCase() : file;
+  const plannedFiles = new Set(actions.map(({ destination }) => normalizeDestination(destination)));
+  for (const { destination } of actions) {
+    let parent = path.dirname(normalizeDestination(destination));
+    while (parent !== path.dirname(parent)) {
+      if (plannedFiles.has(parent)) throw new Error(`Conflicting configuration destinations: ${parent} is a parent of ${destination}`);
+      parent = path.dirname(parent);
+    }
+  }
+  return actions;
+};
+const showUserActions = (actions, preview = false) => {
+  for (const { action, destination, before, contents } of actions) {
+    if (action === 'unchanged') continue;
     console.log(`${action} ${displayUserFile(destination)}`);
+    if (preview && action !== 'preserved') {
+      console.log(`--- ${before === null ? '/dev/null' : displayUserFile(destination)}\n+++ ${contents === null ? '/dev/null' : displayUserFile(destination)}`);
+      const lines = (value) => value ? value.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n') : [];
+      const oldLines = lines(before);
+      const newLines = lines(contents);
+      console.log(`@@ -${oldLines.length ? 1 : 0},${oldLines.length} +${newLines.length ? 1 : 0},${newLines.length} @@`);
+      for (const line of oldLines) console.log(`-${line}`);
+      if (before && !before.endsWith('\n')) console.log('\\ No newline at end of file');
+      for (const line of newLines) console.log(`+${line}`);
+      if (contents && !contents.endsWith('\n')) console.log('\\ No newline at end of file');
+    }
   }
-
-  if (exists(userLockFile) && !trustedPreviousLock) {
-    console.warn(`Preserved unmanaged ${displayUserFile(userLockFile)}; move it or merge it manually before agent-config can manage this path.`);
-    safe = false;
-  } else {
-    const lock = {
-      version: 1,
-      source: 'Ked57/agent-config',
-      scope: 'user',
-      revision,
-      installedAt: new Date().toISOString(),
-      managedFiles: nextManagedFiles
-    };
-    userFiles.write(userLockFile, `${JSON.stringify(lock, null, 2)}\n`);
-    console.log(`Wrote ${displayUserFile(userLockFile)}`);
-  }
-
-  if (!safe) process.exitCode = 2;
+  console.log(['created', 'updated', 'removed', 'unchanged', 'preserved'].map((action) => `${action}=${actions.filter((item) => item.action === action).length}`).join(' '));
 };
-
+const installUser = () => {
+  const actions = planUser();
+  if (!dryRun) for (const { action, destination, contents } of actions) {
+    const operations = userOperationFor(destination);
+    if (action === 'created' || action === 'updated') operations.write(destination, contents);
+    else if (action === 'removed') operations.remove(destination);
+  }
+  showUserActions(actions, dryRun);
+};
 const statusUser = () => {
-  console.log(`User home: ${userHome}`);
-  console.log(`Codex home: ${configuredCodexHome}`);
-  console.log(`Source policy revision: ${revision}`);
-  for (const file of [
-    userPolicyFile,
-    claudeUserFile,
-    ...userStandaloneFiles.map(({ destination }) => destination),
-    userLockFile
-  ]) {
-    console.log(`${exists(file) ? 'present' : 'missing'} ${displayUserFile(file)}`);
-  }
+  console.log(`User home: ${userHome}\nCodex home: ${configuredCodexHome}`);
+  for (const { destination, action } of planUser()) console.log(`${action === 'unchanged' ? 'present' : action} ${displayUserFile(destination)}`);
 };
-
 const checkUser = () => {
-  const expected = [
-    userPolicyFile,
-    claudeUserFile,
-    ...userStandaloneFiles.map(({ destination }) => destination),
-    userLockFile
-  ];
-  const missing = expected.filter((file) => !exists(file));
-  if (missing.length) {
-    for (const file of missing) console.error(`Missing ${displayUserFile(file)}`);
+  const actions = planUser();
+  const drift = actions.filter(({ action }) => !['unchanged', 'preserved'].includes(action));
+  if (drift.length) {
+    showUserActions(drift);
     process.exitCode = 1;
-    return;
-  }
-
-  try {
-    codexFiles.assertSafe(userPolicyFile);
-    for (const file of expected.filter((candidate) => candidate !== userPolicyFile)) userFiles.assertSafe(file);
-  } catch (error) {
-    console.error(error.message);
-    process.exitCode = 1;
-    return;
-  }
-
-  const stale = [];
-  const expectedUserPolicy = marker('user-policy', `${userPolicyIntro}\n\n${userPolicy}`).trim();
-  if (!read(userPolicyFile).includes(expectedUserPolicy)) stale.push(displayUserFile(userPolicyFile));
-  if (!read(claudeUserFile).includes(marker('claude-user-bridge', claudeUserBridge).trim())) {
-    stale.push(displayUserFile(claudeUserFile));
-  }
-  for (const { destination, contents } of userStandaloneFiles) {
-    if (read(destination) !== contents) stale.push(displayUserFile(destination));
-  }
-  if (stale.length) {
-    for (const file of stale) console.error(`Outdated managed content: ${file}`);
-    process.exitCode = 1;
-    return;
-  }
-
-  const lock = readUserLock();
-  if (!isTrustedUserLock(lock)) {
-    console.error(`Invalid managed lock metadata: ${displayUserFile(userLockFile)}`);
-    process.exitCode = 1;
-    return;
-  }
-  if (lock.revision !== revision) {
-    console.error(`Outdated agent-config policy: installed ${lock.revision}, source ${revision}`);
-    process.exitCode = 1;
-    return;
-  }
-  const installedManagedFiles = [...lock.managedFiles].sort();
-  const expectedManagedFiles = userStandaloneFiles.map(({ key }) => key).sort();
-  if (JSON.stringify(installedManagedFiles) !== JSON.stringify(expectedManagedFiles)) {
-    console.error(`Invalid managed file ownership in ${displayUserFile(userLockFile)}; run sync --user to repair it.`);
-    process.exitCode = 1;
-    return;
-  }
-  console.log(`agent-config user check passed for ${userHome}`);
+  } else console.log(`agent-config user check passed for ${userHome}`);
 };
 
 try {
@@ -871,7 +869,7 @@ try {
   else if (command === 'check') userScope ? checkUser() : check();
   else if (command === 'status') userScope ? statusUser() : status();
   else if (command === 'help') {
-    console.log(`${usage}\n\ninit/sync installs managed configuration without overwriting project-owned instructions or routing. Use --user for personal configuration shared across repositories.`);
+    console.log(`${usage}\n\ninit/sync installs managed configuration without overwriting project-owned instructions or routing. Use --user for personal configuration shared across repositories. Add --dry-run to sync --user to preview file diffs without writing.`);
   } else {
     console.error(`Unknown command: ${command}\n${usage}`);
     process.exitCode = 1;

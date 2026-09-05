@@ -147,7 +147,12 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   for (const role of roleFiles) {
     const installedRole = path.join(home, '.agents/agents', `${role}.md`);
     assert.ok(fs.existsSync(installedRole), `missing user role ${role}`);
-    assert.equal(fs.readFileSync(installedRole, 'utf8'), fs.readFileSync(path.join(root, 'agents', `${role}.md`), 'utf8'));
+    const installed = fs.readFileSync(installedRole, 'utf8');
+    assert.match(installed, /^<!-- agent-config:managed -->\n/);
+    assert.equal(
+      installed.replace(/^<!-- agent-config:managed -->\n/, ''),
+      fs.readFileSync(path.join(root, 'agents', `${role}.md`), 'utf8').replace(/\r\n/g, '\n')
+    );
   }
   assert.match(fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8'), /~\/\.agents\/policy\/orchestration\.md/);
   assert.match(fs.readFileSync(path.join(home, '.agents/policy/orchestration.md'), 'utf8'), /~\/\.agents\/agents\/orchestrator\.md/);

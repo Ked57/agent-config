@@ -31,3 +31,14 @@ This creates `.cursor/rules/00-agent-config.mdc`, a thin bridge to the workspace
 `.agents/agents/`, and the shared TypeScript, React, domain, and Vue/PrimeVue conditional
 policy packs live under `.agents/`, so Codex, Claude Code, and Cursor follow the same
 source of truth. These repository files are intended to be committed.
+
+## Native agents
+
+Native agents are installed in `~/.cursor/agents/`, separately from the policy
+bridge plugin. Markdown frontmatter sets a model ID with an effort option; the
+body explicitly loads `~/.agents/agents/<role>.md`. Reload the session after installing.
+See [Cursor subagents](https://cursor.com/docs/subagents).
+
+Edit the corresponding source under `harnesses/cursor/agents/`, then run
+`node bin/agent-config.mjs sync --user --dry-run` to inspect the changes before syncing.
+Model availability depends on the installed harness version and account.
