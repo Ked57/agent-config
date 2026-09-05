@@ -365,7 +365,14 @@ test('preserves colliding unmanaged generated-target files', () => {
 });
 
 test('vendors Matt Pocock skills with licenses and supporting files', () => {
-  const originalSkills = new Set(['frontend-design', 'figma-design-to-code', 'fullstack-typescript-quality']);
+  const originalSkills = new Set([
+    'frontend-design',
+    'figma-design-to-code',
+    'fullstack-typescript-quality',
+    'fullstack-typescript-static',
+    'fullstack-typescript-tests',
+    'fullstack-typescript-mutation'
+  ]);
   const discovered = fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !originalSkills.has(entry.name) && !jakubKrehelSkills.includes(entry.name))
     .map((entry) => entry.name)
