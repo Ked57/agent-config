@@ -72,39 +72,44 @@ user experience.
 
 ## Craft
 
-Staff-lead practice from the top in-window videos (Mar–Sep 2026). Recurring
-points sit first. Spawn mechanics stay in the graph above; this section is
-how to size, isolate, and supervise the work.
+Staff-lead practice from twenty in-window transcripts (Mar–Sep 2026). Weight
+is how many of those twenty independently teach the move. Recurring points sit
+first. Apply these *while* following the graph above; do not restate it.
 
-1. **Agent-sized tickets with a blocking graph.** Each spawn is one vertical
-   slice that fits a single smart session. Independent slices run in parallel;
-   blocked slices wait. Horizontal “do the whole layer” work is the usual
-   mis-size (Pocock PRD→issues / Sandcastle; VS Code multi-agent; IBM
-   orchestration).
-2. **Isolated context per role.** The implementer does not review its own
-   diff. Review and merge run as separate spawns (or a later loop) with a
-   clean window. Authors protect code still in context; a second agent
-   catches what they will not (Pocock implement→review; Sandcastle
-   implementer/reviewer/merger).
-3. **Exact briefs, progressive load.** The spawn prompt already names packs,
-   skills, and the upstream artefact. Skills themselves load as name +
-   description first, body only when the task matches — do not dump every
-   skill into the worker (IBM agent skills; OpenClaw; Nate Herk agent teams).
-4. **Specification is the product.** Unambiguous intent, tests, and state
-   machines are what agents execute. Code is the disposable rendering of
-   that spec. If juniors generate faster than seniors can review, the
-   Orchestrator shrank the wrong bottleneck: size the plan and the review
-   loop, not the typing (Axel Molist; Ryan Lopopolo harness engineering).
-5. **Supervise, do not YOLO.** AFK / parallel workers need a sandbox and a
-   backlog they can pick from. Permissions prompts are a design smell for
-   this role: either sandbox or stay in the loop. Watch the review cycle
-   until `approved`; `comments` returns to the Coder, `wrong direction`
-   returns to the Planner (Sandcastle; OpenClaw security; the graph above).
-
-**Failure modes:** one mega-brief instead of slices; the same agent
-implementing and approving; loading every skill “just in case”; treating
-green tests written by the implementer as proof; seniors drowning in review
-while juniors emit unreviewable diffs.
+1. **Isolate each specialist (12/20).** Spawn Planner, Coder, and Reviewer into
+   a clean window, worktree, or sandbox. The parent keeps the thin routing
+   context. Workers start from the *brief* plus the upstream artefact, not from
+   this dirty session. Parallel Coders each get a worktree and non-overlapping
+   files.
+2. **Review in a clean window; judge output, not claims (12/20).** The
+   implementer is a biased reviewer of code it just wrote. After the Coder’s
+   report, spawn the Reviewer with the plan, the diff, and the standards. Treat
+   green tests written by the implementer as a claim until the Reviewer has
+   checked them. `approved` requires evidence.
+3. **Agent-sized vertical slices with a blocking graph (11/20).** Each spawn is
+   one vertical slice that fits a single smart session. Independent slices run
+   in parallel; blocked slices wait. Horizontal “do the whole layer” is the
+   usual mis-size. Fan out only the unblocked set.
+4. **Exact brief: role, scope, file owners, named return (10/20).** Teammates
+   inherit no history. Fill the spawn template so a cold agent can execute.
+   Name the files. Name the return artefact. Cap the live team at a handful of
+   specialists.
+5. **Skills as procedural knowledge; progressive load (10/20).** Point spawned
+   roles at the skills they need. Do not dump every skill into the worker. When
+   a miss is institutional, encode it as a skill, not as more prompt prose.
+6. **The win condition is verified, not “looks done” (10/20).** Stop only when
+   the plan boxes are ticked, the quality gates named in the plan have been
+   run, the Reviewer has `approved` with evidence, and any unverified item is
+   reported as blocked. A plausible summary is not done.
+7. **Handoffs are artefacts; verify at the boundary (9/20).** Pass a spec, a
+   ticket, an implementation report, a verdict — not a 100k dirty window.
+   Validate the artefact before acting on it. Semantic failure looks well-formed
+   and is wrong.
+8. **Re-plan versus iterate is a verdict (9/20).** `comments` on a sound plan
+   returns to the Coder. `wrong direction` returns to the Planner. Blurry or
+   risky work fans out as prototypes *before* the main plan. Slop output means
+   re-chunk, not another hopeful iterate. AFK workers need a sandbox; YOLO
+   permissions is the failure mode the sandbox exists to replace.
 
 ## Sources (last 6 months)
 

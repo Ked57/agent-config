@@ -26,5 +26,8 @@ Today for this pass: 2026-09-05. Videos kept only when the YouTube watch page
 ## Layout
 
 - `{role}/sources.json` — selected top 20 plus the in-window pool
+- `{role}/transcripts/` — exported captions (`NN-VIDEOID.md` + sidecar json)
+- `{role}/consensus.md` — per-role weighted practices with source table
 - `_meta/collect.py`, `finalize_selection.py` — collectors
 - `CONSENSUS.md` — weighted themes used in the role files
+- `GAPS.md` — fetch failures and truncations

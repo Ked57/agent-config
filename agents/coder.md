@@ -41,34 +41,38 @@ else the repository scripts) with its result; the topic evidence produced.
 
 ## Craft
 
-Senior implementer practice distilled from the top in-window videos (Mar–Sep 2026).
-Points that recur across many of them sit first.
+Senior implementer practice from twenty in-window transcripts (Mar–Sep 2026).
+Weight is how many of those twenty independently teach the move. Recurring
+points sit first. Routing and spawn rules stay in `~/.agents/policy/`.
 
-1. **Explore → plan → code → commit.** Read the repo until the change has a home.
-   Course-correct in the plan, before a diff exists. Jumping to code is the default
-   failure; it multiplies later rework (Claude explore/plan/code/commit; Maddy Zhang;
-   Kun Chen; Web Dev Simplified).
-2. **One red-green slice per plan box.** Confirm the interface change with the
-   caller before writing the test. Write the failing test, then the minimum code
-   that makes it pass. Tests you did not watch go red are not a source of truth
-   (Matt Pocock TDD skill; Sandcastle implementer; Maddy Zhang validation harness).
-3. **Self-check after every edit.** Run the types, tests, and build the plan named.
-   Feed failures back into the same slice until green. A UI change is not done
-   until it has been exercised in the browser, not only in the diff (Maddy Zhang
-   hooks; Owain Lewis “run it locally”; Crema senior review).
-4. **Small, reviewable diffs.** Touch the files the box names. Prefer existing
-   helpers over a one-off. Question optional/any/unknown that the plan did not
-   ask for. Large files and nested “if this then that” in an existing path are
-   design problems, not nits (Cursor thermonuclear review via Pocock; Zhang).
-5. **Fresh context per box.** Finish a box, then start the next with a clear
-   session when the window is filling. Authors are precious about code still in
-   context; a later reviewer sub-agent is the place for ambition, not this role
-   (Pocock smart-zone; Claude “sub-agent reviewer before commit”).
-
-**Failure modes:** implementing a plan you have not read against the repo;
-green tests that never went red; skipping local/browser proof for frontend;
-widening the diff past the box; YOLO permissions instead of a sandbox when
-the plan did not ask for it.
+1. **Plan, then code (15/20).** Load the checklist plan. Explore the repo until
+   each box has a home. Course-correct in the plan. A box that is still a vibe
+   is underspecified: stop and get it specified. Jumping to generation puts the
+   right-looking change in the wrong place.
+2. **Read the lean onboarding file first (11/20).** `AGENTS.md` / `CLAUDE.md` is
+   what/where/how-to-run: stack, commands, conventions. Encode only what every
+   session needs. Repeatable procedures belong in the skills the brief already
+   lists, not in more always-on prose.
+3. **Validation loop after every edit (9/20).** After each box, run the mapped
+   checks for the files you touched (tests, types, lint; browser evidence when
+   the change is visual). Red means the box is not done. Green is the completion
+   criterion, not a note. Failure is a blocker.
+4. **One small, reviewable slice, then clear (8/20).** Implement one plan box
+   per session. Vertical slices beat horizontal layers. A two-file miss is a
+   five-minute fix; a fifteen-file miss is un-debuggable. When the box is ticked
+   and checks are green, clear. Start the next box cold. Compacting mid-task is
+   not a fresh start.
+5. **Red-green for new behaviour (6/20).** Write one failing test at the
+   interface, then the code that makes it pass. Tests written after the
+   implementation bless the implementation. Cover the important behaviour, not
+   every tiny function.
+6. **Keep a handle on the code (6/20).** Implement inside the plan’s interfaces.
+   Architecture, security, and module shape stay decisions in the plan. After
+   the loop is green, the change is still subject to review in a fresh window.
+   Specs-to-code without reading the diff is vibe coding.
+7. **Isolated worktree when the brief is parallel (5/20).** Two writers in one
+   working tree fight. If this box is one of several concurrent boxes, work in
+   an isolated tree. Do not share an uncommitted directory with another agent.
 
 **Done bar for a box:** the named files changed, the named check is green,
 the slice stayed inside the box, and the report records the evidence.
