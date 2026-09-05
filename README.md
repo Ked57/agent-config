@@ -10,6 +10,7 @@ Cursor, Claude Code, and Codex.
 - Portable skills for distinctive frontend design, high-fidelity Figma implementation,
   deterministic full-stack TypeScript quality tooling, and Matt Pocock's engineering
   and productivity workflows.
+- Four shared agent roles with native Codex, Claude Code, and Cursor configurations.
 - A user installer that gives Cursor, Claude Code, and Codex the same personal policy
   without changing application repositories.
 - An optional workspace installer that detects npm, pnpm, Yarn, or Bun; creates thin
@@ -29,6 +30,11 @@ This creates or updates:
 ~/.codex/AGENTS.md                         canonical personal policy (managed block)
 ~/.claude/CLAUDE.md                       Claude bridge to the canonical policy
 ~/.cursor/plugins/local/agent-config/     Cursor plugin with an always-on bridge rule
+~/.agents/policy/                         shared packs and user task routing
+~/.agents/agents/<role>.md                shared behavior
+~/.codex/agents/<role>.toml               native Codex agents (or $CODEX_HOME/agents/)
+~/.claude/agents/<role>.md                native Claude Code agents
+~/.cursor/agents/<role>.md                native Cursor agents
 ~/.agents/skills/<portable-skill>/
 ~/.claude/skills/<portable-skill>/
 ~/.agent-config/agent-config.lock.json
@@ -44,6 +50,11 @@ node bin/agent-config.mjs sync --user
 node bin/agent-config.mjs status --user
 node bin/agent-config.mjs check --user
 ```
+
+The dry run previews file diffs and action counts without changing the installation.
+`check --user` detects missing, modified, and obsolete managed files. Sync removes
+obsolete agent files only when the prior ownership lock and content hash prove they
+are unchanged installer output; locally modified obsolete files are preserved.
 
 For persistent remote environments, use [cloud-agent-install.md](cloud-agent-install.md).
 
@@ -98,6 +109,18 @@ Project agents read `.agents/agent-config.json` directly to identify the verific
 commands relevant to their changed files. `check` validates this file's structure,
 command references, managed content, and lock ownership metadata.
 
+## Shared agents
+
+Edit behavior in `agents/<role>.md` and model or reasoning settings in
+`harnesses/<harness>/agents/<role>.*`, then run `sync --user`. Native instructions
+explicitly read the shared role under `~/.agents/agents/`; the path is an instruction
+to load a file, not an automatic include. Keep runtime settings in native files.
+
+The user policy routes coding tasks through the orchestrator, planner, coder, and
+reviewer. Project installation remains policy-and-skills only. Native agent syntax
+and discovery details are documented in the [Codex](adapters/codex/README.md),
+[Claude Code](adapters/claude/README.md), and [Cursor](adapters/cursor/README.md) adapters.
+
 ## Portable skills
 
 The installer copies every `skills/<name>/` directory that contains a `SKILL.md`. That
@@ -124,7 +147,8 @@ reflow or an unspecified state. Defined Figma details remain the source of truth
 
 - **User-owned:** personal instructions outside managed blocks and all client credentials,
   account state, MCP registration, and IDE preferences.
-- **Source-owned:** policy packs, client bridges, portable skills, and installer implementation.
+- **Source-owned:** policy packs, shared roles, native agent configurations, client bridges, portable
+  skills, and installer implementation.
   During migration, the CLI removes only legacy Cursor rule files proven owned by its prior
   lock file.
 - **Project-owned:** the project architecture section in `AGENTS.md`,
