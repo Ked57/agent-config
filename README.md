@@ -47,6 +47,7 @@ the first installation so it discovers the local plugin.
 
 ```sh
 node bin/agent-config.mjs sync --user
+node bin/agent-config.mjs sync --user --dry-run
 node bin/agent-config.mjs status --user
 node bin/agent-config.mjs check --user
 ```
@@ -55,6 +56,21 @@ The dry run previews file diffs and action counts without changing the installat
 `check --user` detects missing, modified, and obsolete managed files. Sync removes
 obsolete agent files only when the prior ownership lock and content hash prove they
 are unchanged installer output; locally modified obsolete files are preserved.
+Preserved obsolete files become unmanaged after sync. Legacy locks without content
+hashes never authorize deletion. Changing `CODEX_HOME` installs into the new root;
+files in the previous root remain in place, and conflicting files in the new root
+are preserved.
+
+Sync validates sources, destination paths, and ownership conflicts before writing.
+This prevents partial changes from validation failures; filesystem failures during
+writing are not a transaction across all files.
+
+Native source files use the small flat schema present in `harnesses/`: string
+metadata, models, reasoning effort, and explicit shared-role pointers. Prefer
+double-quoted strings. Cursor model options currently support `effort`. Unknown
+fields and syntax fail validation; extending native settings requires extending
+the validator and its tests. Validation checks syntax and settings, not model
+availability on an account.
 
 For persistent remote environments, use [cloud-agent-install.md](cloud-agent-install.md).
 
