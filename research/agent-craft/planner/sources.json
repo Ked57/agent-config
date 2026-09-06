@@ -1,0 +1,230 @@
+{
+  "role": "planner",
+  "window": {
+    "start": "2026-03-05",
+    "end": "2026-09-05"
+  },
+  "selection_method": "Date window 2026-03-05 to 2026-09-05 from watch-page publishDate. On-topic title match for the role. Ranked by view count. Off-topic viral and unrelated-domain videos dropped.",
+  "candidate_count": 266,
+  "in_window_count": 184,
+  "selected": [
+    {
+      "id": "C842vFY5kRo",
+      "title": "System Design Course \u2013 APIs, Databases, Caching, CDNs, Load Balancing & Production Infra",
+      "channel": "freeCodeCamp.org",
+      "view_count": 1093147,
+      "published": "2026-04-16",
+      "url": "https://www.youtube.com/watch?v=C842vFY5kRo",
+      "queries": [
+        "software architecture planning 2026"
+      ]
+    },
+    {
+      "id": "14RP8liACqo",
+      "title": "How Senior Engineers Actually Build With AI in 2026 | Build a Full Stack Systems Architecture App",
+      "channel": "JavaScript Mastery",
+      "view_count": 1063528,
+      "published": "2026-05-01",
+      "url": "https://www.youtube.com/watch?v=14RP8liACqo",
+      "queries": [
+        "software architecture planning 2026",
+        "senior engineer planning implementation 2026"
+      ]
+    },
+    {
+      "id": "iQyg-KypKAA",
+      "title": "L8 Principal's Agentic Engineering Workflow",
+      "channel": "Kun Chen",
+      "view_count": 910836,
+      "published": "2026-06-20",
+      "url": "https://www.youtube.com/watch?v=iQyg-KypKAA",
+      "queries": [
+        "how staff engineers plan software projects 2026",
+        "software estimation and planning senior 2026",
+        "staff engineer planning a project 2026",
+        "senior engineer planning implementation 2026"
+      ]
+    },
+    {
+      "id": "xJQuF02NAK8",
+      "title": "The Explore \u2192 Plan \u2192 Code \u2192 Commit workflow in Claude Code",
+      "channel": "Claude",
+      "view_count": 458894,
+      "published": "2026-05-17",
+      "url": "https://www.youtube.com/watch?v=xJQuF02NAK8",
+      "queries": null
+    },
+    {
+      "id": "KWrsLqnB6vA",
+      "title": "How Claude Code\u2019s Creator Starts EVERY Project",
+      "channel": "Austin Marchese",
+      "view_count": 378032,
+      "published": "2026-04-01",
+      "url": "https://www.youtube.com/watch?v=KWrsLqnB6vA",
+      "queries": [
+        "staff engineer planning a project 2026"
+      ]
+    },
+    {
+      "id": "SE2KF-vxvS0",
+      "title": "System Design for Beginners (2026)",
+      "channel": "KodeKloud",
+      "view_count": 339148,
+      "published": "2026-07-23",
+      "url": "https://www.youtube.com/watch?v=SE2KF-vxvS0",
+      "queries": [
+        "software architecture planning 2026"
+      ]
+    },
+    {
+      "id": "Qa-7iWxDz1A",
+      "title": "Fundamentals of Backend Architecture - How to Design Scalable Software",
+      "channel": "Tiago",
+      "view_count": 243636,
+      "published": "2026-06-08",
+      "url": "https://www.youtube.com/watch?v=Qa-7iWxDz1A",
+      "queries": [
+        "software architecture planning 2026"
+      ]
+    },
+    {
+      "id": "am_oeAoUhew",
+      "title": "Harness Engineering: How to Build Software When Humans Steer, Agents Execute \u2014\u00a0Ryan Lopopolo, OpenAI",
+      "channel": "AI Engineer",
+      "view_count": 224182,
+      "published": "2026-04-16",
+      "url": "https://www.youtube.com/watch?v=am_oeAoUhew",
+      "queries": [
+        "how staff engineers plan software projects 2026"
+      ]
+    },
+    {
+      "id": "hX7yG1KVYhI",
+      "title": "Building a REAL feature with Claude Code: every step explained",
+      "channel": "Matt Pocock",
+      "view_count": 193237,
+      "published": "2026-03-18",
+      "url": "https://www.youtube.com/watch?v=hX7yG1KVYhI",
+      "queries": [
+        "senior engineer planning implementation 2026"
+      ]
+    },
+    {
+      "id": "4wMRXmLpdA8",
+      "title": "AI in the SDLC: Rethinking AI Coding Tools & AI Agents",
+      "channel": "IBM Technology and IBM Developer",
+      "view_count": 125910,
+      "published": "2026-06-22",
+      "url": "https://www.youtube.com/watch?v=4wMRXmLpdA8",
+      "queries": [
+        "software estimation and planning senior 2026",
+        "planning AI coding agent work 2026"
+      ]
+    },
+    {
+      "id": "vOn6wUcOXzI",
+      "title": "System Design Interview Prep (Full 3h Course)",
+      "channel": "Hayk Simonyan",
+      "view_count": 44414,
+      "published": "2026-08-24",
+      "url": "https://www.youtube.com/watch?v=vOn6wUcOXzI",
+      "queries": null
+    },
+    {
+      "id": "uy2yom0AlhA",
+      "title": "Database Internals For System Design",
+      "channel": "System Design Lab",
+      "view_count": 26780,
+      "published": "2026-08-31",
+      "url": "https://www.youtube.com/watch?v=uy2yom0AlhA",
+      "queries": [
+        "writing RFC design documents 2026"
+      ]
+    },
+    {
+      "id": "FoRIj5qcslg",
+      "title": "Why You Need Plan Mode in Claude Code (Pro Tips)",
+      "channel": "GritAI Studio",
+      "view_count": 22331,
+      "published": "2026-03-18",
+      "url": "https://www.youtube.com/watch?v=FoRIj5qcslg",
+      "queries": null
+    },
+    {
+      "id": "3rUsUExrLHw",
+      "title": "Evolution Of Design Documentation",
+      "channel": "Timothy Cain",
+      "view_count": 11538,
+      "published": "2026-03-30",
+      "url": "https://www.youtube.com/watch?v=3rUsUExrLHw",
+      "queries": [
+        "how to write a technical design doc 2026"
+      ]
+    },
+    {
+      "id": "Hy8Hvg9BY8w",
+      "title": "How to Write Design Docs That Get You Promoted to Senior",
+      "channel": "Romanticize Code",
+      "view_count": 3843,
+      "published": "2026-04-08",
+      "url": "https://www.youtube.com/watch?v=Hy8Hvg9BY8w",
+      "queries": [
+        "writing RFC design documents 2026",
+        "how to write a technical design doc 2026"
+      ]
+    },
+    {
+      "id": "sfqHggWY5Ds",
+      "title": "The C4 Model: Visualizing Software Architecture \u2022 Simon Brown & Susanne Kaiser \u2022 GOTO 2026",
+      "channel": "GOTO Conferences",
+      "view_count": 3747,
+      "published": "2026-06-18",
+      "url": "https://www.youtube.com/watch?v=sfqHggWY5Ds",
+      "queries": [
+        "software architecture planning 2026"
+      ]
+    },
+    {
+      "id": "0fH-tWLvDC4",
+      "title": "Plan Before You Build: Deterministic Planning Patterns for AI Agents by Dan Dobrin @ Spring I/O 26",
+      "channel": "Spring I/O",
+      "view_count": 3324,
+      "published": "2026-06-12",
+      "url": "https://www.youtube.com/watch?v=0fH-tWLvDC4",
+      "queries": null
+    },
+    {
+      "id": "horhFvQN3RQ",
+      "title": "Software Architecture Then, Now, and in the Future (keynote at ICSA 2026)",
+      "channel": "International Conference on Software Architecture",
+      "view_count": 296,
+      "published": "2026-07-28",
+      "url": "https://www.youtube.com/watch?v=horhFvQN3RQ",
+      "queries": [
+        "software architecture planning 2026"
+      ]
+    },
+    {
+      "id": "ybr7O3Fog3k",
+      "title": "Why Senior Engineers Don't Give Estimates (And What They Do Instead)",
+      "channel": "Serhii Klymenko | The Resonant Manager",
+      "view_count": 97,
+      "published": "2026-03-24",
+      "url": "https://www.youtube.com/watch?v=ybr7O3Fog3k",
+      "queries": [
+        "software estimation and planning senior 2026"
+      ]
+    },
+    {
+      "id": "SfSLzsqq0qo",
+      "title": "How I Use AI to Write Better Design Docs and PRDs",
+      "channel": "AI For Builders",
+      "view_count": 76,
+      "published": "2026-05-17",
+      "url": "https://www.youtube.com/watch?v=SfSLzsqq0qo",
+      "queries": [
+        "how to write a technical design doc 2026"
+      ]
+    }
+  ]
+}

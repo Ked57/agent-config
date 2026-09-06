@@ -1,0 +1,244 @@
+{
+  "role": "coder",
+  "window": {
+    "start": "2026-03-05",
+    "end": "2026-09-05"
+  },
+  "selection_method": "Date window 2026-03-05 to 2026-09-05 from watch-page publishDate. On-topic title match for the role. Ranked by view count. Off-topic viral and unrelated-domain videos dropped.",
+  "candidate_count": 242,
+  "in_window_count": 146,
+  "selected": [
+    {
+      "id": "-QFHIoCo-Ko",
+      "title": "Full Walkthrough: Workflow for AI Coding \u2014 Matt Pocock",
+      "channel": "AI Engineer and Matt Pocock",
+      "view_count": 1520181,
+      "published": "2026-04-24",
+      "url": "https://www.youtube.com/watch?v=-QFHIoCo-Ko",
+      "queries": [
+        "senior software engineer implementation workflow 2026",
+        "AI pair programming production code 2026",
+        "senior developer coding workflow"
+      ]
+    },
+    {
+      "id": "14RP8liACqo",
+      "title": "How Senior Engineers Actually Build With AI in 2026 | Build a Full Stack Systems Architecture App",
+      "channel": "JavaScript Mastery",
+      "view_count": 1063528,
+      "published": "2026-05-01",
+      "url": "https://www.youtube.com/watch?v=14RP8liACqo",
+      "queries": [
+        "senior software engineer implementation workflow 2026",
+        "shipping features as a senior engineer 2026"
+      ]
+    },
+    {
+      "id": "iQyg-KypKAA",
+      "title": "L8 Principal's Agentic Engineering Workflow",
+      "channel": "Kun Chen",
+      "view_count": 910829,
+      "published": "2026-06-20",
+      "url": "https://www.youtube.com/watch?v=iQyg-KypKAA",
+      "queries": [
+        "senior software engineer implementation workflow 2026"
+      ]
+    },
+    {
+      "id": "UngVdAsQEiU",
+      "title": "The Best Local Agentic Coding Workflow (Complete Guide)",
+      "channel": "Web Dev Simplified and Kyle Cook from Web Dev Simplified",
+      "view_count": 864953,
+      "published": "2026-05-12",
+      "url": "https://www.youtube.com/watch?v=UngVdAsQEiU",
+      "queries": [
+        "senior developer coding workflow"
+      ]
+    },
+    {
+      "id": "EJyuu6zlQCg",
+      "title": "5 Claude Code skills I use every single day",
+      "channel": "Matt Pocock",
+      "view_count": 491929,
+      "published": "2026-03-16",
+      "url": "https://www.youtube.com/watch?v=EJyuu6zlQCg",
+      "queries": [
+        "TDD in practice 2026"
+      ]
+    },
+    {
+      "id": "xJQuF02NAK8",
+      "title": "The Explore \u2192 Plan \u2192 Code \u2192 Commit workflow in Claude Code",
+      "channel": "Claude",
+      "view_count": 458894,
+      "published": "2026-05-17",
+      "url": "https://www.youtube.com/watch?v=xJQuF02NAK8",
+      "queries": [
+        "senior developer coding workflow"
+      ]
+    },
+    {
+      "id": "M6mYodf0dJM",
+      "title": "mattpocock/skills: A complete AI Coding workflow, end-to-end",
+      "channel": "Matt Pocock",
+      "view_count": 411759,
+      "published": "2026-07-16",
+      "url": "https://www.youtube.com/watch?v=M6mYodf0dJM",
+      "queries": [
+        "AI coding agent implementation best practices 2026",
+        "software engineer ticket implementation 2026"
+      ]
+    },
+    {
+      "id": "YAsxyoTWFDA",
+      "title": "I Have Spent 1000+ Hours With Claude Code. This Is What I Learned",
+      "channel": "The Coding Sloth",
+      "view_count": 410446,
+      "published": "2026-08-17",
+      "url": "https://www.youtube.com/watch?v=YAsxyoTWFDA",
+      "queries": [
+        "how senior developers write production code 2026",
+        "AI coding agent implementation best practices 2026"
+      ]
+    },
+    {
+      "id": "qYqIhX9hTQk",
+      "title": "FULL Claude Code Tutorial for Beginners in 2026! (Step-By-Step)",
+      "channel": "Tech With Tim",
+      "view_count": 392469,
+      "published": "2026-03-29",
+      "url": "https://www.youtube.com/watch?v=qYqIhX9hTQk",
+      "queries": [
+        "Cursor Claude Code implementer workflow 2026"
+      ]
+    },
+    {
+      "id": "UhRGHr7pgnU",
+      "title": "My Opencode Workflow As A Senior Engineer",
+      "channel": "DevOps Toolbox",
+      "view_count": 344398,
+      "published": "2026-03-13",
+      "url": "https://www.youtube.com/watch?v=UhRGHr7pgnU",
+      "queries": [
+        "senior software engineer implementation workflow 2026",
+        "AI coding agent implementation best practices 2026",
+        "how I implement a pull request senior developer 2026"
+      ]
+    },
+    {
+      "id": "bcM9dP_uXJU",
+      "title": "How to Build an AI Agent with Claude Code (Claude AI Agent Tutorial)",
+      "channel": "AI Master",
+      "view_count": 309822,
+      "published": "2026-06-30",
+      "url": "https://www.youtube.com/watch?v=bcM9dP_uXJU",
+      "queries": [
+        "AI coding agent implementation best practices 2026",
+        "Cursor Claude Code implementer workflow 2026"
+      ]
+    },
+    {
+      "id": "uogzSxOw4LU",
+      "title": "The Ultimate Claude Code Guide | MCP, Skills & More",
+      "channel": "Tech With Tim",
+      "view_count": 246795,
+      "published": "2026-04-13",
+      "url": "https://www.youtube.com/watch?v=uogzSxOw4LU",
+      "queries": [
+        "Cursor Claude Code implementer workflow 2026"
+      ]
+    },
+    {
+      "id": "BMMcmmnjrM8",
+      "title": "How to Build Mobile Apps with Claude Code: Full Course (2026)",
+      "channel": "Nick Saraev",
+      "view_count": 243784,
+      "published": "2026-05-11",
+      "url": "https://www.youtube.com/watch?v=BMMcmmnjrM8",
+      "queries": [
+        "Cursor Claude Code implementer workflow 2026"
+      ]
+    },
+    {
+      "id": "wlpBCazAY9Q",
+      "title": "AI-Assisted Coding Tutorial \u2013 OpenClaw, GitHub Copilot, Claude Code, CodeRabbit, Gemini CLI",
+      "channel": "freeCodeCamp.org and Beau Carnes",
+      "view_count": 235658,
+      "published": "2026-03-31",
+      "url": "https://www.youtube.com/watch?v=wlpBCazAY9Q",
+      "queries": [
+        "AI pair programming production code 2026"
+      ]
+    },
+    {
+      "id": "hfba9dAT6xE",
+      "title": "The Best LOCAL Agentic Coding Workflow (Complete Guide)",
+      "channel": "Tech With Tim",
+      "view_count": 211956,
+      "published": "2026-06-10",
+      "url": "https://www.youtube.com/watch?v=hfba9dAT6xE",
+      "queries": [
+        "senior developer coding workflow"
+      ]
+    },
+    {
+      "id": "MzhIr7BfpI0",
+      "title": "How I use Claude Code (Senior Software Engineer Tips)",
+      "channel": "Maddy Zhang",
+      "view_count": 208541,
+      "published": "2026-04-05",
+      "url": "https://www.youtube.com/watch?v=MzhIr7BfpI0",
+      "queries": [
+        "senior software engineer implementation workflow 2026",
+        "Cursor Claude Code implementer workflow 2026",
+        "shipping features as a senior engineer 2026",
+        "software engineer ticket implementation 2026"
+      ]
+    },
+    {
+      "id": "hX7yG1KVYhI",
+      "title": "Building a REAL feature with Claude Code: every step explained",
+      "channel": "Matt Pocock",
+      "view_count": 193236,
+      "published": "2026-03-18",
+      "url": "https://www.youtube.com/watch?v=hX7yG1KVYhI",
+      "queries": [
+        "senior software engineer implementation workflow 2026",
+        "shipping features as a senior engineer 2026"
+      ]
+    },
+    {
+      "id": "9dKA2hq4vf0",
+      "title": "How Senior Engineers Actually Build with AI in 2026 | Build a Full Stack Job Applications Platform",
+      "channel": "JavaScript Mastery",
+      "view_count": 180806,
+      "published": "2026-06-06",
+      "url": "https://www.youtube.com/watch?v=9dKA2hq4vf0",
+      "queries": [
+        "shipping features as a senior engineer 2026"
+      ]
+    },
+    {
+      "id": "GUgxx6fMiR8",
+      "title": "How to Build an App With Claude Code - Full Tutorial for Beginners",
+      "channel": "Tech With Tim",
+      "view_count": 159939,
+      "published": "2026-05-06",
+      "url": "https://www.youtube.com/watch?v=GUgxx6fMiR8",
+      "queries": [
+        "Cursor Claude Code implementer workflow 2026"
+      ]
+    },
+    {
+      "id": "jZgcWCzxh1I",
+      "title": "Claude Code Dynamic Workflows Clearly Explained",
+      "channel": "Nate Herk | AI Automation",
+      "view_count": 113096,
+      "published": "2026-05-30",
+      "url": "https://www.youtube.com/watch?v=jZgcWCzxh1I",
+      "queries": [
+        "Cursor Claude Code implementer workflow 2026"
+      ]
+    }
+  ]
+}

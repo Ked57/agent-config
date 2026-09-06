@@ -9,13 +9,14 @@ Cursor, Claude Code, and Codex.
   every task at the task router.
 - Two always-installed packs: `routing.md` (tech, skill, and topic routing, then the
   coding/non-coding exit) and `orchestration.md` (how the Orchestrator spawns roles).
-- One self-contained file per sub-agent role: Orchestrator, Planner, Coder, Reviewer, each
-  with its model fallback list, inputs, handoff contract, what to load, and exit criteria.
+- One self-contained file per sub-agent role: Orchestrator, Planner, Designer, Coder,
+  Reviewer, each with its model fallback list, inputs, handoff contract, what to load,
+  and exit criteria.
 - Conditional TypeScript, React, Vue + PrimeVue, and DDD domain-module policy packs shared by all harnesses.
 - Portable skills for distinctive frontend design, high-fidelity Figma implementation,
   complexity audits, deterministic full-stack TypeScript quality tooling, and Matt Pocock's
   engineering and productivity workflows.
-- Four shared agent roles with native Codex, Claude Code, and Cursor configurations.
+- Five shared agent roles with native Codex, Claude Code, and Cursor configurations.
 - A user installer that gives Cursor, Claude Code, and Codex the same personal policy
   without changing application repositories.
 - An optional workspace installer that detects npm, pnpm, Yarn, or Bun; creates thin
@@ -39,7 +40,7 @@ This creates or updates:
 ~/.agents/policy/routing.md               task router, read first for every task
 ~/.agents/policy/orchestration.md         sub-agent orchestration for coding tasks
 ~/.agents/policy/<tech-pack>.md           typescript, react, vue-primevue, domain-module
-~/.agents/agents/<role>.md                orchestrator, planner, coder, reviewer
+~/.agents/agents/<role>.md                orchestrator, planner, designer, coder, reviewer
 ~/.codex/agents/<role>.toml               native Codex agents (or $CODEX_HOME/agents/)
 ~/.claude/agents/<role>.md                native Claude Code agents
 ~/.cursor/agents/<role>.md                native Cursor agents
@@ -121,7 +122,7 @@ CLAUDE.md                                  thin Claude Code bridge to AGENTS.md
 .cursor/rules/00-agent-config.mdc          thin Cursor bridge to AGENTS.md
 .agents/policy/routing.md                  task router, always
 .agents/policy/orchestration.md            sub-agent orchestration, always
-.agents/agents/<role>.md                   orchestrator, planner, coder, reviewer, always
+.agents/agents/<role>.md                   orchestrator, planner, designer, coder, reviewer, always
 .agents/policy/typescript.md               TypeScript work, when detected
 .agents/policy/react.md                    React work, when detected
 .agents/policy/domain-module.md            domain work, when the convention is detected
@@ -157,8 +158,8 @@ Edit behavior in `agents/<role>.md` and model or reasoning settings in
 explicitly read the shared role under `~/.agents/agents/`; the path is an instruction
 to load a file, not an automatic include. Keep runtime settings in native files.
 
-The user policy routes coding tasks through the orchestrator, planner, coder, and
-reviewer. Project installation remains policy-and-skills only. Native agent syntax
+The user policy routes coding tasks through the orchestrator, planner, designer, coder,
+and reviewer. Project installation remains policy-and-skills only. Native agent syntax
 and discovery details are documented in the [Codex](adapters/codex/README.md),
 [Claude Code](adapters/claude/README.md), and [Cursor](adapters/cursor/README.md) adapters.
 
@@ -202,9 +203,9 @@ Three layers, each a single source of truth, installed for every user and worksp
   which carries the routing result), and the handoff chain.
 - `agents/<role>.md` — one self-contained file per role. `orchestrator.md` owns the
   workflow graph, the three loops (review → coder, review → planner, prototype fan-out),
-  the spawn prompt template, and the win condition. `planner.md`, `coder.md`, and
-  `reviewer.md` each carry mandate, ordered model fallbacks, inputs, output contract,
-  what to load, and exit criteria.
+  the spawn prompt template, and the win condition. `planner.md`, `designer.md`,
+  `coder.md`, and `reviewer.md` each carry mandate, ordered model fallbacks, inputs,
+  output contract, what to load, and exit criteria.
 
 ### Routing chain per harness
 
@@ -224,7 +225,7 @@ Claude Code ~/.claude/CLAUDE.md  (@-imports ~/.agents/AGENTS.md)
                                     ├─ non-coding ─► answer with routed packs and skills
                                     └─ coding ─► ~/.agents/policy/orchestration.md
                                                   └─► ~/.agents/agents/orchestrator.md
-                                                        └─► spawns planner | coder | reviewer
+                                                        └─► spawns planner | designer | coder | reviewer
                                                              each reads ~/.agents/agents/<role>.md
                                                              + ~/.agents/policy/<tech-pack>.md
                                                              + ~/.agents/skills/<name>/SKILL.md

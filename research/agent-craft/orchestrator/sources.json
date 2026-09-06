@@ -1,0 +1,239 @@
+{
+  "role": "orchestrator",
+  "window": {
+    "start": "2026-03-05",
+    "end": "2026-09-05"
+  },
+  "selection_method": "Date window 2026-03-05 to 2026-09-05 from watch-page publishDate. On-topic title match for the role. Ranked by view count. Off-topic viral and unrelated-domain videos dropped.",
+  "candidate_count": 237,
+  "in_window_count": 126,
+  "selected": [
+    {
+      "id": "h0hdaHPKDdI",
+      "title": "What 6 months of AI coding did to my dev team",
+      "channel": "Axel Molist",
+      "view_count": 529904,
+      "published": "2026-04-18",
+      "url": "https://www.youtube.com/watch?v=h0hdaHPKDdI",
+      "queries": [
+        "staff engineer coordinating software delivery 2026"
+      ]
+    },
+    {
+      "id": "M6mYodf0dJM",
+      "title": "mattpocock/skills: A complete AI Coding workflow, end-to-end",
+      "channel": "Matt Pocock",
+      "view_count": 411776,
+      "published": "2026-07-16",
+      "url": "https://www.youtube.com/watch?v=M6mYodf0dJM",
+      "queries": [
+        "multi-agent coding workflow Cursor Claude 2026"
+      ]
+    },
+    {
+      "id": "Lg-meK5IU8Q",
+      "title": "What AI Agent Skills Are and How They Work",
+      "channel": "IBM Technology",
+      "view_count": 410786,
+      "published": "2026-04-20",
+      "url": "https://www.youtube.com/watch?v=Lg-meK5IU8Q",
+      "queries": [
+        "AI agent orchestration software engineering 2026"
+      ]
+    },
+    {
+      "id": "vDVSGVpB2vc",
+      "title": "How to Build Claude Agent Teams Better Than 99% of People",
+      "channel": "Nate Herk | AI Automation",
+      "view_count": 310997,
+      "published": "2026-03-23",
+      "url": "https://www.youtube.com/watch?v=vDVSGVpB2vc",
+      "queries": [
+        "multi-agent coding workflow Cursor Claude 2026",
+        "multi agent software development 2026"
+      ]
+    },
+    {
+      "id": "L7FF8Zgab3M",
+      "title": "What is OpenClaw? Inside AI Agents, LLMs and the Agentic Loop",
+      "channel": "IBM Technology and IBM Developer",
+      "view_count": 250279,
+      "published": "2026-04-27",
+      "url": "https://www.youtube.com/watch?v=L7FF8Zgab3M",
+      "queries": [
+        "AI agent orchestration software engineering 2026"
+      ]
+    },
+    {
+      "id": "E5-QK3CDVQM",
+      "title": "I Open-Sourced My Own AFK Software Factory",
+      "channel": "Matt Pocock",
+      "view_count": 180073,
+      "published": "2026-04-30",
+      "url": "https://www.youtube.com/watch?v=E5-QK3CDVQM",
+      "queries": [
+        "AI software factory orchestration 2026"
+      ]
+    },
+    {
+      "id": "J5KTpq7hVn4",
+      "title": "Multi-agent workflows in VS Code",
+      "channel": "Visual Studio Code",
+      "view_count": 102337,
+      "published": "2026-03-18",
+      "url": "https://www.youtube.com/watch?v=J5KTpq7hVn4",
+      "queries": [
+        "multi agent software development 2026"
+      ]
+    },
+    {
+      "id": "xqGCbEDbny8",
+      "title": "Codex Tutorial: Build Your First AI Agent Delegation Loop",
+      "channel": "AI News & Strategy Daily | Nate B Jones",
+      "view_count": 76415,
+      "published": "2026-06-12",
+      "url": "https://www.youtube.com/watch?v=xqGCbEDbny8",
+      "queries": [
+        "tech lead delegation and review loops 2026"
+      ]
+    },
+    {
+      "id": "ZVPlLaehjLk",
+      "title": "Agentic AI Frameworks Explained: Workflows, Multi-Agent, & Production",
+      "channel": "IBM Technology",
+      "view_count": 64340,
+      "published": "2026-07-09",
+      "url": "https://www.youtube.com/watch?v=ZVPlLaehjLk",
+      "queries": [
+        "AI agent orchestration software engineering 2026",
+        "orchestrating AI coding agents 2026",
+        "multi agent software development 2026",
+        "AI software factory orchestration 2026"
+      ]
+    },
+    {
+      "id": "iqRcGCah0Kw",
+      "title": "System Design for AI Agents \u2013 Building a Multi-Agent PR Reviewer",
+      "channel": "freeCodeCamp.org",
+      "view_count": 62869,
+      "published": "2026-08-14",
+      "url": "https://www.youtube.com/watch?v=iqRcGCah0Kw",
+      "queries": [
+        "multi agent software development 2026"
+      ]
+    },
+    {
+      "id": "AbpyqAfxZ8c",
+      "title": "I Built an Agentic Software Factory with Codex and Claude Code",
+      "channel": "Owain Lewis",
+      "view_count": 56202,
+      "published": "2026-07-25",
+      "url": "https://www.youtube.com/watch?v=AbpyqAfxZ8c",
+      "queries": [
+        "AI software factory orchestration 2026"
+      ]
+    },
+    {
+      "id": "PIdETjcXNIk",
+      "title": "Pi to Pi: Two-Way Agent Orchestration with the Pi Coding Agent",
+      "channel": "IndyDevDan",
+      "view_count": 54869,
+      "published": "2026-05-18",
+      "url": "https://www.youtube.com/watch?v=PIdETjcXNIk",
+      "queries": [
+        "orchestrating AI coding agents 2026"
+      ]
+    },
+    {
+      "id": "tGbjIvvYuHE",
+      "title": "How to Build a Software Factory for AI Coding Agents",
+      "channel": "Boundary and HumanLayer",
+      "view_count": 47405,
+      "published": "2026-08-28",
+      "url": "https://www.youtube.com/watch?v=tGbjIvvYuHE",
+      "queries": [
+        "AI software factory orchestration 2026"
+      ]
+    },
+    {
+      "id": "aVVA3gP3M9U",
+      "title": "How New Staff Engineers Build Judgment Without Years of Experience",
+      "channel": "Beyond Coding",
+      "view_count": 30481,
+      "published": "2026-08-26",
+      "url": "https://www.youtube.com/watch?v=aVVA3gP3M9U",
+      "queries": [
+        "how staff engineers break down work 2026",
+        "engineering lead coordinating engineers 2026"
+      ]
+    },
+    {
+      "id": "0Z0GUDakR_A",
+      "title": "Intro to multi-agent systems with ADK",
+      "channel": "Google Cloud Tech and Google for Developers",
+      "view_count": 19838,
+      "published": "2026-06-08",
+      "url": "https://www.youtube.com/watch?v=0Z0GUDakR_A",
+      "queries": [
+        "multi agent software development 2026"
+      ]
+    },
+    {
+      "id": "tNQPNBQC5kg",
+      "title": "Build, Reuse, or Hybrid? How Orchestration Powers Agentic AI",
+      "channel": "IBM Technology",
+      "view_count": 10340,
+      "published": "2026-04-25",
+      "url": "https://www.youtube.com/watch?v=tNQPNBQC5kg",
+      "queries": [
+        "AI software factory orchestration 2026"
+      ]
+    },
+    {
+      "id": "EtSO9vU84ws",
+      "title": "Multi-Agent Orchestration Explained: From Patterns to Production",
+      "channel": "scrollypedia",
+      "view_count": 10321,
+      "published": "2026-04-05",
+      "url": "https://www.youtube.com/watch?v=EtSO9vU84ws",
+      "queries": [
+        "AI agent orchestration software engineering 2026",
+        "orchestrating AI coding agents 2026"
+      ]
+    },
+    {
+      "id": "B8kSsEDk0TQ",
+      "title": "My Multi-Agent Claude Code Setup (steal my workflows!)",
+      "channel": "AI with Avthar",
+      "view_count": 6747,
+      "published": "2026-05-29",
+      "url": "https://www.youtube.com/watch?v=B8kSsEDk0TQ",
+      "queries": [
+        "multi-agent coding workflow Cursor Claude 2026"
+      ]
+    },
+    {
+      "id": "w_pAU0jur_4",
+      "title": "Why 2026 Is the Year of AI Builders (Agents, Orchestration & 15-Hour Tasks Explained)",
+      "channel": "Agentic AI Institute",
+      "view_count": 726,
+      "published": "2026-04-21",
+      "url": "https://www.youtube.com/watch?v=w_pAU0jur_4",
+      "queries": [
+        "AI agent orchestration software engineering 2026",
+        "orchestrating AI coding agents 2026"
+      ]
+    },
+    {
+      "id": "GCd4Ft4tcMA",
+      "title": "Multi-Agent Orchestration: The #1 Skill AI Engineers NEED in 2026",
+      "channel": "AI Side Hustle",
+      "view_count": 679,
+      "published": "2026-07-05",
+      "url": "https://www.youtube.com/watch?v=GCd4Ft4tcMA",
+      "queries": [
+        "AI agent orchestration software engineering 2026"
+      ]
+    }
+  ]
+}
