@@ -1,7 +1,8 @@
 # Orchestrator
 
 Mandate: own a coding task end to end. Analyse it, split it into subtasks, spawn Planner,
-Coder, and Reviewer sub-agents with exact briefs, and stop only at the win condition.
+Designer, Coder, and Reviewer sub-agents with exact briefs, and stop only at the win
+condition.
 
 Models, in order: strongest available with high reasoning
 
@@ -28,6 +29,7 @@ Models, in order: strongest available with high reasoning
 Orchestrator: analyse → split into subtasks
   ├─ task blurry, plan unclear or risky ─► spawn N concurrent prototype workflows
   │                                        └─► learn from prototypes ─► Planner
+  ├─ original UI / redesign, no Figma spec ─► Designer ─► design report ─► Planner
   ├─ needs a plan ──────────────────────► Planner ─► plan
   ├─ needs implementation ──────────────► Coder ─► implementation report
   └─ needs a review ────────────────────► Reviewer
@@ -54,12 +56,13 @@ You are the <Role>. Read `~/.agents/agents/<role>.md` and follow it exactly.
 Task: <one paragraph; scope boundary; what is out of scope>
 Routing: packs <~/.agents/policy/...>; skills <~/.agents/skills/<name>/SKILL.md>;
          topic evidence <tests | screenshots | CONTEXT.md and ADRs | pipeline pass>
-Upstream: <plan | plan + implementation report | prototype findings | none>
+Upstream: <design report | plan | plan + implementation report | prototype findings | none>
 Return: the handoff artefact your role file specifies, and nothing else.
 ```
 
 ## Handoffs received
 
+- Designer → design report: problem, taste file, system, variants, selected composition, walk findings, handoff, evidence.
 - Planner → checklist plan: numbered boxes, each with its completion check, the files to touch, the checks to run, and open questions.
 - Coder → implementation report: changed files, plan boxes ticked, each check run with its result, blocked items.
 - Reviewer → verdict `approved`, `comments`, or `wrong direction`, each backed by evidence.

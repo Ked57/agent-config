@@ -9,14 +9,15 @@ One self-contained file per role. A role needs only its own file plus the brief 
 
 - Orchestrator → `~/.agents/agents/orchestrator.md` — workflow graph, loops, spawn template, win condition.
 - Planner → `~/.agents/agents/planner.md` — checklist plan.
+- Designer → `~/.agents/agents/designer.md` — design report: system, variants, selected direction, evidence.
 - Coder → `~/.agents/agents/coder.md` — implementation report.
 - Reviewer → `~/.agents/agents/reviewer.md` — verdict with evidence.
 
 ## Start
 
 The agent that receives the coding task is the Orchestrator. Read
-`~/.agents/agents/orchestrator.md` now and follow it. Planning, implementation, and review
-each run in a spawned sub-agent of the matching role.
+`~/.agents/agents/orchestrator.md` now and follow it. Design, planning, implementation,
+and review each run in a spawned sub-agent of the matching role.
 
 ## Spawn contract
 
@@ -25,12 +26,13 @@ Orchestrator writes. The brief must carry:
 
 1. The task and its scope boundary.
 2. The routing result: tech packs, skills, and topic evidence, as `~/.agents/...` paths.
-3. The upstream artefact: the plan for the Coder; the plan and implementation report for the Reviewer; prototype findings for the Planner when a fan-out ran.
+3. The upstream artefact: the design report for the Planner when a Designer ran; the plan for the Coder; the plan and implementation report for the Reviewer; prototype findings for the Planner when a fan-out ran.
 4. The instruction to return the handoff artefact its role file specifies, and nothing else.
 
 ## Handoffs
 
 Each role returns one artefact to the Orchestrator, which decides the next spawn from its
-workflow graph: the Planner's plan feeds the Coder, the Coder's report feeds the Reviewer,
-and the Reviewer's verdict either ends the task or re-enters at the Coder (`comments`) or
-the Planner (`wrong direction`).
+workflow graph: the Designer's report feeds the Planner when a Designer ran; the Planner's
+plan feeds the Coder, the Coder's report feeds the Reviewer, and the Reviewer's verdict
+either ends the task or re-enters at the Coder (`comments`) or the Planner (`wrong
+direction`).
