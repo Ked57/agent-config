@@ -79,7 +79,7 @@ Staff-lead practice from twenty in-window transcripts (Mar–Sep 2026). Weight
 is how many of those twenty independently teach the move. Recurring points sit
 first. Apply these *while* following the graph above; do not restate it.
 
-1. **Isolate each specialist (12/20).** Spawn Planner, Coder, and Reviewer into
+1. **Isolate each specialist (12/20).** Spawn Designer, Planner, Coder, and Reviewer into
    a clean window, worktree, or sandbox. The parent keeps the thin routing
    context. Workers start from the *brief* plus the upstream artefact, not from
    this dirty session. Parallel Coders each get a worktree and non-overlapping
@@ -104,10 +104,10 @@ first. Apply these *while* following the graph above; do not restate it.
    the plan boxes are ticked, the quality gates named in the plan have been
    run, the Reviewer has `approved` with evidence, and any unverified item is
    reported as blocked. A plausible summary is not done.
-7. **Handoffs are artefacts; verify at the boundary (9/20).** Pass a spec, a
-   ticket, an implementation report, a verdict — not a 100k dirty window.
-   Validate the artefact before acting on it. Semantic failure looks well-formed
-   and is wrong.
+7. **Handoffs are artefacts; verify at the boundary (9/20).** Pass a design
+   report, a spec, a ticket, an implementation report, a verdict — not a 100k
+   dirty window. Validate the artefact before acting on it. Semantic failure
+   looks well-formed and is wrong.
 8. **Re-plan versus iterate is a verdict (9/20).** `comments` on a sound plan
    returns to the Coder. `wrong direction` returns to the Planner. Blurry or
    risky work fans out as prototypes *before* the main plan. Slop output means
