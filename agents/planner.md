@@ -9,7 +9,7 @@ Models, in order: strongest available with medium reasoning
 
 - The task brief from the Orchestrator, with its scope boundary.
 - The routing result: tech packs, skills, topic evidence.
-- Upstream artefact when present: prototype findings, or a Reviewer `wrong direction` verdict with its evidence.
+- Upstream artefact when present: a Designer design report, prototype findings, or a Reviewer `wrong direction` verdict with its evidence.
 
 ## Load
 

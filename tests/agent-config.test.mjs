@@ -349,6 +349,16 @@ test('role files are self-contained and the router chain resolves to them', () =
   assert.match(orchestrator, /Read `~\/\.agents\/agents\/<role>\.md`/);
 });
 
+test('designer directs AI to produce the work and cites the last-90-day source set', () => {
+  const designer = fs.readFileSync(path.join(root, 'agents/designer.md'), 'utf8');
+  assert.match(designer, /AI produces the artifact at every step/);
+  assert.match(designer, /### 3\. System-first/);
+  assert.match(designer, /### 4\. Widget-first diverge/);
+  assert.match(designer, /Write a `DESIGN\.md` before any screen/);
+  assert.match(designer, /2026-06-06 through\n2026-09-06/);
+  assert.equal((designer.match(/youtube\.com\/watch\?v=/g) || []).length, 20);
+});
+
 test('preserves an unmanaged AGENTS.md instead of overwriting it', () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-safe-'));
   fs.writeFileSync(path.join(project, 'AGENTS.md'), '# Existing project guidance\n');
@@ -479,6 +489,7 @@ test('keeps Jakub Krehel model and user invocation boundaries', () => {
 test('routes interface skills at precise task and role boundaries', () => {
   const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
   const planner = fs.readFileSync(path.join(root, 'agents/planner.md'), 'utf8');
+  const designer = fs.readFileSync(path.join(root, 'agents/designer.md'), 'utf8');
   const coder = fs.readFileSync(path.join(root, 'agents/coder.md'), 'utf8');
   const reviewer = fs.readFileSync(path.join(root, 'agents/reviewer.md'), 'utf8');
 
@@ -501,19 +512,25 @@ test('routes interface skills at precise task and role boundaries', () => {
   for (const name of focusedSkills) {
     const exactPath = `~/.agents/skills/${name}/SKILL.md`;
     assert.ok(planner.includes(exactPath), `planner does not load ${exactPath}`);
+    assert.ok(designer.includes(exactPath), `designer does not load ${exactPath}`);
     assert.ok(coder.includes(exactPath), `coder does not load ${exactPath}`);
     assert.ok(reviewer.includes(exactPath), `reviewer does not load ${exactPath}`);
   }
+  assert.match(designer, /skills\/frontend-design\/SKILL\.md.*no supplied source-of-truth/s);
+  assert.match(routing, /spawn the Designer \(`~\/\.agents\/agents\/designer\.md`\)/);
   assert.doesNotMatch(planner, /skills\/better-interface\/SKILL\.md/);
+  assert.doesNotMatch(designer, /skills\/better-interface\/SKILL\.md/);
   assert.doesNotMatch(coder, /skills\/better-interface\/SKILL\.md/);
   assert.match(reviewer, /skills\/better-interface\/SKILL\.md.*screen, flow, or repository.*interface-review.*hands off/s);
   assert.match(coder, /skills\/break\/SKILL\.md.*skills\/variant\/SKILL\.md.*only when the user explicitly invokes/s);
   assert.doesNotMatch(planner, /skills\/(break|variant)\/SKILL\.md/);
+  assert.doesNotMatch(designer, /skills\/(break|variant)\/SKILL\.md/);
   assert.doesNotMatch(reviewer, /skills\/(break|variant)\/SKILL\.md/);
   assert.match(reviewer, /skills\/interface-review\/SKILL\.md.*only when the user explicitly invokes/s);
   assert.doesNotMatch(planner, /skills\/interface-review\/SKILL\.md/);
+  assert.doesNotMatch(designer, /skills\/interface-review\/SKILL\.md/);
   assert.doesNotMatch(coder, /skills\/interface-review\/SKILL\.md/);
-  for (const role of [planner, coder, reviewer]) {
+  for (const role of [planner, designer, coder, reviewer]) {
     assert.doesNotMatch(role, /skills\/explain-interface/);
   }
 });

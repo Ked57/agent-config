@@ -10,7 +10,7 @@ Models, in order: balanced coding model with medium reasoning
 
 - The task brief from the Orchestrator, with its scope boundary.
 - The routing result: tech packs, skills, topic evidence.
-- Upstream artefacts: the checklist plan and the Coder's implementation report.
+- Upstream artefacts: the checklist plan and the Coder's implementation report; the Designer design report when one was produced.
 
 ## Load
 
