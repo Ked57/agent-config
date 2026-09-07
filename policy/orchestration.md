@@ -1,38 +1,64 @@
 # Sub-agent orchestration
 
-Read this after `~/.agents/policy/routing.md` has classified the task as coding work. The
-routing result (packs, skills, topic evidence) is an input here; this file does not route.
+Read this after `~/.agents/policy/routing.md` classifies the task as coding work. The main
+agent coordinates the task directly; coordination is not a separate delegated role.
 
 ## Roles
 
-One self-contained file per role. A role needs only its own file plus the brief it receives.
+Each role owns its procedure and output contract; routing stays in the router.
 
-- Orchestrator → `~/.agents/agents/orchestrator.md` — workflow graph, loops, spawn template, win condition.
-- Planner → `~/.agents/agents/planner.md` — checklist plan.
-- Designer → `~/.agents/agents/designer.md` — design report: system, variants, selected direction, evidence.
-- Coder → `~/.agents/agents/coder.md` — implementation report.
-- Reviewer → `~/.agents/agents/reviewer.md` — verdict with evidence.
+- Planner → `~/.agents/agents/planner.md` — buildable checklist plan.
+- Designer → `~/.agents/agents/designer.md` — design direction and artifacts.
+- Coder → `~/.agents/agents/coder.md` — implementation and automated verification.
+- Manual QA → `~/.agents/agents/manual-qa.md` — hands-on browser, computer, API, or CLI checks.
+- Reviewer → `~/.agents/agents/reviewer.md` — independent review of code and evidence.
 
-## Start
+## Workflow graph
 
-The agent that receives the coding task is the Orchestrator. Read
-`~/.agents/agents/orchestrator.md` now and follow it. Design, planning, implementation,
-and review each run in a spawned sub-agent of the matching role.
+```text
+original UI, no exact spec → Designer → Planner → Coder
+unresolved implementation → Planner → Coder
+clear implementation      → Coder
+
+changed runnable behavior → Manual QA → Reviewer
+no runnable behavior      → Reviewer
+review-only request       → Reviewer → report
+manual-QA-only request    → Manual QA → report
+```
+
+The main agent selects needed stages and reuses sufficient plans or designs. An exact
+visual spec goes to Coder. Run Manual QA after implementation when a runtime surface can
+be exercised; record why it is not applicable otherwise. Missing tools or access mean
+blocked QA, not that QA is unnecessary. Review-only and QA-only requests do not authorize
+repairs. For implementation tasks:
+
+- QA failures or Reviewer `comments` go to Coder, followed by affected QA and review again.
+- Reviewer `wrong direction` goes to Planner with evidence before further implementation.
+- QA `blocked` or Reviewer `pending` leaves required work open; resolve the dependency and
+  continue independent work. Diagnose repeated failures before retrying an unchanged loop.
 
 ## Spawn contract
 
-A spawned sub-agent loads exactly two things: its role file and the task brief the
-Orchestrator writes. The brief must carry:
+Use the matching native role when available; otherwise give a general sub-agent the role
+file and disclose the fallback. If delegation is unavailable, perform the needed stages
+sequentially and disclose the lack of independence. Honor harness model settings.
 
-1. The task and its scope boundary.
-2. The routing result: tech packs, skills, and topic evidence, as `~/.agents/...` paths.
-3. The upstream artefact: the design report for the Planner when a Designer ran; the plan for the Coder; the plan and implementation report for the Reviewer; prototype findings for the Planner when a fan-out ran.
-4. The instruction to return the handoff artefact its role file specifies, and nothing else.
+A role starts with its file and brief, then reads applicable packs, skills, and repository
+evidence. Preserve user decisions across handoffs. Keep shared-file edits sequential;
+parallel writers own disjoint files. Give QA a stable build and isolated test data.
 
-## Handoffs
+```text
+Read `~/.agents/agents/<role>.md` and follow it.
+Task: outcome, acceptance criteria, scope, owned files, and existing user decisions.
+Routing: applicable ~/.agents/policy/<pack>.md and ~/.agents/skills/<name>/SKILL.md;
+         required checks and topic evidence.
+Upstream: relevant reports, exact changed-file/revision scope, and unresolved items.
+QA context when needed: build, launch instructions, entry points, test data, scenarios.
+Return: the role's artefact, with unresolved work explicit.
+```
 
-Each role returns one artefact to the Orchestrator, which decides the next spawn from its
-workflow graph: the Designer's report feeds the Planner when a Designer ran; the Planner's
-plan feeds the Coder, the Coder's report feeds the Reviewer, and the Reviewer's verdict
-either ends the task or re-enters at the Coder (`comments`) or the Planner (`wrong
-direction`).
+## Win condition
+
+The requested behavior is delivered, required automated checks pass, applicable manual QA
+passes, and review has no unresolved actionable findings. Required unavailable evidence
+remains pending. Report the outcome, observed evidence, and remaining limitations.

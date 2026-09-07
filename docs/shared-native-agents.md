@@ -8,8 +8,8 @@ or separate sync executable.
 
 ## Acceptance criteria
 
-- Import the existing orchestrator, planner, coder, and reviewer behavior, removing
-  model-selection prose. Import the routing/orchestration needed to reach them.
+- Share planner, designer, coder, manual-qa, and reviewer behavior. The main agent
+  coordinates them through the routing and orchestration policy.
 - Every role has a native configuration for each harness and every pointer resolves
   to its installed shared Markdown. Shared behavior contains no model settings.
 - Codex uses standalone TOML with name, description, developer_instructions, model,

@@ -155,7 +155,7 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
     );
   }
   assert.match(fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8'), /~\/\.agents\/policy\/orchestration\.md/);
-  assert.match(fs.readFileSync(path.join(home, '.agents/policy/orchestration.md'), 'utf8'), /~\/\.agents\/agents\/orchestrator\.md/);
+  assert.match(fs.readFileSync(path.join(home, '.agents/policy/orchestration.md'), 'utf8'), /~\/\.agents\/agents\/manual-qa\.md/);
 
   const installedClaudePolicy = fs.readFileSync(claudePolicy, 'utf8');
   assert.match(installedClaudePolicy, /Existing Claude preference/);
@@ -333,7 +333,7 @@ test('role files are self-contained and the router chain resolves to them', () =
   const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
   const orchestration = fs.readFileSync(path.join(root, 'policy/orchestration.md'), 'utf8');
   assert.match(routing, /~\/\.agents\/policy\/orchestration\.md/);
-  assert.doesNotMatch(orchestration, /## Workflow graph|Skill router|Topic router/);
+  assert.doesNotMatch(orchestration, /Skill router|Topic router/);
   for (const role of roleFiles) {
     assert.match(orchestration, new RegExp(`~/\\.agents/agents/${role}\\.md`));
     const contents = fs.readFileSync(path.join(root, 'agents', `${role}.md`), 'utf8');
@@ -342,21 +342,19 @@ test('role files are self-contained and the router chain resolves to them', () =
     assert.match(contents, /## Output|## Handoffs received/);
     assert.match(contents, /## Exit/);
     assert.doesNotMatch(contents, /`\.agents\/(policy|agents|skills)\//, `${role} uses a project-relative path`);
+    for (const [, skillPath] of contents.matchAll(/`([^`\n]*\/SKILL\.md)`/g)) {
+      assert.ok(skillPath.startsWith('~/.agents/skills/'), `${role} has a non-portable skill pointer: ${skillPath}`);
+    }
   }
-  const orchestrator = fs.readFileSync(path.join(root, 'agents/orchestrator.md'), 'utf8');
-  assert.match(orchestrator, /## Workflow graph/);
-  assert.match(orchestrator, /## Win condition/);
-  assert.match(orchestrator, /Read `~\/\.agents\/agents\/<role>\.md`/);
+  assert.match(orchestration, /## Workflow graph/);
+  assert.match(orchestration, /## Win condition/);
+  assert.match(orchestration, /Read `~\/\.agents\/agents\/<role>\.md`/);
 });
 
-test('designer directs AI to produce the work and cites the last-90-day source set', () => {
+test('designer keeps research provenance out of the runtime role', () => {
   const designer = fs.readFileSync(path.join(root, 'agents/designer.md'), 'utf8');
-  assert.match(designer, /AI produces the artifact at every step/);
-  assert.match(designer, /### 3\. System-first/);
-  assert.match(designer, /### 4\. Widget-first diverge/);
-  assert.match(designer, /Write a `DESIGN\.md` before any screen/);
-  assert.match(designer, /2026-06-06 through\n2026-09-06/);
-  assert.equal((designer.match(/youtube\.com\/watch\?v=/g) || []).length, 20);
+  assert.doesNotMatch(designer, /^## (Provenance|Sources)\b/m);
+  assert.doesNotMatch(designer, /youtube\.com\/watch\?v=/);
 });
 
 test('preserves an unmanaged AGENTS.md instead of overwriting it', () => {

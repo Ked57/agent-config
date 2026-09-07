@@ -38,7 +38,6 @@ Edit the corresponding source under `harnesses/claude/agents/`, then run
 `node bin/agent-config.mjs sync --user --dry-run` to inspect the changes before syncing.
 Model availability depends on the installed harness version and account.
 
-Claude subagents cannot spawn further subagents. Run the orchestrator in the main
-session (`claude --agent orchestrator`), or let the normal main session assume the
-orchestrator role through task routing. Delegate planner, coder, and reviewer from
-that main session.
+The main session follows `~/.agents/policy/orchestration.md` and delegates the needed
+planner, designer, coder, manual-qa, and reviewer stages. Delegated roles return their
+reports to the main session for coordination.

@@ -1,0 +1,6 @@
+# agent-config:managed
+name = "manual-qa"
+description = "Test changes hands-on in browsers, apps, and APIs, then report reproducible findings."
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"
+developer_instructions = "Read `~/.agents/agents/manual-qa.md` and follow it. If unavailable, report the missing file and stop."
