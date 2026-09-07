@@ -155,7 +155,7 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
     );
   }
   assert.match(fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8'), /~\/\.agents\/policy\/orchestration\.md/);
-  assert.match(fs.readFileSync(path.join(home, '.agents/policy/orchestration.md'), 'utf8'), /~\/\.agents\/agents\/orchestrator\.md/);
+  assert.match(fs.readFileSync(path.join(home, '.agents/policy/orchestration.md'), 'utf8'), /~\/\.agents\/agents\/manual-qa\.md/);
 
   const installedClaudePolicy = fs.readFileSync(claudePolicy, 'utf8');
   assert.match(installedClaudePolicy, /Existing Claude preference/);
@@ -333,7 +333,7 @@ test('role files are self-contained and the router chain resolves to them', () =
   const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
   const orchestration = fs.readFileSync(path.join(root, 'policy/orchestration.md'), 'utf8');
   assert.match(routing, /~\/\.agents\/policy\/orchestration\.md/);
-  assert.doesNotMatch(orchestration, /## Workflow graph|Skill router|Topic router/);
+  assert.doesNotMatch(orchestration, /Skill router|Topic router/);
   for (const role of roleFiles) {
     assert.match(orchestration, new RegExp(`~/\\.agents/agents/${role}\\.md`));
     const contents = fs.readFileSync(path.join(root, 'agents', `${role}.md`), 'utf8');
@@ -342,11 +342,19 @@ test('role files are self-contained and the router chain resolves to them', () =
     assert.match(contents, /## Output|## Handoffs received/);
     assert.match(contents, /## Exit/);
     assert.doesNotMatch(contents, /`\.agents\/(policy|agents|skills)\//, `${role} uses a project-relative path`);
+    for (const [, skillPath] of contents.matchAll(/`([^`\n]*\/SKILL\.md)`/g)) {
+      assert.ok(skillPath.startsWith('~/.agents/skills/'), `${role} has a non-portable skill pointer: ${skillPath}`);
+    }
   }
-  const orchestrator = fs.readFileSync(path.join(root, 'agents/orchestrator.md'), 'utf8');
-  assert.match(orchestrator, /## Workflow graph/);
-  assert.match(orchestrator, /## Win condition/);
-  assert.match(orchestrator, /Read `~\/\.agents\/agents\/<role>\.md`/);
+  assert.match(orchestration, /## Workflow graph/);
+  assert.match(orchestration, /## Win condition/);
+  assert.match(orchestration, /Read `~\/\.agents\/agents\/<role>\.md`/);
+});
+
+test('designer keeps research provenance out of the runtime role', () => {
+  const designer = fs.readFileSync(path.join(root, 'agents/designer.md'), 'utf8');
+  assert.doesNotMatch(designer, /^## (Provenance|Sources)\b/m);
+  assert.doesNotMatch(designer, /youtube\.com\/watch\?v=/);
 });
 
 test('preserves an unmanaged AGENTS.md instead of overwriting it', () => {
@@ -479,6 +487,7 @@ test('keeps Jakub Krehel model and user invocation boundaries', () => {
 test('routes interface skills at precise task and role boundaries', () => {
   const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
   const planner = fs.readFileSync(path.join(root, 'agents/planner.md'), 'utf8');
+  const designer = fs.readFileSync(path.join(root, 'agents/designer.md'), 'utf8');
   const coder = fs.readFileSync(path.join(root, 'agents/coder.md'), 'utf8');
   const reviewer = fs.readFileSync(path.join(root, 'agents/reviewer.md'), 'utf8');
 
@@ -501,19 +510,25 @@ test('routes interface skills at precise task and role boundaries', () => {
   for (const name of focusedSkills) {
     const exactPath = `~/.agents/skills/${name}/SKILL.md`;
     assert.ok(planner.includes(exactPath), `planner does not load ${exactPath}`);
+    assert.ok(designer.includes(exactPath), `designer does not load ${exactPath}`);
     assert.ok(coder.includes(exactPath), `coder does not load ${exactPath}`);
     assert.ok(reviewer.includes(exactPath), `reviewer does not load ${exactPath}`);
   }
+  assert.match(designer, /skills\/frontend-design\/SKILL\.md.*no supplied source-of-truth/s);
+  assert.match(routing, /spawn the Designer \(`~\/\.agents\/agents\/designer\.md`\)/);
   assert.doesNotMatch(planner, /skills\/better-interface\/SKILL\.md/);
+  assert.doesNotMatch(designer, /skills\/better-interface\/SKILL\.md/);
   assert.doesNotMatch(coder, /skills\/better-interface\/SKILL\.md/);
   assert.match(reviewer, /skills\/better-interface\/SKILL\.md.*screen, flow, or repository.*interface-review.*hands off/s);
   assert.match(coder, /skills\/break\/SKILL\.md.*skills\/variant\/SKILL\.md.*only when the user explicitly invokes/s);
   assert.doesNotMatch(planner, /skills\/(break|variant)\/SKILL\.md/);
+  assert.doesNotMatch(designer, /skills\/(break|variant)\/SKILL\.md/);
   assert.doesNotMatch(reviewer, /skills\/(break|variant)\/SKILL\.md/);
   assert.match(reviewer, /skills\/interface-review\/SKILL\.md.*only when the user explicitly invokes/s);
   assert.doesNotMatch(planner, /skills\/interface-review\/SKILL\.md/);
+  assert.doesNotMatch(designer, /skills\/interface-review\/SKILL\.md/);
   assert.doesNotMatch(coder, /skills\/interface-review\/SKILL\.md/);
-  for (const role of [planner, coder, reviewer]) {
+  for (const role of [planner, designer, coder, reviewer]) {
     assert.doesNotMatch(role, /skills\/explain-interface/);
   }
 });

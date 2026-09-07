@@ -130,6 +130,62 @@ function renameRole(repo) {
   }
 }
 
+function addRole(repo, role, description = 'Run hands-on checks') {
+  put(path.join(repo, `agents/${role}.md`), `# ${role}\n\n${description}.\n`);
+  for (const harness of ['codex', 'claude', 'cursor']) {
+    const instructions = `Read \`~/.agents/agents/${role}.md\` and follow it.`;
+    put(path.join(repo, `harnesses/${harness}/agents/${role}.${harness === 'codex' ? 'toml' : 'md'}`), harness === 'codex'
+      ? ['name = ' + JSON.stringify(role), 'description = ' + JSON.stringify(description), 'model = "gpt-5.6-sol"', 'model_reasoning_effort = "low"', `developer_instructions = ${JSON.stringify(instructions)}`].join('\n') + '\n'
+      : `---\nname: ${JSON.stringify(role)}\ndescription: ${JSON.stringify(description)}\nmodel: ${harness === 'claude' ? 'sonnet' : '"gpt-5.6-sol[effort=low]"'}\n---\n\n${instructions}\n`);
+  }
+}
+
+function addActualManualQa(repo) {
+  put(path.join(repo, 'agents/manual-qa.md'), fs.readFileSync(path.join(root, 'agents/manual-qa.md'), 'utf8'));
+  for (const harness of ['codex', 'claude', 'cursor']) {
+    const extension = harness === 'codex' ? 'toml' : 'md';
+    put(path.join(repo, `harnesses/${harness}/agents/manual-qa.${extension}`), fs.readFileSync(path.join(root, `harnesses/${harness}/agents/manual-qa.${extension}`), 'utf8'));
+  }
+}
+
+test('discovers manual QA in every native harness and removes orchestrator registrations', (t) => {
+  const { repo, home, run } = fixture(t);
+  addActualManualQa(repo);
+  addRole(repo, 'orchestrator', 'Legacy coordinator');
+  ok(run('init'));
+  for (const file of ['.codex/agents/manual-qa.toml', '.claude/agents/manual-qa.md', '.cursor/agents/manual-qa.md']) {
+    assert.match(fs.readFileSync(path.join(home, file), 'utf8'), /manual-qa/);
+  }
+  for (const file of ['.codex/agents/orchestrator.toml', '.claude/agents/orchestrator.md', '.cursor/agents/orchestrator.md']) {
+    assert.ok(fs.existsSync(path.join(home, file)));
+  }
+  for (const harness of ['codex', 'claude', 'cursor']) fs.unlinkSync(path.join(repo, `harnesses/${harness}/agents/orchestrator.${harness === 'codex' ? 'toml' : 'md'}`));
+  fs.unlinkSync(path.join(repo, 'agents/orchestrator.md'));
+  ok(run('sync'));
+  for (const file of ['.codex/agents/orchestrator.toml', '.claude/agents/orchestrator.md', '.cursor/agents/orchestrator.md']) {
+    assert.ok(!fs.existsSync(path.join(home, file)));
+  }
+  assert.ok(!fs.existsSync(path.join(home, '.agents/agents/orchestrator.md')));
+  assert.ok(fs.existsSync(path.join(home, '.agents/agents/manual-qa.md')));
+  ok(run('check'));
+});
+
+test('migration preserves a modified old orchestrator registration', (t) => {
+  const { repo, home, run } = fixture(t);
+  addRole(repo, 'orchestrator', 'Legacy coordinator');
+  ok(run('init'));
+  put(path.join(home, '.claude/agents/orchestrator.md'), '# Locally modified legacy agent\n');
+  for (const harness of ['codex', 'claude', 'cursor']) fs.unlinkSync(path.join(repo, `harnesses/${harness}/agents/orchestrator.${harness === 'codex' ? 'toml' : 'md'}`));
+  fs.unlinkSync(path.join(repo, 'agents/orchestrator.md'));
+  addActualManualQa(repo);
+  ok(run('sync'));
+  assert.ok(fs.existsSync(path.join(home, '.claude/agents/orchestrator.md')));
+  assert.equal(fs.readFileSync(path.join(home, '.claude/agents/orchestrator.md'), 'utf8'), '# Locally modified legacy agent\n');
+  for (const file of ['.codex/agents/orchestrator.toml', '.cursor/agents/orchestrator.md']) assert.ok(!fs.existsSync(path.join(home, file)));
+  for (const file of ['.codex/agents/manual-qa.toml', '.claude/agents/manual-qa.md', '.cursor/agents/manual-qa.md']) assert.ok(fs.existsSync(path.join(home, file)));
+  ok(run('check'));
+});
+
 test('removes only unchanged obsolete outputs and preserves modified or unrelated agents', (t) => {
   const { repo, home, run } = fixture(t);
   ok(run('init'));

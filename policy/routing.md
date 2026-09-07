@@ -60,7 +60,7 @@ Figma node or other exact visual spec.
 
 ## 3. Topic (discipline → packs, skills, evidence)
 
-- **Design** (visual direction, redesign, Figma, interface quality) → use the matching interface route above. Evidence: rendered screenshots at narrow and wide viewports, keyboard and assistive-technology checks when relevant, measured contrast, and Figma comparison when supplied.
+- **Design** (visual direction, redesign, Figma, interface quality) → use the matching interface route above. Original visual direction or AI-produced design artifacts with no supplied spec also spawn the Designer (`~/.agents/agents/designer.md`) from orchestration. Evidence: rendered screenshots at narrow and wide viewports, keyboard and assistive-technology checks when relevant, measured contrast, and Figma comparison when supplied.
 - **Frontend** (components, forms, UI state) → `typescript.md` plus `react.md` or `vue-primevue.md`. Evidence: component tests, screenshots, accessibility selectors.
 - **Backend** (services, APIs, data access, business rules) → `typescript.md`; `domain-module.md` when the convention is detected; `codebase-design`. Evidence: unit and integration tests.
 - **Domain** (terminology, boundaries, decisions) → `domain-modeling`, `domain-module.md`. Evidence: `CONTEXT.md` and ADRs updated.
