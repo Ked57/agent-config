@@ -182,10 +182,13 @@ const policyPacks = fs.readdirSync(policyRoot, { withFileTypes: true })
     source: path.join(policyRoot, entry.name)
   }))
   .sort((left, right) => left.name.localeCompare(right.name));
-const roleFiles = fs.readdirSync(path.join(sourceRoot, 'agents'), { withFileTypes: true })
-  .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-  .map((entry) => ({ name: entry.name, source: path.join(sourceRoot, 'agents', entry.name) }))
-  .sort((left, right) => left.name.localeCompare(right.name));
+const agentsSourceDirectory = path.join(sourceRoot, 'agents');
+const roleFiles = exists(agentsSourceDirectory)
+  ? fs.readdirSync(agentsSourceDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+    .map((entry) => ({ name: entry.name, source: path.join(agentsSourceDirectory, entry.name) }))
+    .sort((left, right) => left.name.localeCompare(right.name))
+  : [];
 const managedSourceFiles = [
   'policy/shared-policy.md',
   ...policyPacks.map(({ name }) => `policy/${name}.md`),
@@ -207,7 +210,7 @@ const codexFiles = codexHomeIsInsideUserHome
   : createFileOperations(configuredCodexHome, 'Codex home');
 // Codex keeps a managed block in ~/.codex/AGENTS.md. The same shared-policy body is
 // also written to ~/.agents/AGENTS.md so ~/.agents/... pointers resolve. Packs and
-// role files are standalone files under ~/.agents/.
+// skills are standalone files under ~/.agents/.
 const userPolicy = sharedPolicy;
 const packagePath = path.join(projectRoot, 'package.json');
 const packageJson = !userScope && exists(packagePath) ? JSON.parse(read(packagePath)) : null;
@@ -329,7 +332,6 @@ const legacyGeneratedFileHashes = new Map([
 const legacyGeneratedFiles = [...legacyGeneratedFileHashes.keys()].map((file) => target(...file.split('/')));
 const projectPackDetector = {
   routing: true,
-  orchestration: true,
   typescript: isTypeScript,
   react: isReact,
   'domain-module': hasDomainConvention,
@@ -374,7 +376,7 @@ const cursorPluginManifestContents = `${JSON.stringify({
   description: 'Personal cross-harness agent policy bridge.'
 }, null, 2)}\n`;
 const userStandaloneFiles = [
-  ...(userScope ? discoverAgents(sourceRoot, userHome, configuredCodexHome) : []),
+  ...(userScope ? discoverAgents(sourceRoot, userHome) : []),
   { key: 'cursor:plugin-manifest', destination: cursorPluginManifest, contents: cursorPluginManifestContents },
   { key: 'cursor:user-rule', destination: cursorUserRule, contents: cursorUserRuleContents },
   { key: 'agents:AGENTS.md', destination: userAgentsFile, contents: sharedPolicy },
@@ -721,6 +723,8 @@ const userDestinationForKey = (key) => {
   if (current) return current.destination;
   const agent = /^(?:(codex|claude|cursor):)?agent:([a-z][a-z0-9-]*)\.(md|toml)$/.exec(key);
   if (agent && agent[3] === (agent[1] === 'codex' ? 'toml' : 'md')) return path.join(agent[1] === 'codex' ? configuredCodexHome : path.join(userHome, `.${agent[1] ?? 'agents'}`), 'agents', `${agent[2]}.${agent[3]}`);
+  const policy = /^policy:([a-z][a-z0-9-]*)$/.exec(key);
+  if (policy) return path.join(userHome, '.agents', 'policy', `${policy[1]}.md`);
   const skill = /^(claude:)?skill:([a-z][a-z0-9-]*):([a-zA-Z0-9_./-]+)$/.exec(key);
   if (skill && skill[3].split('/').every((part) => part && part !== '.' && part !== '..')) return path.join(userHome, skill[1] ? '.claude' : '.agents', 'skills', skill[2], skill[3]);
   throw new Error(`Invalid managed ownership key: ${key}`);
@@ -796,8 +800,10 @@ const planUser = () => {
     if (!exists(destination)) continue;
     const before = read(destination);
     const isAgent = /^(?:(codex|claude|cursor):)?agent:/.test(key);
+    const isPolicy = /^policy:[a-z][a-z0-9-]*$/.test(key);
     const hasMarker = /^(?:# agent-config:managed|<!-- agent-config:managed -->)$/m.test(before.replace(/\r\n/g, '\n'));
-    const removable = isAgent && hasMarker && previous.version === 2 && sha256(before) === previous.hashes[key];
+    const hashMatches = previous.version === 2 && sha256(before) === previous.hashes[key];
+    const removable = hashMatches && (isPolicy || (isAgent && hasMarker));
     actions.push({ destination, before, contents: removable ? null : before, action: removable ? 'removed' : 'preserved' });
   }
   const lock = {

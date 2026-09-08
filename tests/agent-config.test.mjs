@@ -68,12 +68,10 @@ const jakubKrehelSkills = [
   ...userInvokedJakubKrehelSkills
 ].sort();
 const jakubKrehelLock = JSON.parse(fs.readFileSync(path.join(root, 'skills/jakubkrehel-skills.lock.json'), 'utf8'));
+const agentBrowserSkills = ['agent-browser'];
+const agentBrowserLock = JSON.parse(fs.readFileSync(path.join(root, 'skills/agent-browser-skills.lock.json'), 'utf8'));
 const policyPacks = fs.readdirSync(path.join(root, 'policy'))
   .filter((name) => name.endsWith('.md') && name !== 'shared-policy.md')
-  .map((name) => name.slice(0, -'.md'.length))
-  .sort();
-const roleFiles = fs.readdirSync(path.join(root, 'agents'))
-  .filter((name) => name.endsWith('.md'))
   .map((name) => name.slice(0, -'.md'.length))
   .sort();
 const sharedPolicySource = fs.readFileSync(path.join(root, 'policy/shared-policy.md'), 'utf8');
@@ -131,31 +129,24 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   assert.match(installedPolicy, /agent-config:begin user-policy/);
   assert.match(installedPolicy, /# Start here/);
   assert.match(installedPolicy, /~\/\.agents\/policy\/routing\.md/);
-  assert.match(installedPolicy, /~\/\.agents\/policy\/orchestration\.md/);
+  assert.match(installedPolicy, /~\/\.agents\/skills\/manual-qa\/SKILL\.md/);
+  assert.doesNotMatch(installedPolicy, /orchestration\.md/);
   assert.doesNotMatch(installedPolicy, /# TypeScript standards/);
   const userAgentsMd = path.join(home, '.agents/AGENTS.md');
   assert.ok(fs.existsSync(userAgentsMd), 'missing ~/.agents/AGENTS.md');
   assert.equal(fs.readFileSync(userAgentsMd, 'utf8'), sharedPolicySource);
   assert.match(fs.readFileSync(userAgentsMd, 'utf8'), /~\/\.agents\/AGENTS\.md/);
   assert.ok(!fs.existsSync(path.join(home, '.agents/policy/shared-policy.md')));
-  assert.deepEqual(policyPacks, ['domain-module', 'orchestration', 'react', 'routing', 'typescript', 'vue-primevue']);
+  assert.deepEqual(policyPacks, ['domain-module', 'react', 'routing', 'typescript', 'vue-primevue']);
   for (const pack of policyPacks) {
     const installedPack = path.join(home, '.agents/policy', `${pack}.md`);
     assert.ok(fs.existsSync(installedPack), `missing user pack ${pack}`);
     assert.equal(fs.readFileSync(installedPack, 'utf8'), fs.readFileSync(path.join(root, 'policy', `${pack}.md`), 'utf8'));
   }
-  for (const role of roleFiles) {
-    const installedRole = path.join(home, '.agents/agents', `${role}.md`);
-    assert.ok(fs.existsSync(installedRole), `missing user role ${role}`);
-    const installed = fs.readFileSync(installedRole, 'utf8');
-    assert.match(installed, /^<!-- agent-config:managed -->\n/);
-    assert.equal(
-      installed.replace(/^<!-- agent-config:managed -->\n/, ''),
-      fs.readFileSync(path.join(root, 'agents', `${role}.md`), 'utf8').replace(/\r\n/g, '\n')
-    );
-  }
-  assert.match(fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8'), /~\/\.agents\/policy\/orchestration\.md/);
-  assert.match(fs.readFileSync(path.join(home, '.agents/policy/orchestration.md'), 'utf8'), /~\/\.agents\/agents\/manual-qa\.md/);
+  assert.ok(!fs.existsSync(path.join(home, '.agents/policy/orchestration.md')));
+  assert.ok(!fs.existsSync(path.join(home, '.agents/agents')));
+  assert.match(fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8'), /Changed runnable UI, API, or CLI behavior after implementation → `manual-qa`/);
+  assert.match(fs.readFileSync(path.join(home, '.agents/skills/manual-qa/SKILL.md'), 'utf8'), /Hands-on verification of a running surface/);
 
   const installedClaudePolicy = fs.readFileSync(claudePolicy, 'utf8');
   assert.match(installedClaudePolicy, /Existing Claude preference/);
@@ -276,15 +267,15 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
 
   assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /# Start here/);
   assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /~\/\.agents\/policy\/routing\.md/);
-  assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /~\/\.agents\/policy\/orchestration\.md/);
+  assert.match(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /~\/\.agents\/skills\/manual-qa\/SKILL\.md/);
+  assert.doesNotMatch(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8'), /orchestration\.md/);
   assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /vue-primevue\.md/);
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/routing.md')));
-  assert.ok(fs.existsSync(path.join(project, '.agents/policy/orchestration.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/policy/orchestration.md')));
+  assert.ok(!fs.existsSync(path.join(project, '.agents/agents')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/shared-policy.md')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/AGENTS.md')));
-  for (const role of roleFiles) {
-    assert.ok(fs.existsSync(path.join(project, '.agents/agents', `${role}.md`)), `missing project role ${role}`);
-  }
+  assert.ok(fs.existsSync(path.join(project, '.agents/skills/manual-qa/SKILL.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/react.md')));
@@ -323,38 +314,31 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
 
   run(project, 'check');
 
-  fs.rmSync(path.join(project, '.agents/agents/coder.md'));
+  fs.rmSync(path.join(project, '.agents/skills/manual-qa/SKILL.md'));
   assert.throws(() => run(project, 'check'));
   run(project, 'sync');
   run(project, 'check');
 });
 
-test('role files are self-contained and the router chain resolves to them', () => {
+test('routing and shared policy resolve without role files', () => {
   const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
-  const orchestration = fs.readFileSync(path.join(root, 'policy/orchestration.md'), 'utf8');
-  assert.match(routing, /~\/\.agents\/policy\/orchestration\.md/);
-  assert.doesNotMatch(orchestration, /Skill router|Topic router/);
-  for (const role of roleFiles) {
-    assert.match(orchestration, new RegExp(`~/\\.agents/agents/${role}\\.md`));
-    const contents = fs.readFileSync(path.join(root, 'agents', `${role}.md`), 'utf8');
-    assert.match(contents, /^Models, in order: /m, `${role} lacks a model fallback list`);
-    assert.match(contents, /## Inputs/);
-    assert.match(contents, /## Output|## Handoffs received/);
-    assert.match(contents, /## Exit/);
-    assert.doesNotMatch(contents, /`\.agents\/(policy|agents|skills)\//, `${role} uses a project-relative path`);
-    for (const [, skillPath] of contents.matchAll(/`([^`\n]*\/SKILL\.md)`/g)) {
-      assert.ok(skillPath.startsWith('~/.agents/skills/'), `${role} has a non-portable skill pointer: ${skillPath}`);
-    }
-  }
-  assert.match(orchestration, /## Workflow graph/);
-  assert.match(orchestration, /## Win condition/);
-  assert.match(orchestration, /Read `~\/\.agents\/agents\/<role>\.md`/);
-});
-
-test('designer keeps research provenance out of the runtime role', () => {
-  const designer = fs.readFileSync(path.join(root, 'agents/designer.md'), 'utf8');
-  assert.doesNotMatch(designer, /^## (Provenance|Sources)\b/m);
-  assert.doesNotMatch(designer, /youtube\.com\/watch\?v=/);
+  const sharedPolicy = fs.readFileSync(path.join(root, 'policy/shared-policy.md'), 'utf8');
+  assert.match(routing, /~\/\.agents\/policy\/typescript\.md/);
+  assert.doesNotMatch(routing, /orchestration\.md/);
+  assert.doesNotMatch(sharedPolicy, /orchestration\.md/);
+  assert.match(sharedPolicy, /~\/\.agents\/skills\/manual-qa\/SKILL\.md/);
+  assert.match(routing, /Changed runnable UI, API, or CLI behavior after implementation → `manual-qa`/);
+  assert.match(routing, /Browser automation with the agent-browser CLI → `agent-browser`/);
+  assert.ok(!fs.existsSync(path.join(root, 'policy/orchestration.md')));
+  assert.ok(!fs.existsSync(path.join(root, 'agents')));
+  const manualQa = fs.readFileSync(path.join(root, 'skills/manual-qa/SKILL.md'), 'utf8');
+  assert.match(manualQa, /^description:/m);
+  assert.doesNotMatch(manualQa, /^disable-model-invocation: true$/m);
+  assert.match(manualQa, /~\/\.agents\/skills\/agent-browser\/SKILL\.md/);
+  assert.match(manualQa, /React inspection/);
+  assert.match(manualQa, /Web Vitals/);
+  assert.match(manualQa, /profiler/);
+  assert.match(manualQa, /hunting regressions/);
 });
 
 test('preserves an unmanaged AGENTS.md instead of overwriting it', () => {
@@ -401,10 +385,11 @@ test('vendors Matt Pocock skills with licenses and supporting files', () => {
     'fullstack-typescript-quality',
     'fullstack-typescript-static',
     'fullstack-typescript-tests',
-    'fullstack-typescript-mutation'
+    'fullstack-typescript-mutation',
+    'manual-qa'
   ]);
   const discovered = fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && !originalSkills.has(entry.name) && !jakubKrehelSkills.includes(entry.name))
+    .filter((entry) => entry.isDirectory() && !originalSkills.has(entry.name) && !jakubKrehelSkills.includes(entry.name) && !agentBrowserSkills.includes(entry.name))
     .map((entry) => entry.name)
     .sort();
   assert.deepEqual(discovered, [...mattPocockSkills]);
@@ -468,6 +453,48 @@ test('locks every vendored Jakub Krehel file and license to its upstream commit'
   }
 });
 
+test('locks the vendored agent-browser discovery skill and license to its upstream commit', () => {
+  assert.equal(agentBrowserLock.version, 1);
+  assert.equal(agentBrowserLock.source, 'https://github.com/vercel-labs/agent-browser');
+  assert.equal(agentBrowserLock.commit, '72007a6788d863611b23bed0b59d0d659c638d8e');
+  assert.equal(agentBrowserLock.license.sourcePath, 'LICENSE');
+  assert.equal(agentBrowserLock.license.installedAs, 'LICENSE.txt');
+  assert.deepEqual(Object.keys(agentBrowserLock.skills).sort(), agentBrowserSkills);
+
+  for (const name of agentBrowserSkills) {
+    const skillDirectory = path.join(root, 'skills', name);
+    const lockedSkill = agentBrowserLock.skills[name];
+    assert.equal(lockedSkill.upstreamPath, `skills/${name}`);
+    const lockedFiles = Object.keys(lockedSkill.files).map((file) => file.split(/[\\\\/]/).join('/')).sort();
+    const installedFiles = listFiles(skillDirectory)
+      .map((file) => file.split(path.sep).join('/'))
+      .sort();
+    assert.deepEqual(
+      installedFiles,
+      [...lockedFiles, agentBrowserLock.license.installedAs].sort(),
+      `vendored inventory drifted for ${name}`
+    );
+
+    for (const file of lockedFiles) {
+      const lockedFileKey = Object.keys(lockedSkill.files).find((key) => key.split(/[\\\\/]/).join('/') === file);
+      assert.equal(
+        normalizedContentSha256(path.join(skillDirectory, file)),
+        lockedSkill.files[lockedFileKey],
+        `vendored content drifted for ${name}/${file}`
+      );
+    }
+
+    const licenseFile = path.join(skillDirectory, agentBrowserLock.license.installedAs);
+    assert.equal(
+      normalizedContentSha256(licenseFile),
+      agentBrowserLock.license.normalizedSha256,
+      `license drifted for ${name}`
+    );
+    assert.match(fs.readFileSync(path.join(skillDirectory, 'SKILL.md'), 'utf8'), /agent-browser skills get core/);
+    assert.doesNotMatch(fs.readFileSync(path.join(skillDirectory, 'SKILL.md'), 'utf8'), /^disable-model-invocation: true$/m);
+  }
+});
+
 test('keeps Jakub Krehel model and user invocation boundaries', () => {
   for (const name of modelInvokedJakubKrehelSkills) {
     const skill = fs.readFileSync(path.join(root, 'skills', name, 'SKILL.md'), 'utf8');
@@ -484,14 +511,9 @@ test('keeps Jakub Krehel model and user invocation boundaries', () => {
   }
 });
 
-test('routes interface skills at precise task and role boundaries', () => {
+test('routes interface skills at precise task boundaries', () => {
   const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
-  const planner = fs.readFileSync(path.join(root, 'agents/planner.md'), 'utf8');
-  const designer = fs.readFileSync(path.join(root, 'agents/designer.md'), 'utf8');
-  const coder = fs.readFileSync(path.join(root, 'agents/coder.md'), 'utf8');
-  const reviewer = fs.readFileSync(path.join(root, 'agents/reviewer.md'), 'utf8');
 
-  const focusedSkills = modelInvokedJakubKrehelSkills.filter((name) => name !== 'better-interface');
   for (const route of [
     /- Cross-discipline audit of an existing screen, flow, or repository → `better-interface`\./,
     /- Semantic HTML, keyboard or focus behaviour, forms, or assistive technology → `better-accessibility`\./,
@@ -506,31 +528,8 @@ test('routes interface skills at precise task and role boundaries', () => {
   assert.match(routing, /`break`, `explain-interface`, `interface-review`, and `variant` are explicitly user-invoked/);
   assert.match(routing, /`frontend-design` remains the.*original visual direction or substantial redesign/s);
   assert.match(routing, /`figma-design-to-code` remains the.*faithful implementation of a supplied.*Figma node or other exact visual spec/s);
-
-  for (const name of focusedSkills) {
-    const exactPath = `~/.agents/skills/${name}/SKILL.md`;
-    assert.ok(planner.includes(exactPath), `planner does not load ${exactPath}`);
-    assert.ok(designer.includes(exactPath), `designer does not load ${exactPath}`);
-    assert.ok(coder.includes(exactPath), `coder does not load ${exactPath}`);
-    assert.ok(reviewer.includes(exactPath), `reviewer does not load ${exactPath}`);
-  }
-  assert.match(designer, /skills\/frontend-design\/SKILL\.md.*no supplied source-of-truth/s);
-  assert.match(routing, /spawn the Designer \(`~\/\.agents\/agents\/designer\.md`\)/);
-  assert.doesNotMatch(planner, /skills\/better-interface\/SKILL\.md/);
-  assert.doesNotMatch(designer, /skills\/better-interface\/SKILL\.md/);
-  assert.doesNotMatch(coder, /skills\/better-interface\/SKILL\.md/);
-  assert.match(reviewer, /skills\/better-interface\/SKILL\.md.*screen, flow, or repository.*interface-review.*hands off/s);
-  assert.match(coder, /skills\/break\/SKILL\.md.*skills\/variant\/SKILL\.md.*only when the user explicitly invokes/s);
-  assert.doesNotMatch(planner, /skills\/(break|variant)\/SKILL\.md/);
-  assert.doesNotMatch(designer, /skills\/(break|variant)\/SKILL\.md/);
-  assert.doesNotMatch(reviewer, /skills\/(break|variant)\/SKILL\.md/);
-  assert.match(reviewer, /skills\/interface-review\/SKILL\.md.*only when the user explicitly invokes/s);
-  assert.doesNotMatch(planner, /skills\/interface-review\/SKILL\.md/);
-  assert.doesNotMatch(designer, /skills\/interface-review\/SKILL\.md/);
-  assert.doesNotMatch(coder, /skills\/interface-review\/SKILL\.md/);
-  for (const role of [planner, designer, coder, reviewer]) {
-    assert.doesNotMatch(role, /skills\/explain-interface/);
-  }
+  assert.doesNotMatch(routing, /spawn the Designer/);
+  assert.doesNotMatch(routing, /~\/\.agents\/agents\//);
 });
 
 test('frontend skills keep distinct triggers and required completion contracts', () => {
@@ -791,7 +790,7 @@ test('does not install framework packs from dependencies alone', () => {
 
   run(project, 'init');
 
-  assert.ok(fs.existsSync(path.join(project, '.agents/policy/orchestration.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/routing.md')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/react.md')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));

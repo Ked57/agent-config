@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import test from 'node:test';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const put = (file, value) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, value); };
@@ -14,13 +15,6 @@ function fixture(t) {
   const home = path.join(directory, 'home');
   fs.mkdirSync(home);
   for (const folder of ['bin', 'policy', 'skills']) fs.cpSync(path.join(root, folder), path.join(repo, folder), { recursive: true });
-  put(path.join(repo, 'agents/coder.md'), '# Coder\n\nImplement the task.\n');
-  for (const harness of ['codex', 'claude', 'cursor']) {
-    const instructions = 'Read `~/.agents/agents/coder.md` and follow it.';
-    put(path.join(repo, `harnesses/${harness}/agents/coder.${harness === 'codex' ? 'toml' : 'md'}`), harness === 'codex'
-      ? ['name = "coder"', 'description = "Implement a task"', 'model = "gpt-5.6-sol"', 'model_reasoning_effort = "low"', `developer_instructions = ${JSON.stringify(instructions)}`].join('\n') + '\n'
-      : `---\nname: coder\ndescription: Implement a task\nmodel: ${harness === 'claude' ? 'sonnet' : '"gpt-5.6-sol[effort=low]"'}\n---\n\n${instructions}\n`);
-  }
   const run = (command, extra = [], environment = {}) => {
     const env = { ...process.env, HOME: home, USERPROFILE: home, ...environment };
     if (!('CODEX_HOME' in environment)) delete env.CODEX_HOME;
@@ -33,31 +27,34 @@ function fixture(t) {
   return { repo, home, run, directory };
 }
 const ok = (result) => assert.equal(result.status, 0, result.stderr);
+const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
-test('discovers shared and native agents, synchronizes deterministically, and detects drift', (t) => {
+test('synchronizes policy without installing shared roles', (t) => {
   const { home, run } = fixture(t);
   ok(run('init'));
-  assert.match(fs.readFileSync(path.join(home, '.agents/agents/coder.md'), 'utf8'), /agent-config:managed/);
+  assert.ok(!fs.existsSync(path.join(home, '.agents/agents')));
   for (const file of ['.codex/agents/coder.toml', '.claude/agents/coder.md', '.cursor/agents/coder.md']) {
-    assert.match(fs.readFileSync(path.join(home, file), 'utf8'), /~\/.agents\/agents\/coder.md/);
+    assert.ok(!fs.existsSync(path.join(home, file)));
   }
   ok(run('check'));
   const lock = fs.readFileSync(path.join(home, '.agent-config/agent-config.lock.json'), 'utf8');
   assert.match(run('sync').stdout, /created=0 updated=0 removed=0/);
   assert.equal(fs.readFileSync(path.join(home, '.agent-config/agent-config.lock.json'), 'utf8'), lock);
-  put(path.join(home, '.codex/agents/coder.toml'), '# changed\n');
+  put(path.join(home, '.agents/policy/routing.md'), '# changed\n');
   assert.notEqual(run('check').status, 0);
   ok(run('sync'));
   ok(run('check'));
 });
 
-test('installs and connects the shared routing and role policy', (t) => {
+test('installs and connects the shared routing policy', (t) => {
   const { home, run } = fixture(t);
   ok(run('init'));
-  for (const name of ['routing', 'orchestration', 'typescript', 'react', 'vue-primevue', 'domain-module']) {
+  for (const name of ['routing', 'typescript', 'react', 'vue-primevue', 'domain-module']) {
     assert.ok(fs.existsSync(path.join(home, '.agents/policy', `${name}.md`)));
   }
+  assert.ok(!fs.existsSync(path.join(home, '.agents/policy/orchestration.md')));
   assert.match(fs.readFileSync(path.join(home, '.codex/AGENTS.md'), 'utf8'), /~\/.agents\/policy\/routing.md/);
+  assert.match(fs.readFileSync(path.join(home, '.agents/AGENTS.md'), 'utf8'), /~\/.agents\/skills\/manual-qa\/SKILL.md/);
 });
 
 function snapshot(directory) {
@@ -67,13 +64,13 @@ function snapshot(directory) {
   });
 }
 
-test('late native collision and malformed policy block leave the whole home unchanged', (t) => {
+test('late shared-file collision and malformed policy block leave the whole home unchanged', (t) => {
   const { home, run } = fixture(t);
-  put(path.join(home, '.cursor/agents/coder.md'), 'User owned');
+  put(path.join(home, '.agents/policy/routing.md'), 'User owned');
   const before = snapshot(home);
   assert.notEqual(run('sync').status, 0);
   assert.deepEqual(snapshot(home), before);
-  fs.unlinkSync(path.join(home, '.cursor/agents/coder.md'));
+  fs.unlinkSync(path.join(home, '.agents/policy/routing.md'));
   put(path.join(home, '.claude/CLAUDE.md'), '<!-- agent-config:begin claude-user-bridge -->');
   const malformed = snapshot(home);
   assert.notEqual(run('sync').status, 0);
@@ -87,7 +84,7 @@ test('dry-run previews changes and removals without changing files or the lock',
   assert.match(initial.stdout, /--- \/dev\/null/);
   assert.deepEqual(snapshot(home), []);
   ok(run('sync'));
-  put(path.join(repo, 'agents/coder.md'), '# Coder\nChanged behavior.\n');
+  put(path.join(repo, 'skills/manual-qa/SKILL.md'), `${fs.readFileSync(path.join(repo, 'skills/manual-qa/SKILL.md'), 'utf8')}\nChanged behavior.\n`);
   const before = snapshot(home);
   const preview = run('sync', ['--dry-run']);
   ok(preview);
@@ -98,126 +95,95 @@ test('dry-run previews changes and removals without changing files or the lock',
   ok(run('check'));
 });
 
-test('invalid native metadata and missing sources fail before any writes', (t) => {
+test('empty shared agents fail before any writes; a missing agents directory is allowed', (t) => {
   const { repo, home, run } = fixture(t);
-  const file = path.join(repo, 'harnesses/codex/agents/coder.toml');
-  const original = fs.readFileSync(file, 'utf8');
-  for (const contents of [
-    original + 'name = "duplicate"\n',
-    original.replace('name = "coder"', 'name = "other"'),
-    original.replace('model_reasoning_effort = "low"', 'model_reasoning_effort = "invalid"'),
-    original.replace('description = "Implement a task"', 'description = "bad\\qescape"'),
-    original.replace('description = "Implement a task"', 'description = "bad\\uD800escape"'),
-    original.replace('~/.agents/agents/coder.md', '~/.agents/agents/missing.md'),
-    original.replace('model = "gpt-5.6-sol"\n', ''),
-    original + 'unsupported = "setting"\n'
-  ]) {
-    put(file, contents);
-    assert.notEqual(run('sync').status, 0, contents);
-    assert.deepEqual(snapshot(home), []);
-  }
-  put(file, original);
-  fs.renameSync(path.join(repo, 'agents'), path.join(repo, 'agents-missing'));
+  put(path.join(repo, 'agents/coder.md'), '');
   assert.notEqual(run('sync').status, 0);
   assert.deepEqual(snapshot(home), []);
-});
-
-function renameRole(repo) {
-  for (const relative of ['agents/coder.md', 'harnesses/codex/agents/coder.toml', 'harnesses/claude/agents/coder.md', 'harnesses/cursor/agents/coder.md']) {
-    const old = path.join(repo, relative);
-    put(old.replace(/coder\.(md|toml)$/, 'reviewer.$1'), fs.readFileSync(old, 'utf8').replaceAll('coder', 'reviewer'));
-    fs.unlinkSync(old);
-  }
-}
-
-function addRole(repo, role, description = 'Run hands-on checks') {
-  put(path.join(repo, `agents/${role}.md`), `# ${role}\n\n${description}.\n`);
-  for (const harness of ['codex', 'claude', 'cursor']) {
-    const instructions = `Read \`~/.agents/agents/${role}.md\` and follow it.`;
-    put(path.join(repo, `harnesses/${harness}/agents/${role}.${harness === 'codex' ? 'toml' : 'md'}`), harness === 'codex'
-      ? ['name = ' + JSON.stringify(role), 'description = ' + JSON.stringify(description), 'model = "gpt-5.6-sol"', 'model_reasoning_effort = "low"', `developer_instructions = ${JSON.stringify(instructions)}`].join('\n') + '\n'
-      : `---\nname: ${JSON.stringify(role)}\ndescription: ${JSON.stringify(description)}\nmodel: ${harness === 'claude' ? 'sonnet' : '"gpt-5.6-sol[effort=low]"'}\n---\n\n${instructions}\n`);
-  }
-}
-
-function addActualManualQa(repo) {
-  put(path.join(repo, 'agents/manual-qa.md'), fs.readFileSync(path.join(root, 'agents/manual-qa.md'), 'utf8'));
-  for (const harness of ['codex', 'claude', 'cursor']) {
-    const extension = harness === 'codex' ? 'toml' : 'md';
-    put(path.join(repo, `harnesses/${harness}/agents/manual-qa.${extension}`), fs.readFileSync(path.join(root, `harnesses/${harness}/agents/manual-qa.${extension}`), 'utf8'));
-  }
-}
-
-test('discovers manual QA in every native harness and removes orchestrator registrations', (t) => {
-  const { repo, home, run } = fixture(t);
-  addActualManualQa(repo);
-  addRole(repo, 'orchestrator', 'Legacy coordinator');
-  ok(run('init'));
-  for (const file of ['.codex/agents/manual-qa.toml', '.claude/agents/manual-qa.md', '.cursor/agents/manual-qa.md']) {
-    assert.match(fs.readFileSync(path.join(home, file), 'utf8'), /manual-qa/);
-  }
-  for (const file of ['.codex/agents/orchestrator.toml', '.claude/agents/orchestrator.md', '.cursor/agents/orchestrator.md']) {
-    assert.ok(fs.existsSync(path.join(home, file)));
-  }
-  for (const harness of ['codex', 'claude', 'cursor']) fs.unlinkSync(path.join(repo, `harnesses/${harness}/agents/orchestrator.${harness === 'codex' ? 'toml' : 'md'}`));
-  fs.unlinkSync(path.join(repo, 'agents/orchestrator.md'));
+  fs.rmSync(path.join(repo, 'agents'), { recursive: true, force: true });
   ok(run('sync'));
-  for (const file of ['.codex/agents/orchestrator.toml', '.claude/agents/orchestrator.md', '.cursor/agents/orchestrator.md']) {
-    assert.ok(!fs.existsSync(path.join(home, file)));
-  }
-  assert.ok(!fs.existsSync(path.join(home, '.agents/agents/orchestrator.md')));
-  assert.ok(fs.existsSync(path.join(home, '.agents/agents/manual-qa.md')));
-  ok(run('check'));
+  assert.ok(fs.existsSync(path.join(home, '.agents/policy/routing.md')));
+  assert.ok(!fs.existsSync(path.join(home, '.agents/agents')));
 });
 
-test('migration preserves a modified old orchestrator registration', (t) => {
-  const { repo, home, run } = fixture(t);
-  addRole(repo, 'orchestrator', 'Legacy coordinator');
+test('removes unchanged leftover shared-agent files and preserves modified leftovers', (t) => {
+  const { home, run } = fixture(t);
   ok(run('init'));
-  put(path.join(home, '.claude/agents/orchestrator.md'), '# Locally modified legacy agent\n');
-  for (const harness of ['codex', 'claude', 'cursor']) fs.unlinkSync(path.join(repo, `harnesses/${harness}/agents/orchestrator.${harness === 'codex' ? 'toml' : 'md'}`));
-  fs.unlinkSync(path.join(repo, 'agents/orchestrator.md'));
-  addActualManualQa(repo);
-  ok(run('sync'));
-  assert.ok(fs.existsSync(path.join(home, '.claude/agents/orchestrator.md')));
-  assert.equal(fs.readFileSync(path.join(home, '.claude/agents/orchestrator.md'), 'utf8'), '# Locally modified legacy agent\n');
-  for (const file of ['.codex/agents/orchestrator.toml', '.cursor/agents/orchestrator.md']) assert.ok(!fs.existsSync(path.join(home, file)));
-  for (const file of ['.codex/agents/manual-qa.toml', '.claude/agents/manual-qa.md', '.cursor/agents/manual-qa.md']) assert.ok(fs.existsSync(path.join(home, file)));
-  ok(run('check'));
-});
-
-test('removes only unchanged obsolete outputs and preserves modified or unrelated agents', (t) => {
-  const { repo, home, run } = fixture(t);
-  ok(run('init'));
+  const managed = '<!-- agent-config:managed -->\n# Coder\n';
   put(path.join(home, '.cursor/agents/custom.md'), '# User agent');
-  put(path.join(home, '.claude/agents/coder.md'), '# Locally modified old agent');
-  renameRole(repo);
-  assert.notEqual(run('check').status, 0);
-  const before = snapshot(home);
+  put(path.join(home, '.agents/agents/coder.md'), managed);
+  const lockFile = path.join(home, '.agent-config/agent-config.lock.json');
+  const lock = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+  lock.managedFiles.push('agent:coder.md');
+  lock.hashes['agent:coder.md'] = hash(managed);
+  put(lockFile, JSON.stringify(lock, null, 2));
   const preview = run('sync', ['--dry-run']);
   ok(preview);
-  assert.match(preview.stdout, /removed=3/);
-  assert.deepEqual(snapshot(home), before);
+  assert.match(preview.stdout, /removed=1/);
   ok(run('sync'));
-  for (const file of ['.agents/agents/coder.md', '.codex/agents/coder.toml', '.cursor/agents/coder.md']) assert.ok(!fs.existsSync(path.join(home, file)));
-  assert.equal(fs.readFileSync(path.join(home, '.claude/agents/coder.md'), 'utf8'), '# Locally modified old agent');
+  assert.ok(!fs.existsSync(path.join(home, '.agents/agents/coder.md')));
   assert.equal(fs.readFileSync(path.join(home, '.cursor/agents/custom.md'), 'utf8'), '# User agent');
+  ok(run('check'));
+
+  put(path.join(home, '.agents/agents/reviewer.md'), '# Locally modified old agent');
+  const after = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+  after.managedFiles.push('agent:reviewer.md');
+  after.hashes['agent:reviewer.md'] = hash(managed);
+  put(lockFile, JSON.stringify(after, null, 2));
+  const preserved = run('sync', ['--dry-run']);
+  ok(preserved);
+  assert.match(preserved.stdout, /removed=0/);
+  assert.match(preserved.stdout, /preserved=1/);
+  ok(run('sync'));
+  assert.equal(fs.readFileSync(path.join(home, '.agents/agents/reviewer.md'), 'utf8'), '# Locally modified old agent');
   ok(run('check'));
 });
 
 test('migrates legacy locks without deleting outputs lacking installed hashes', (t) => {
-  const { repo, home, run } = fixture(t);
+  const { home, run } = fixture(t);
   ok(run('init'));
+  const managed = '<!-- agent-config:managed -->\n# Coder\n';
+  put(path.join(home, '.agents/agents/coder.md'), managed);
   const lockFile = path.join(home, '.agent-config/agent-config.lock.json');
   const lock = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
   lock.version = 1;
+  lock.managedFiles.push('agent:coder.md');
   delete lock.hashes;
   put(lockFile, JSON.stringify(lock));
-  renameRole(repo);
   const result = run('sync');
   ok(result);
-  assert.match(result.stdout, /preserved=4/);
-  assert.ok(fs.existsSync(path.join(home, '.codex/agents/coder.toml')));
+  assert.match(result.stdout, /preserved=1/);
+  assert.ok(fs.existsSync(path.join(home, '.agents/agents/coder.md')));
+  ok(run('check'));
+});
+
+test('sync removes previously installed native harness wrappers', (t) => {
+  const { home, run } = fixture(t);
+  ok(run('init'));
+  const contents = '# agent-config:managed\nname = "coder"\n';
+  put(path.join(home, '.codex/agents/coder.toml'), contents);
+  const lockFile = path.join(home, '.agent-config/agent-config.lock.json');
+  const lock = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+  lock.managedFiles.push('codex:agent:coder.toml');
+  lock.hashes['codex:agent:coder.toml'] = hash(contents);
+  put(lockFile, JSON.stringify(lock));
+  ok(run('sync'));
+  assert.ok(!fs.existsSync(path.join(home, '.codex/agents/coder.toml')));
+  ok(run('check'));
+});
+
+test('sync removes an obsolete policy pack when the lock still owns the unchanged file', (t) => {
+  const { home, run } = fixture(t);
+  ok(run('init'));
+  const contents = '# Sub-agent orchestration\n';
+  put(path.join(home, '.agents/policy/orchestration.md'), contents);
+  const lockFile = path.join(home, '.agent-config/agent-config.lock.json');
+  const lock = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+  lock.managedFiles.push('policy:orchestration');
+  lock.hashes['policy:orchestration'] = hash(contents);
+  put(lockFile, JSON.stringify(lock));
+  ok(run('sync'));
+  assert.ok(!fs.existsSync(path.join(home, '.agents/policy/orchestration.md')));
   ok(run('check'));
 });
 
@@ -226,7 +192,7 @@ test('rejects poisoned ownership keys and invalid lock metadata before writes', 
   ok(run('init'));
   const file = path.join(home, '.agent-config/agent-config.lock.json');
   const original = JSON.parse(fs.readFileSync(file, 'utf8'));
-  for (const key of ['codex:agent:../../outside.toml', 'skill:bad:../outside.md', 'agent:/absolute.md']) {
+  for (const key of ['codex:agent:../../outside.toml', 'skill:bad:../outside.md', 'agent:/absolute.md', 'policy:../outside']) {
     const lock = structuredClone(original);
     lock.managedFiles.push(key);
     lock.hashes[key] = 'a'.repeat(64);
@@ -241,66 +207,36 @@ test('rejects poisoned ownership keys and invalid lock metadata before writes', 
   assert.deepEqual(snapshot(home), before);
 });
 
-test('custom Codex home installs and checks outside the user home', (t) => {
+test('custom Codex home installs policy without native agent wrappers', (t) => {
   const { home, run, directory } = fixture(t);
   const codexHome = path.join(directory, 'separate-codex');
   ok(run('sync', [], { CODEX_HOME: codexHome }));
-  assert.ok(fs.existsSync(path.join(codexHome, 'agents/coder.toml')));
+  assert.ok(fs.existsSync(path.join(codexHome, 'AGENTS.md')));
+  assert.ok(!fs.existsSync(path.join(codexHome, 'agents')));
   assert.ok(!fs.existsSync(path.join(home, '.codex')));
   ok(run('check', [], { CODEX_HOME: codexHome }));
-  assert.match(run('status', [], { CODEX_HOME: codexHome }).stdout, /agents.*coder/);
+  assert.match(run('status', [], { CODEX_HOME: codexHome }).stdout, /policy.routing\.md/);
 });
 
-test('changing Codex home preserves conflicting files in the new root', (t) => {
-  const { home, run, directory } = fixture(t);
-  ok(run('init'));
-  const codexHome = path.join(directory, 'other-codex');
-  put(path.join(codexHome, 'agents/coder.toml'), '# User-owned new root agent');
-  const before = snapshot(home);
-  assert.notEqual(run('sync', [], { CODEX_HOME: codexHome }).status, 0);
-  assert.equal(fs.readFileSync(path.join(codexHome, 'agents/coder.toml'), 'utf8'), '# User-owned new root agent');
-  assert.deepEqual(snapshot(home), before);
-});
-
-test('junctions at a native destination or the Codex root cannot cause partial writes', (t) => {
+test('junctions at a shared-policy destination or the Codex root cannot cause partial writes', (t) => {
   const { home, run, directory } = fixture(t);
   const external = path.join(directory, 'external');
   fs.mkdirSync(external);
-  fs.mkdirSync(path.join(home, '.cursor'));
-  fs.symlinkSync(external, path.join(home, '.cursor/agents'), process.platform === 'win32' ? 'junction' : 'dir');
+  fs.mkdirSync(path.join(home, '.agents'));
+  fs.symlinkSync(external, path.join(home, '.agents/policy'), process.platform === 'win32' ? 'junction' : 'dir');
   assert.notEqual(run('sync').status, 0);
   assert.ok(!fs.existsSync(path.join(home, '.codex')));
   assert.deepEqual(fs.readdirSync(external), []);
-  fs.unlinkSync(path.join(home, '.cursor/agents'));
+  fs.unlinkSync(path.join(home, '.agents/policy'));
   const codexHome = path.join(directory, 'linked-codex');
   fs.symlinkSync(external, codexHome, process.platform === 'win32' ? 'junction' : 'dir');
   assert.notEqual(run('sync', [], { CODEX_HOME: codexHome }).status, 0);
   assert.deepEqual(fs.readdirSync(external), []);
-  assert.ok(!fs.existsSync(path.join(home, '.agents')));
-});
-
-test('rejects YAML implicit non-string metadata and malformed frontmatter', (t) => {
-  const { repo, home, run } = fixture(t);
-  const file = path.join(repo, 'harnesses/claude/agents/coder.md');
-  const original = fs.readFileSync(file, 'utf8');
-  for (const bad of [original.replace('description: Implement a task', 'description: true'), original.replace('---\n', '--\n')]) {
-    put(file, bad);
-    assert.notEqual(run('sync').status, 0);
-    assert.deepEqual(snapshot(home), []);
-  }
-});
-
-test('validates Cursor model options before writes', (t) => {
-  const { repo, home, run } = fixture(t);
-  const file = path.join(repo, 'harnesses/cursor/agents/coder.md');
-  const original = fs.readFileSync(file, 'utf8');
-  put(file, original.replace('[effort=low]', '[effort=invalid]'));
-  assert.notEqual(run('sync').status, 0);
-  assert.deepEqual(snapshot(home), []);
+  assert.ok(!fs.existsSync(path.join(home, '.agents/policy')));
 });
 
 test('rejects Codex roots that overlap planned files before writing anything', (t) => {
-  for (const relative of ['.agents/agents/coder.md', '.agent-config/agent-config.lock.json']) {
+  for (const relative of ['.agents/policy/routing.md', '.agent-config/agent-config.lock.json']) {
     const { home, run } = fixture(t);
     const result = run('sync', [], { CODEX_HOME: path.join(home, relative) });
     assert.notEqual(result.status, 0);
