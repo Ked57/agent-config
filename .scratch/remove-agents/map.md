@@ -4,13 +4,13 @@ Label: wayfinder:map
 
 ## Destination
 
-A spec that removes agent roles from this distribution and folds their procedures into skills, with every remaining product decision locked so implementation can start.
+A spec that removes agent roles and native agents from this distribution. Skills stay as they are: role procedures are not copied, merged, or recreated as skills. The map is done when every remaining product decision is locked so implementation can start.
 
 ## Notes
 
-Domain: this repository's portable agent-configuration (policy, skills, installer, adapters). Consult `writing-for-agents`, `grilling`, and `domain-modeling` every session. Planning only: produce decisions, not the deletion.
+Domain: this repository's portable agent-configuration (policy, installer, adapters — not skills). Consult `writing-for-agents`, `grilling`, and `domain-modeling` every session. Planning only: produce decisions, not the deletion.
 
-Working language for this effort (not yet a glossary): **role** means a shared procedure file under `agents/<role>.md`; **native agent** means a harness config under `harnesses/{cursor,claude,codex}/agents/` installed to `~/.cursor/agents`, `~/.claude/agents`, or `$CODEX_HOME/agents`; **skill** means a `skills/<name>/SKILL.md` package; **orchestration** means `policy/orchestration.md`, the coding-task spawn graph. Avoid calling all of these "agents."
+Working language: **skill**, **role**, **native agent**, and **orchestration** as in `CONTEXT.md`. Unqualified "agent" is the bloat being removed (roles + native agents together).
 
 Project install already skips native agents ("policy-and-skills only") but still copies roles into `.agents/agents/`. User install still writes both roles and native agents. The user's "too" is read against that split.
 
@@ -18,12 +18,12 @@ No `docs/agents/issue-tracker.md` exists; this map uses the local-markdown track
 
 ## Decisions so far
 
-<!-- the index: one line per closed ticket, enough to judge relevance, then zoom the link for the detail the ticket holds -->
+- [Fold roles into skills or replace one-for-one](issues/02-fold-roles-into-skills-or-replace-one-for-one.md): Skills are unchanged. Role procedures do not move into skills.
 
 ## Not yet specified
 
 - How `policy/routing.md` and `policy/orchestration.md` read after spawn-vs-in-process is decided: deleted, rewritten as a thin coordinator, or absorbed into routing.
-- Exact skill file splits and which unique role text survives, once mapping is chosen.
+- Unique role prose that no skill already carries (Designer rulebook and persona walk, Planner checklist contract, Manual QA report contract): deleted with the agents, or kept in policy — once artifact scope is known.
 - Installer, lock, and test surgery: `bin/native-agents.mjs`, `tests/native-agents.test.mjs`, always-copy of `.agents/agents/` on project install.
 - Adapter and README rewrites, including the routing-chain diagram.
 - Fate of draft PR "Add senior craft to shared agent roles" once roles are leaving.
@@ -33,6 +33,7 @@ No `docs/agents/issue-tracker.md` exists; this map uses the local-markdown track
 ## Out of scope
 
 - Changing Cursor, Claude Code, or Codex product features for subagents or skills.
-- Removing or rewriting unrelated skills.
+- Editing skills, including folding role procedures into them.
+- [Home for the Designer procedure](issues/07-home-for-the-designer-procedure.md): a skill home is off the destination; skills are unchanged.
 - MCP registration (already client-local).
 - Implementing the removal inside this map.

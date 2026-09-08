@@ -1,4 +1,5 @@
 Type: grilling
+Status: resolved
 
 # Fold roles into skills or replace one-for-one
 
@@ -25,3 +26,7 @@ Options:
 - **Single coordinator skill.** One skill replaces `orchestration.md` and points at existing skills; no per-role skill files.
 
 Recommended: **Fold.** Do not keep a Coder skill beside `implement`, or a Reviewer skill beside `code-review`.
+
+## Answer
+
+Neither fold nor one-for-one. Skills are unchanged. Role procedures are not copied, merged, or recreated as skills. "Work better as skills" means the existing skill system already does the job; it does not mean relocating role text into `SKILL.md` files.

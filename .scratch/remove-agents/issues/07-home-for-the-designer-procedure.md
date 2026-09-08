@@ -1,4 +1,5 @@
 Type: grilling
+Status: closed
 Blocked by: 02
 
 # Home for the Designer procedure
@@ -16,3 +17,7 @@ Once [Fold roles into skills or replace one-for-one](02-fold-roles-into-skills-o
 - **Keep the Designer role** — out of destination unless the mapping ticket reopens scope.
 
 This ticket does not reopen whether agents stay; it only places the procedure.
+
+## Out of scope
+
+Closed off the route. Skills are unchanged, so the Designer procedure does not get a skill home. Whether unique Designer prose is deleted with the role or kept in policy is fog until artifact scope is known; it is not this ticket.

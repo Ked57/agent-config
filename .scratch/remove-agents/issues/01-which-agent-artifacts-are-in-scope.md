@@ -13,4 +13,4 @@ Today that stack is four layers:
 3. **Orchestration** — `policy/orchestration.md` tells the main session to spawn those roles; `policy/routing.md` and `policy/shared-policy.md` send coding work there.
 4. **Installer coupling** — `bin/native-agents.mjs` requires shared roles to exist and to match native files one-for-one.
 
-Recommended: all four. Native agents exist only to wrap roles; leaving roles in place keeps the bloat the user is rejecting. A narrower cut (native files only) would still leave role files, orchestration, and a second dispatch path beside skills.
+Recommended: all four. Native agents exist only to wrap roles; leaving roles in place keeps the bloat. Skills stay as they are either way — this ticket is about what gets deleted, not what skills absorb.

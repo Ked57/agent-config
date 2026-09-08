@@ -11,6 +11,6 @@ If coding work runs in-process on the main session, those settings have nowhere 
 
 Options:
 
-- **Drop them.** The main session's model runs the skills. Recommendation if spawn dies.
-- **Per-skill hints.** Only for skills that still spawn, and only if a harness can honor a model hint without a native agent file.
-- **Keep a tiny native-agent table** solely for model/effort, with empty bodies that load a skill. This preserves the bloat the destination is removing; treat as last resort if research shows a harness requires a named agent to pick a model.
+- **Drop them.** The main session's model runs whatever skills routing already loads. Recommendation if spawn dies. Does not edit skills.
+- **Keep a tiny native-agent table** solely for model/effort. This preserves the bloat the destination is removing; treat as last resort if research shows a harness requires a named agent to pick a model.
+- **Per-skill model hints** are off this map: they would edit skills, and skills stay unchanged.
