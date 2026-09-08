@@ -1,5 +1,4 @@
 Type: research
-Status: claimed
 
 # Harness behavior without custom native agents
 
