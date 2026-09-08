@@ -7,16 +7,13 @@ Cursor, Claude Code, and Codex.
 
 - A concise shared completion, verification, safety, and anti-slop policy that starts
   every task at the task router.
-- Two always-installed packs: `routing.md` (tech, skill, and topic routing, then the
-  coding/non-coding exit) and `orchestration.md` (how the main agent coordinates roles).
-- One self-contained file per sub-agent role: Planner, Designer, Coder, Manual QA,
-  Reviewer, each with its model preference, inputs, handoff contract, what to load,
-  and exit criteria.
-- Conditional TypeScript, React, Vue + PrimeVue, and DDD domain-module policy packs shared by all harnesses.
+- One always-installed pack: `routing.md` (tech, skill, and topic routing, then the
+  coding/non-coding exit). After implementation, shared policy requires the `manual-qa`
+  skill when a runnable UI, API, or CLI surface changed.
+- Conditional TypeScript, React, Vue + PrimeVue, and DDD domain-module policy packs shared across Cursor, Claude Code, and Codex.
 - Portable skills for distinctive frontend design, high-fidelity Figma implementation,
-  complexity audits, deterministic full-stack TypeScript quality tooling, and Matt Pocock's
-  engineering and productivity workflows.
-- Five shared agent roles with native Codex, Claude Code, and Cursor configurations.
+  complexity audits, deterministic full-stack TypeScript quality tooling, hands-on
+  verification, and Matt Pocock's engineering and productivity workflows.
 - A user installer that gives Cursor, Claude Code, and Codex the same personal policy
   without changing application repositories.
 - An optional workspace installer that detects npm, pnpm, Yarn, or Bun; creates thin
@@ -38,13 +35,8 @@ This creates or updates:
 ~/.claude/CLAUDE.md                       Claude bridge to ~/.agents/AGENTS.md
 ~/.cursor/plugins/local/agent-config/     Cursor plugin with an always-on bridge rule
 ~/.agents/policy/routing.md               task router, read first for every task
-~/.agents/policy/orchestration.md         sub-agent orchestration for coding tasks
 ~/.agents/policy/<tech-pack>.md           typescript, react, vue-primevue, domain-module
-~/.agents/agents/<role>.md                planner, designer, coder, manual-qa, reviewer
-~/.codex/agents/<role>.toml               native Codex agents (or $CODEX_HOME/agents/)
-~/.claude/agents/<role>.md                native Claude Code agents
-~/.cursor/agents/<role>.md                native Cursor agents
-~/.agents/skills/<portable-skill>/
+~/.agents/skills/<portable-skill>/         includes manual-qa
 ~/.claude/skills/<portable-skill>/
 ~/.agent-config/agent-config.lock.json
 ```
@@ -55,7 +47,7 @@ instead of `~/.agents/policy/shared-policy.md`. `README.md`, `adapters/*/README.
 `docs/`, `cloud-agent-install.md`, and this repository's `AGENTS.md` stay in the
 checkout: they are human docs or tooling-repo guidance, not portable agent policy.
 
-The managed block in `~/.codex/AGENTS.md` carries only the shared policy; every pack, role,
+The managed block in `~/.codex/AGENTS.md` carries only the shared policy; every pack
 and skill it points at is a real file under `~/.agents/`, so `~/.agents/...` references
 resolve in every harness. Cursor's always-on rule and Claude's user `CLAUDE.md` both
 point at `~/.agents/AGENTS.md`.
@@ -74,8 +66,9 @@ node bin/agent-config.mjs check --user
 
 The dry run previews file diffs and action counts without changing the installation.
 `check --user` detects missing, modified, and obsolete managed files. Sync removes
-obsolete agent files only when the prior ownership lock and content hash prove they
-are unchanged installer output; locally modified obsolete files are preserved.
+obsolete leftover role files, dropped policy packs, and native wrappers only when the prior ownership lock
+and content hash prove they are unchanged installer output; locally modified obsolete
+files are preserved.
 Preserved obsolete files become unmanaged after sync. Legacy locks without content
 hashes never authorize deletion. Changing `CODEX_HOME` installs into the new root;
 files in the previous root remain in place, and conflicting files in the new root
@@ -84,13 +77,6 @@ are preserved.
 Sync validates sources, destination paths, and ownership conflicts before writing.
 This prevents partial changes from validation failures; filesystem failures during
 writing are not a transaction across all files.
-
-Native source files use the small flat schema present in `harnesses/`: string
-metadata, models, reasoning effort, and explicit shared-role pointers. Prefer
-double-quoted strings. Cursor model options currently support `effort`. Unknown
-fields and syntax fail validation; extending native settings requires extending
-the validator and its tests. Validation checks syntax and settings, not model
-availability on an account.
 
 For persistent remote environments, use [cloud-agent-install.md](cloud-agent-install.md).
 
@@ -106,8 +92,6 @@ The installer scans actual project source before creating conditional policy pac
 
 ```text
 .agents/policy/routing.md                  always
-.agents/policy/orchestration.md            always
-.agents/agents/<role>.md                   always
 .agents/policy/typescript.md               only when TypeScript source exists
 .agents/policy/react.md                    only when React source exists
 .agents/policy/vue-primevue.md             only when Vue source exists
@@ -121,8 +105,6 @@ AGENTS.md                                  shared policy with the "Start here" r
 CLAUDE.md                                  thin Claude Code bridge to AGENTS.md
 .cursor/rules/00-agent-config.mdc          thin Cursor bridge to AGENTS.md
 .agents/policy/routing.md                  task router, always
-.agents/policy/orchestration.md            sub-agent orchestration, always
-.agents/agents/<role>.md                   planner, designer, coder, manual-qa, reviewer, always
 .agents/policy/typescript.md               TypeScript work, when detected
 .agents/policy/react.md                    React work, when detected
 .agents/policy/domain-module.md            domain work, when the convention is detected
@@ -147,32 +129,32 @@ node bin/agent-config.mjs status --project ~/dev/my-webapp
 node bin/agent-config.mjs check --project ~/dev/my-webapp
 ```
 
-Project agents read `.agents/agent-config.json` directly to identify the verification
+Project sessions read `.agents/agent-config.json` directly to identify the verification
 commands relevant to their changed files. `check` validates this file's structure,
 command references, managed content, and lock ownership metadata.
 
-## Shared agents
+## Leftover native agents
 
-Edit behavior in `agents/<role>.md` and model or reasoning settings in
-`harnesses/<harness>/agents/<role>.*`, then run `sync --user`. Native instructions
-explicitly read the shared role under `~/.agents/agents/`; the path is an instruction
-to load a file, not an automatic include. Keep runtime settings in native files.
+This repository does not ship shared roles or native harness wrappers. `sync --user`
+removes leftover `~/.agents/agents/<role>.md` files and previously installed wrappers
+under `~/.codex/agents/`, `~/.claude/agents/`, and `~/.cursor/agents/` when the lock
+still owns them and the files are unchanged. Locally modified leftovers stay in place.
 
-The main agent coordinates planner, designer, coder, manual-qa, and reviewer as needed.
-Manual QA exercises running changes through a browser, computer-use tools, direct API
-requests, or CLI commands and supplies observed evidence to the reviewer.
-Project installation remains policy-and-skills only. Native agent syntax
-and discovery details are documented in the [Codex](adapters/codex/README.md),
+Hands-on verification lives in `skills/manual-qa/`. Client discovery details are
+documented in the [Codex](adapters/codex/README.md),
 [Claude Code](adapters/claude/README.md), and [Cursor](adapters/cursor/README.md) adapters.
 
 ## Portable skills
 
 The installer copies every `skills/<name>/` directory that contains a `SKILL.md`. That
-includes this repository's frontend and quality skills, plus skills vendored under the
+includes this repository's frontend, quality, and manual-qa skills, plus skills vendored under the
 MIT License from [`mattpocock/skills`](https://github.com/mattpocock/skills) and
-[`jakubkrehel/skills` at commit `267330e`](https://github.com/jakubkrehel/skills/tree/267330e1adfc66a718fb65fa6918c1f06d0a689e).
+[`jakubkrehel/skills` at commit `267330e`](https://github.com/jakubkrehel/skills/tree/267330e1adfc66a718fb65fa6918c1f06d0a689e),
+and the Apache-2.0 discovery stub from
+[`vercel-labs/agent-browser` at commit `72007a6`](https://github.com/vercel-labs/agent-browser/tree/72007a6788d863611b23bed0b59d0d659c638d8e).
 Each vendored skill keeps its original files and a `LICENSE.txt`; the pinned upstream
-inventory and normalized-content hashes are recorded in `skills/jakubkrehel-skills.lock.json`.
+inventory and normalized-content hashes are recorded in
+`skills/jakubkrehel-skills.lock.json` and `skills/agent-browser-skills.lock.json`.
 
 Run `setup-matt-pocock-skills` once in a repository before using the engineering
 workflow skills (issue tracker, triage labels, and domain-doc layout). `ask-matt` is the
@@ -192,19 +174,23 @@ original visual direction and substantial redesign without a supplied source-of-
 design; `figma-design-to-code` still owns faithful implementation of a supplied Figma
 node.
 
-## Routing and orchestration
+`agent-browser` is the installed discovery stub for the agent-browser CLI. Usage
+instructions stay in the CLI (`agent-browser skills get core`) so they match the
+installed binary. `manual-qa` loads that stub for browser UI.
 
-Three layers, each a single source of truth, installed for every user and workspace:
+## Routing and skills
+
+Two layers, each a single source of truth, installed for every user and workspace:
 
 - `policy/routing.md` — the task router, read first for every task. Tech (file type →
-  pack), skill (task type → Pocock skill), topic (discipline → packs, skills, evidence),
-  then the exit: coding task → orchestration; question or documentation-only edit →
-  answer directly. This is the only place that rule is stated.
-- `policy/orchestration.md` — the main agent's workflow, role pointers, spawn contract,
-  repair loops, and completion criteria. Applicable manual QA follows implementation;
-  its results feed review. Blocked checks remain open.
-- `agents/<role>.md` — one self-contained procedure and output contract per delegated
-  role: planner, designer, coder, manual-qa, and reviewer.
+  pack), skill (task type → skill), topic (discipline → packs, skills, evidence),
+  then the exit: coding task → do the work with the routed packs and skills; question
+  or documentation-only edit → answer directly. This is the only place that exit is
+  stated.
+- `policy/shared-policy.md` — the completion contract. After implementation, when a
+  runnable UI, API, or CLI surface changed, read and run `manual-qa`.
+
+The `manual-qa` procedure lives only in `skills/manual-qa/SKILL.md`.
 
 ### Routing chain per harness
 
@@ -222,12 +208,9 @@ Claude Code ~/.claude/CLAUDE.md  (@-imports ~/.agents/AGENTS.md)
 
             all ─► "Start here" ─► ~/.agents/policy/routing.md
                                     ├─ non-coding ─► answer with routed packs and skills
-                                    └─ coding ─► ~/.agents/policy/orchestration.md
-                                                  └─► main agent delegates needed stages
-                                                        └─► planner | designer | coder | manual-qa | reviewer
-                                                             each reads ~/.agents/agents/<role>.md
-                                                             + ~/.agents/policy/<tech-pack>.md
-                                                             + ~/.agents/skills/<name>/SKILL.md
+                                    └─ coding ─► do the work with routed packs and skills
+                                                 after implementation, when a runnable
+                                                 surface changed ─► ~/.agents/skills/manual-qa/SKILL.md
 ```
 
 Cursor Cloud Agents replace the plugin rule with the account User Rule from
@@ -258,7 +241,7 @@ details remain the source of truth.
 
 - **User-owned:** personal instructions outside managed blocks and all client credentials,
   account state, MCP registration, and IDE preferences.
-- **Source-owned:** policy packs, shared roles, native agent configurations, client bridges, portable
+- **Source-owned:** policy packs, client bridges, portable
   skills, and installer implementation.
   During migration, the CLI removes only legacy Cursor rule files proven owned by its prior
   lock file.

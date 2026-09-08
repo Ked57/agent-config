@@ -31,6 +31,8 @@ Repository-specific instructions take precedence.
 - Complexity: auditing or reducing cyclomatic complexity, nested branching, or a function that is hard to test because of too many paths → `complexity-audit`.
 - Quality tooling install, upgrade, or audit → `fullstack-typescript-quality`.
 - Writing skills, `AGENTS.md`, or agent-facing docs → `writing-for-agents`.
+- Changed runnable UI, API, or CLI behavior after implementation → `manual-qa`.
+- Browser automation with the agent-browser CLI → `agent-browser`.
 - Cross-discipline audit of an existing screen, flow, or repository → `better-interface`.
 - Semantic HTML, keyboard or focus behaviour, forms, or assistive technology → `better-accessibility`.
 - Palettes, color tokens or formats, or measured contrast → `better-colors`.
@@ -38,6 +40,10 @@ Repository-specific instructions take precedence.
 - Type systems, fonts, wrapping, truncation, or rendered text → `better-typography`.
 - Surfaces, icons, visual polish, or optional motion → `better-ui`.
 - Product copy, labels, errors, empty states, voice, or terminology → `better-writing`.
+
+`manual-qa` loads `agent-browser` for browser UI. Specialized agent-browser workflows
+(`core`, `dogfood`, `electron`, and the rest) are served by `agent-browser skills get`,
+not as separate installed skills.
 
 `fullstack-typescript-quality` owns quality-tooling orchestration; it loads
 `fullstack-typescript-static`, `fullstack-typescript-tests`, and
@@ -60,7 +66,7 @@ Figma node or other exact visual spec.
 
 ## 3. Topic (discipline → packs, skills, evidence)
 
-- **Design** (visual direction, redesign, Figma, interface quality) → use the matching interface route above. Original visual direction or AI-produced design artifacts with no supplied spec also spawn the Designer (`~/.agents/agents/designer.md`) from orchestration. Evidence: rendered screenshots at narrow and wide viewports, keyboard and assistive-technology checks when relevant, measured contrast, and Figma comparison when supplied.
+- **Design** (visual direction, redesign, Figma, interface quality) → use the matching interface route above. Evidence: rendered screenshots at narrow and wide viewports, keyboard and assistive-technology checks when relevant, measured contrast, and Figma comparison when supplied.
 - **Frontend** (components, forms, UI state) → `typescript.md` plus `react.md` or `vue-primevue.md`. Evidence: component tests, screenshots, accessibility selectors.
 - **Backend** (services, APIs, data access, business rules) → `typescript.md`; `domain-module.md` when the convention is detected; `codebase-design`. Evidence: unit and integration tests.
 - **Domain** (terminology, boundaries, decisions) → `domain-modeling`, `domain-module.md`. Evidence: `CONTEXT.md` and ADRs updated.
@@ -69,5 +75,5 @@ Figma node or other exact visual spec.
 
 ## Exit
 
-- **Coding task** (new behaviour, bug fix, refactor, tests, tooling or configuration change) → read `~/.agents/policy/orchestration.md` and run the task through its roles. Carry the routing result — packs, skills, topic evidence — into the task brief.
+- **Coding task** (new behaviour, bug fix, refactor, tests, tooling or configuration change) → do the work with the routed packs and skills.
 - **Non-coding task** (question, explanation, documentation-only edit) → answer directly with the routed packs and skills.

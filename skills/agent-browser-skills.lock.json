@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "source": "https://github.com/vercel-labs/agent-browser",
+  "commit": "72007a6788d863611b23bed0b59d0d659c638d8e",
+  "license": {
+    "sourcePath": "LICENSE",
+    "installedAs": "LICENSE.txt",
+    "normalizedSha256": "014bb31e83d5c2e76aea1cc6e82217346ab41362f32cb355ad0f5c10aa0aeaff"
+  },
+  "skills": {
+    "agent-browser": {
+      "upstreamPath": "skills/agent-browser",
+      "files": {
+        "SKILL.md": "3a7520e64de2dfaa516b6721c001e84e06e3c06a187b82af029ae721540ebfac"
+      }
+    }
+  }
+}

@@ -7,9 +7,10 @@ node bin/agent-config.mjs init --user
 ```
 
 The installer adds a managed block to `~/.claude/CLAUDE.md` that imports
-`~/.agents/AGENTS.md`, whose "Start here" step routes through `~/.agents/policy/routing.md`,
-then `~/.agents/policy/orchestration.md` and `~/.agents/agents/<role>.md` for coding
-tasks. It also installs the portable skills under `~/.claude/skills/`.
+`~/.agents/AGENTS.md`, whose "Start here" step routes through `~/.agents/policy/routing.md`.
+Coding tasks are done with the routed packs and skills; after implementation, shared
+policy requires `manual-qa` when a runnable surface changed. It also installs the
+portable skills under `~/.claude/skills/`.
 Repository instructions have higher priority than user memory.
 
 Use project-scoped installation only when the team wants the guidance committed:
@@ -20,24 +21,17 @@ node bin/agent-config.mjs init --project /path/to/workspace
 
 The project installer creates a thin `CLAUDE.md` bridge that points Claude Code to the
 workspace-local `AGENTS.md`, whose managed block carries the same "Start here" step. The
-routing and orchestration packs, role files, conditional policy packs, and skills are
-mirrored under `.agents/` alongside quality routing. Commit these project files.
+routing pack, conditional policy packs, and skills are mirrored under `.agents/`
+alongside quality routing. Commit these project files.
 
 Claude-specific settings and native hook registrations remain in `.claude/`.
 When adding a Claude hook, make it call the project-owned verification command from
 `.agents/agent-config.json`; do not duplicate policy in the hook body.
 
-## Native agents
+## Skills
 
-Native agents are installed in `~/.claude/agents/`. Markdown frontmatter sets the
-model alias and effort; the body explicitly loads `~/.agents/agents/<role>.md`.
-Use `/agents` to inspect discovery after installing or reloading the session. See
-[Claude Code subagents](https://code.claude.com/docs/en/sub-agents).
-
-Edit the corresponding source under `harnesses/claude/agents/`, then run
-`node bin/agent-config.mjs sync --user --dry-run` to inspect the changes before syncing.
-Model availability depends on the installed harness version and account.
-
-The main session follows `~/.agents/policy/orchestration.md` and delegates the needed
-planner, designer, coder, manual-qa, and reviewer stages. Delegated roles return their
-reports to the main session for coordination.
+This installer does not write native Claude Code agent files. Procedures live in
+`~/.agents/skills/<name>/SKILL.md`. Edit the corresponding source under `skills/`, then
+run `node bin/agent-config.mjs sync --user --dry-run` to inspect the changes before
+syncing. See [Claude Code subagents](https://code.claude.com/docs/en/sub-agents) if you
+register a native Claude agent yourself.

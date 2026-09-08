@@ -4,7 +4,8 @@ You are reading `~/.agents/AGENTS.md` (user-scoped) or the `shared-policy` manag
 in a project `AGENTS.md`.
 
 1. Read `~/.agents/policy/routing.md` and route the task on its three axes: tech, skill, topic.
-2. Coding task → read `~/.agents/policy/orchestration.md` and run the task through its roles. Non-coding task → answer directly with what routing loaded.
+2. Coding task → do the work with the routed packs and skills. Non-coding task → answer
+   directly with what routing loaded.
 
 Paths are user-scoped; a project-scoped install carries the same files under `.agents/` in
 the repository root. Use whichever exists.
@@ -18,10 +19,12 @@ Do not report implementation work complete until:
 1. The requested behaviour is implemented or the reported defect is resolved.
 2. Relevant automated checks have passed.
 3. Changed behaviour has appropriate regression coverage, following repository conventions.
-4. Required manual or browser verification has been performed when the environment and tooling allow it.
+4. After implementation, when a browser, app, API, or CLI surface changed, read
+   `~/.agents/skills/manual-qa/SKILL.md` and run it. If no runnable surface applies, state
+   that.
 5. Known limitations, unverified paths, or external blockers are stated explicitly.
 
-Do not claim manual verification was performed when it was not.
+Do not claim a manual check was performed without executing it.
 
 ## Execution and verification
 
