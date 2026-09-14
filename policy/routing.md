@@ -38,7 +38,16 @@ Repository-specific instructions take precedence.
 - Palettes, color tokens or formats, or measured contrast → `better-colors`.
 - Grouping, alignment, spacing, responsive structure, or spatial RTL → `better-layout`.
 - Type systems, fonts, wrapping, truncation, or rendered text → `better-typography`.
-- Surfaces, icons, visual polish, or optional motion → `better-ui`.
+- Surfaces, icons, or visual polish → `better-ui`.
+- Building web animation or motion → `animate`.
+- Building React Native or Expo motion → `animate-expo`.
+- Searching an interface for places that should animate → `find-animation-opportunities`.
+- Auditing existing motion and producing implementation plans → `improve-animations`.
+- Naming a motion effect from a vague description → `animation-vocabulary`.
+- Apple-style fluid motion, springs, or gesture-driven UI → `apple-design`.
+- Working with Sonner toasts → `ask-sonner`.
+- Writing, reviewing, or migrating Swift → `write-swift`.
+- Design-engineering craft, animation taste, or the details that make UI feel right → `emil-design-eng`.
 - Product copy, labels, errors, empty states, voice, or terminology → `better-writing`.
 
 `manual-qa` loads `agent-browser` for browser UI. Specialized agent-browser workflows
@@ -57,10 +66,13 @@ starts only when the user explicitly invokes `interface-review`; it resolves the
 scope and hands the cross-discipline audit to `better-interface`.
 
 `break`, `explain-interface`, `interface-review`, and `variant` are explicitly user-invoked
-named workflows; route to them only when the user names one. `frontend-design` remains the
+named workflows; route to them only when the user names one. `review-animations`,
+`pick-ui-library`, and `design-prototype` are the same: animation review, curated library
+lookup, and picker-based UI variants fire only when named. `frontend-design` remains the
 route for original visual direction or substantial redesign without a source-of-truth
 design; `figma-design-to-code` remains the route for faithful implementation of a supplied
-Figma node or other exact visual spec.
+Figma node or other exact visual spec. `better-ui` remains surfaces, icons, and visual
+polish on an existing interface; building motion routes to `animate` or `animate-expo`.
 
 `ask-matt` is the human-invoked full map of these skills and their flows; agents route with this table instead.
 

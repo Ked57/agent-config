@@ -68,6 +68,28 @@ const jakubKrehelSkills = [
   ...userInvokedJakubKrehelSkills
 ].sort();
 const jakubKrehelLock = JSON.parse(fs.readFileSync(path.join(root, 'skills/jakubkrehel-skills.lock.json'), 'utf8'));
+const modelInvokedEmilKowalskiSkills = [
+  'animate',
+  'animate-expo',
+  'animation-vocabulary',
+  'apple-design',
+  'ask-sonner',
+  'emil-design-eng',
+  'find-animation-opportunities',
+  'improve-animations',
+  'write-swift'
+];
+const userInvokedEmilKowalskiSkills = [
+  'design-prototype',
+  'pick-ui-library',
+  'review-animations'
+];
+const emilKowalskiSkills = [
+  ...modelInvokedEmilKowalskiSkills,
+  ...userInvokedEmilKowalskiSkills
+].sort();
+const emilKowalskiLock = JSON.parse(fs.readFileSync(path.join(root, 'skills/emilkowalski-skills.lock.json'), 'utf8'));
+const emilKowalskiUpstreamName = (name) => name === 'design-prototype' ? 'prototype' : name;
 const agentBrowserSkills = ['agent-browser'];
 const agentBrowserLock = JSON.parse(fs.readFileSync(path.join(root, 'skills/agent-browser-skills.lock.json'), 'utf8'));
 const policyPacks = fs.readdirSync(path.join(root, 'policy'))
@@ -192,6 +214,10 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
     assertInstalledSkillTree(path.join(home, '.agents/skills'), name);
     assertInstalledSkillTree(path.join(home, '.claude/skills'), name);
   }
+  for (const name of emilKowalskiSkills) {
+    assertInstalledSkillTree(path.join(home, '.agents/skills'), name);
+    assertInstalledSkillTree(path.join(home, '.claude/skills'), name);
+  }
 
   assert.doesNotThrow(() => runUser(home, 'check'));
   fs.rmSync(userAgentsMd);
@@ -299,6 +325,9 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   for (const name of jakubKrehelSkills) {
     assertInstalledSkillTree(path.join(project, '.agents/skills'), name);
   }
+  for (const name of emilKowalskiSkills) {
+    assertInstalledSkillTree(path.join(project, '.agents/skills'), name);
+  }
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /# agent-config:begin prettier-ignore/);
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /\.agents\//);
 
@@ -389,7 +418,7 @@ test('vendors Matt Pocock skills with licenses and supporting files', () => {
     'manual-qa'
   ]);
   const discovered = fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && !originalSkills.has(entry.name) && !jakubKrehelSkills.includes(entry.name) && !agentBrowserSkills.includes(entry.name))
+    .filter((entry) => entry.isDirectory() && !originalSkills.has(entry.name) && !jakubKrehelSkills.includes(entry.name) && !emilKowalskiSkills.includes(entry.name) && !agentBrowserSkills.includes(entry.name))
     .map((entry) => entry.name)
     .sort();
   assert.deepEqual(discovered, [...mattPocockSkills]);
@@ -453,6 +482,57 @@ test('locks every vendored Jakub Krehel file and license to its upstream commit'
   }
 });
 
+test('locks every vendored Emil Kowalski file and license to its upstream commit', () => {
+  assert.equal(emilKowalskiLock.version, 1);
+  assert.equal(emilKowalskiLock.source, 'https://github.com/emilkowalski/skills');
+  assert.equal(emilKowalskiLock.commit, 'd23d7f88a2e21c9e4b1418c7abe420f5c1052ba7');
+  assert.equal(emilKowalskiLock.license.sourcePath, 'LICENSE');
+  assert.equal(emilKowalskiLock.license.installedAs, 'LICENSE.txt');
+  assert.deepEqual(Object.keys(emilKowalskiLock.skills).sort(), emilKowalskiSkills);
+
+  let canonicalLicense;
+  for (const name of emilKowalskiSkills) {
+    const skillDirectory = path.join(root, 'skills', name);
+    const lockedSkill = emilKowalskiLock.skills[name];
+    assert.equal(lockedSkill.upstreamPath, `skills/${emilKowalskiUpstreamName(name)}`);
+    const lockedFiles = Object.keys(lockedSkill.files).map((file) => file.split(/[\\\\/]/).join('/')).sort();
+    const installedFiles = listFiles(skillDirectory)
+      .map((file) => file.split(path.sep).join('/'))
+      .sort();
+    assert.deepEqual(
+      installedFiles,
+      [...lockedFiles, emilKowalskiLock.license.installedAs].sort(),
+      `vendored inventory drifted for ${name}`
+    );
+
+    for (const file of lockedFiles) {
+      const lockedFileKey = Object.keys(lockedSkill.files).find((key) => key.split(/[\\\\/]/).join('/') === file);
+      assert.equal(
+        normalizedContentSha256(path.join(skillDirectory, file)),
+        lockedSkill.files[lockedFileKey],
+        `vendored content drifted for ${name}/${file}`
+      );
+    }
+
+    const licenseFile = path.join(skillDirectory, emilKowalskiLock.license.installedAs);
+    assert.equal(
+      normalizedContentSha256(licenseFile),
+      emilKowalskiLock.license.normalizedSha256,
+      `license drifted for ${name}`
+    );
+    canonicalLicense ??= normalizedContent(licenseFile);
+    assert.equal(normalizedContent(licenseFile), canonicalLicense, `license content differs for ${name}`);
+    assert.match(canonicalLicense, /Copyright \(c\) 2026 Emil Kowalski/);
+  }
+
+  const mattPrototype = fs.readFileSync(path.join(root, 'skills/prototype/SKILL.md'), 'utf8');
+  const emilPrototype = fs.readFileSync(path.join(root, 'skills/design-prototype/SKILL.md'), 'utf8');
+  assert.match(mattPrototype, /^name: prototype$/m);
+  assert.match(fs.readFileSync(path.join(root, 'skills/prototype/LICENSE.txt'), 'utf8'), /Copyright \(c\) 2026 Matt Pocock/);
+  assert.match(emilPrototype, /^name: design-prototype$/m);
+  assert.match(emilPrototype, /^disable-model-invocation: true$/m);
+});
+
 test('locks the vendored agent-browser discovery skill and license to its upstream commit', () => {
   assert.equal(agentBrowserLock.version, 1);
   assert.equal(agentBrowserLock.source, 'https://github.com/vercel-labs/agent-browser');
@@ -511,6 +591,18 @@ test('keeps Jakub Krehel model and user invocation boundaries', () => {
   }
 });
 
+test('keeps Emil Kowalski model and user invocation boundaries', () => {
+  for (const name of modelInvokedEmilKowalskiSkills) {
+    const skill = fs.readFileSync(path.join(root, 'skills', name, 'SKILL.md'), 'utf8');
+    assert.equal((skill.match(/^disable-model-invocation: true$/gm) ?? []).length, 0, `${name} must remain model-invoked`);
+  }
+
+  for (const name of userInvokedEmilKowalskiSkills) {
+    const skill = fs.readFileSync(path.join(root, 'skills', name, 'SKILL.md'), 'utf8');
+    assert.equal((skill.match(/^disable-model-invocation: true$/gm) ?? []).length, 1, `${name} must remain user-invoked`);
+  }
+});
+
 test('routes interface skills at precise task boundaries', () => {
   const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
 
@@ -520,14 +612,25 @@ test('routes interface skills at precise task boundaries', () => {
     /- Palettes, color tokens or formats, or measured contrast → `better-colors`\./,
     /- Grouping, alignment, spacing, responsive structure, or spatial RTL → `better-layout`\./,
     /- Type systems, fonts, wrapping, truncation, or rendered text → `better-typography`\./,
-    /- Surfaces, icons, visual polish, or optional motion → `better-ui`\./,
+    /- Surfaces, icons, or visual polish → `better-ui`\./,
+    /- Building web animation or motion → `animate`\./,
+    /- Building React Native or Expo motion → `animate-expo`\./,
+    /- Searching an interface for places that should animate → `find-animation-opportunities`\./,
+    /- Auditing existing motion and producing implementation plans → `improve-animations`\./,
+    /- Naming a motion effect from a vague description → `animation-vocabulary`\./,
+    /- Apple-style fluid motion, springs, or gesture-driven UI → `apple-design`\./,
+    /- Working with Sonner toasts → `ask-sonner`\./,
+    /- Writing, reviewing, or migrating Swift → `write-swift`\./,
+    /- Design-engineering craft, animation taste, or the details that make UI feel right → `emil-design-eng`\./,
     /- Product copy, labels, errors, empty states, voice, or terminology → `better-writing`\./
   ]) assert.match(routing, route);
   assert.match(routing, /`better-interface` owns review orchestration only; implementation and remediation route to the focused/s);
   assert.match(routing, /A branch, pull request, commit range, or working-tree review.*starts only when the user explicitly invokes `interface-review`.*hands the cross-discipline audit to `better-interface`/s);
   assert.match(routing, /`break`, `explain-interface`, `interface-review`, and `variant` are explicitly user-invoked/);
+  assert.match(routing, /`review-animations`,\s*`pick-ui-library`, and `design-prototype` are the same/);
   assert.match(routing, /`frontend-design` remains the.*original visual direction or substantial redesign/s);
   assert.match(routing, /`figma-design-to-code` remains the.*faithful implementation of a supplied.*Figma node or other exact visual spec/s);
+  assert.match(routing, /building motion routes to `animate` or `animate-expo`/);
   assert.doesNotMatch(routing, /spawn the Designer/);
   assert.doesNotMatch(routing, /~\/\.agents\/agents\//);
 });

@@ -14,18 +14,23 @@ Codex, and Claude Code.
   files must defer to the policy packs installed under `.agents/policy/`; do not
   duplicate policy in `.mdc` files.
 - Keep each meaning in one place: `policy/routing.md` routes, `policy/shared-policy.md`
-  states the completion contract, and `skills/<name>/SKILL.md` holds each procedure.
+  states the completion contract (installed as `~/.agents/AGENTS.md`, not under
+  `~/.agents/policy/`), and `skills/<name>/SKILL.md` holds each procedure.
 - Refer to installed files by `~`-relative global paths (`~/.agents/AGENTS.md`,
   `~/.agents/policy/<pack>.md`, `~/.agents/skills/<name>/SKILL.md`). This
   repository's `AGENTS.md` is tooling-repo guidance, not the user-scoped shared policy.
 - Installed agents discover self-invoking skills from `policy/routing.md` skill
   routing and each skill's description. Update both when adding a skill that should
   fire on its own.
+- Do not add shared agent roles, a `harnesses/` tree, or an orchestration pack.
+  Coding tasks run in-session with routed packs and skills.
 - Do not add credentials, access tokens, session files, or absolute user-home
   paths. MCP registration is intentionally managed separately in each client.
 - Keep `adapters/` as client-specific registration documentation, not the
   canonical location for shared behaviour.
 - `bin/agent-config.mjs` must preserve project-owned files and update only
   generated files or explicitly marked managed blocks.
+- After changing installable `policy/` or `skills/` sources, run
+  `node bin/agent-config.mjs sync --user` so the local install matches the checkout.
 - Before committing, run `npm run verify` and ensure the repository contains no
   secrets.

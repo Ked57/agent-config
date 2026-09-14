@@ -148,13 +148,15 @@ documented in the [Codex](adapters/codex/README.md),
 
 The installer copies every `skills/<name>/` directory that contains a `SKILL.md`. That
 includes this repository's frontend, quality, and manual-qa skills, plus skills vendored under the
-MIT License from [`mattpocock/skills`](https://github.com/mattpocock/skills) and
+MIT License from [`mattpocock/skills`](https://github.com/mattpocock/skills),
 [`jakubkrehel/skills` at commit `267330e`](https://github.com/jakubkrehel/skills/tree/267330e1adfc66a718fb65fa6918c1f06d0a689e),
+and [`emilkowalski/skills` at commit `d23d7f8`](https://github.com/emilkowalski/skills/tree/d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7),
 and the Apache-2.0 discovery stub from
 [`vercel-labs/agent-browser` at commit `72007a6`](https://github.com/vercel-labs/agent-browser/tree/72007a6788d863611b23bed0b59d0d659c638d8e).
 Each vendored skill keeps its original files and a `LICENSE.txt`; the pinned upstream
 inventory and normalized-content hashes are recorded in
-`skills/jakubkrehel-skills.lock.json` and `skills/agent-browser-skills.lock.json`.
+`skills/jakubkrehel-skills.lock.json`, `skills/emilkowalski-skills.lock.json`, and
+`skills/agent-browser-skills.lock.json`.
 
 Run `setup-matt-pocock-skills` once in a repository before using the engineering
 workflow skills (issue tracker, triage labels, and domain-doc layout). `ask-matt` is the
@@ -173,6 +175,18 @@ These skills improve or inspect an existing interface. `frontend-design` still o
 original visual direction and substantial redesign without a supplied source-of-truth
 design; `figma-design-to-code` still owns faithful implementation of a supplied Figma
 node.
+
+Emil Kowalski's model-invoked skills cover motion and design-engineering craft:
+`emil-design-eng` for animation taste and the details that make UI feel right,
+`animate` and `animate-expo` for building web or React Native motion,
+`find-animation-opportunities` for hunting places that should move,
+`improve-animations` for auditing existing motion, `animation-vocabulary` for naming
+effects, `apple-design` for Apple-style fluid interfaces, `ask-sonner` for Sonner, and
+`write-swift` for Swift. The three named workflows are user-invoked only:
+`review-animations` reviews motion against a strict bar, `pick-ui-library` picks from a
+curated library list, and `design-prototype` (Emil's `prototype`, renamed to sit beside
+Matt Pocock's `prototype`) builds picker-based UI variants. Jakub Krehel's `variant`
+remains the interface-review picker workflow.
 
 `agent-browser` is the installed discovery stub for the agent-browser CLI. Usage
 instructions stay in the CLI (`agent-browser skills get core`) so they match the
@@ -223,6 +237,7 @@ scopes fails when any hop is missing or stale.
 - `frontend-design` owns original visual direction and substantial redesigns. It grounds
   palette, typography, composition, and motion in the product while preserving an
   existing design system when one is in scope. Stack exemplars live in its `EXAMPLES.md`.
+  Building the motion itself routes to `animate` or `animate-expo`.
 - `figma-design-to-code` owns faithful implementation of a supplied Figma node or other
   exact visual spec. It requires structured target context, repository component and
   token reuse, and rendered comparison with the spec.
