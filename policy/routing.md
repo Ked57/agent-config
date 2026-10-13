@@ -18,14 +18,14 @@ Repository-specific instructions take precedence.
 - Design question that needs a runnable answer → `prototype`.
 - Bug, regression, flake, or performance problem → `diagnosing-bugs`.
 - New behaviour with a known target → `tdd`; with a ticket, `implement` drives it.
-- Multi-session build → `to-spec`, then `to-tickets`, then `implement` per ticket.
+- Multi-session build → `to-spec`, then `to-tickets`, then `implement` per ticket or `implement-spec` for the whole spec on one integration branch.
 - Effort too foggy for one session → `wayfinder`.
 - Module shape or seam → `codebase-design`; codebase upkeep → `improve-codebase-architecture`.
-- Terminology, `CONTEXT.md`, or ADR → `domain-modeling`.
+- Terminology, `GLOSSARY.md`, or ADR → `domain-modeling`.
 - Review of a branch, PR, or diff → `code-review`.
+- Writing a pull request body → `pr`.
 - Reading legwork against primary sources → `research`.
 - Steps only a human can perform → `wizard`.
-- In-progress merge or rebase conflict → `resolving-merge-conflicts`.
 - Exact visual spec: a supplied Figma node, Code Connect mapping, approved design screenshot, or other exact visual spec → `figma-design-to-code`. The spec wins over taste.
 - Original UI: designing or substantially reshaping an interface with no supplied spec → `frontend-design`.
 - Complexity: auditing or reducing cyclomatic complexity, nested branching, or a function that is hard to test because of too many paths → `complexity-audit`.
@@ -81,7 +81,7 @@ polish on an existing interface; building motion routes to `animate` or `animate
 - **Design** (visual direction, redesign, Figma, interface quality) → use the matching interface route above. Evidence: rendered screenshots at narrow and wide viewports, keyboard and assistive-technology checks when relevant, measured contrast, and Figma comparison when supplied.
 - **Frontend** (components, forms, UI state) → `typescript.md` plus `react.md` or `vue-primevue.md`. Evidence: component tests, screenshots, accessibility selectors.
 - **Backend** (services, APIs, data access, business rules) → `typescript.md`; `domain-module.md` when the convention is detected; `codebase-design`. Evidence: unit and integration tests.
-- **Domain** (terminology, boundaries, decisions) → `domain-modeling`, `domain-module.md`. Evidence: `CONTEXT.md` and ADRs updated.
+- **Domain** (terminology, boundaries, decisions) → `domain-modeling`, `domain-module.md`. Evidence: `GLOSSARY.md` and ADRs updated.
 - **SRE** (CI, pipelines, infrastructure, secrets, releases) → `wizard` for human-only steps; `setup-pre-commit` and `fullstack-typescript-quality` for quality gates. Evidence: pipeline pass, `.agents/agent-config.json` checks.
 - **Agent configuration** (skills, policy, `AGENTS.md`) → `writing-for-agents`. Evidence: the repository's own verify script.
 

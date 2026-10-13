@@ -148,20 +148,22 @@ documented in the [Codex](adapters/codex/README.md),
 
 The installer copies every `skills/<name>/` directory that contains a `SKILL.md`. That
 includes this repository's frontend, quality, and manual-qa skills, plus skills vendored under the
-MIT License from [`mattpocock/skills`](https://github.com/mattpocock/skills),
+MIT License from [`mattpocock/skills` at commit `49dd158`](https://github.com/mattpocock/skills/tree/49dd158d1076134a641b33efb035946536778336),
 [`jakubkrehel/skills` at commit `267330e`](https://github.com/jakubkrehel/skills/tree/267330e1adfc66a718fb65fa6918c1f06d0a689e),
 and [`emilkowalski/skills` at commit `d23d7f8`](https://github.com/emilkowalski/skills/tree/d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7),
 and the Apache-2.0 discovery stub from
 [`vercel-labs/agent-browser` at commit `72007a6`](https://github.com/vercel-labs/agent-browser/tree/72007a6788d863611b23bed0b59d0d659c638d8e).
 Each vendored skill keeps its original files and a `LICENSE.txt`; the pinned upstream
 inventory and normalized-content hashes are recorded in
-`skills/jakubkrehel-skills.lock.json`, `skills/emilkowalski-skills.lock.json`, and
-`skills/agent-browser-skills.lock.json`.
+`skills/mattpocock-skills.lock.json`, `skills/jakubkrehel-skills.lock.json`,
+`skills/emilkowalski-skills.lock.json`, and `skills/agent-browser-skills.lock.json`.
 
 Run `setup-matt-pocock-skills` once in a repository before using the engineering
-workflow skills (issue tracker, triage labels, and domain-doc layout). `ask-matt` is the
-human-invoked router over those skills; `policy/routing.md` carries the agent-side
-task type → skill mapping so agents route without invoking it.
+workflow skills (issue tracker, triage labels, and domain-doc layout). Domain docs
+are `GLOSSARY.md` and ADRs; rename an existing `CONTEXT.md` or `CONTEXT-MAP.md` to
+`GLOSSARY.md` or `GLOSSARY-MAP.md`. `ask-matt` is the human-invoked router over those
+skills; `policy/routing.md` carries the agent-side task type → skill mapping so agents
+route without invoking it.
 
 Jakub Krehel's seven model-invoked skills cover existing-interface work by discipline:
 `better-interface` for cross-discipline audits, plus
