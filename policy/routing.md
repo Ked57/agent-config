@@ -18,7 +18,7 @@ Repository-specific instructions take precedence.
 - Design question that needs a runnable answer → `prototype`.
 - Bug, regression, flake, or performance problem → `diagnosing-bugs`.
 - New behaviour with a known target → `tdd`; with a ticket, `implement` drives it.
-- Multi-session build → `to-spec`, then `to-tickets`, then `implement` per ticket or `implement-spec` for the whole spec on one integration branch.
+- Multi-session build → `to-spec`, then `to-tickets`, then `implement` per ticket.
 - Effort too foggy for one session → `wayfinder`.
 - Module shape or seam → `codebase-design`; codebase upkeep → `improve-codebase-architecture`.
 - Terminology, `GLOSSARY.md`, or ADR → `domain-modeling`.
@@ -48,7 +48,7 @@ Repository-specific instructions take precedence.
 - Working with Sonner toasts → `ask-sonner`.
 - Writing, reviewing, or migrating Swift → `write-swift`.
 - Design-engineering craft, animation taste, or the details that make UI feel right → `emil-design-eng`.
-- Product copy, labels, errors, empty states, voice, or terminology → `better-writing`.
+- Product copy, labels, errors, empty states, or voice → `better-writing`.
 
 `manual-qa` loads `agent-browser` for browser UI. Specialized agent-browser workflows
 (`core`, `dogfood`, `electron`, and the rest) are served by `agent-browser skills get`,
@@ -74,6 +74,10 @@ design; `figma-design-to-code` remains the route for faithful implementation of 
 Figma node or other exact visual spec. `better-ui` remains surfaces, icons, and visual
 polish on an existing interface; building motion routes to `animate` or `animate-expo`.
 
+`code-review` uses the merge-base with the base branch as its fixed point when the user names none. Standards sources are the routed packs under `~/.agents/policy/`, `~/.agents/AGENTS.md`, and the files the repository documents.
+
+`implement-spec`, `retro`, `triage`, `handoff`, `to-questionnaire`, and `wait-what` run only when the user names them. `implement-spec` lands a whole spec on one integration branch. `triage` covers incoming issues the user did not create. `retro` looks back at the session's environment.
+
 `ask-matt` is the human-invoked full map of these skills and their flows; agents route with this table instead.
 
 ## 3. Topic (discipline → packs, skills, evidence)
@@ -81,7 +85,7 @@ polish on an existing interface; building motion routes to `animate` or `animate
 - **Design** (visual direction, redesign, Figma, interface quality) → use the matching interface route above. Evidence: rendered screenshots at narrow and wide viewports, keyboard and assistive-technology checks when relevant, measured contrast, and Figma comparison when supplied.
 - **Frontend** (components, forms, UI state) → `typescript.md` plus `react.md` or `vue-primevue.md`. Evidence: component tests, screenshots, accessibility selectors.
 - **Backend** (services, APIs, data access, business rules) → `typescript.md`; `domain-module.md` when the convention is detected; `codebase-design`. Evidence: unit and integration tests.
-- **Domain** (terminology, boundaries, decisions) → `domain-modeling`, `domain-module.md`. Evidence: `GLOSSARY.md` and ADRs updated.
+- **Domain language** (terms, glossary, ADRs) → `domain-modeling`. Evidence: `GLOSSARY.md` and ADRs updated.
 - **SRE** (CI, pipelines, infrastructure, secrets, releases) → `wizard` for human-only steps; `setup-pre-commit` and `fullstack-typescript-quality` for quality gates. Evidence: pipeline pass, `.agents/agent-config.json` checks.
 - **Agent configuration** (skills, policy, `AGENTS.md`) → `writing-for-agents`. Evidence: the repository's own verify script.
 

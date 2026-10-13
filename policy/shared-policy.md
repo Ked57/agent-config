@@ -29,6 +29,7 @@ Do not claim a manual check was performed without executing it.
 ## Execution and verification
 
 - Work through implementation, verification, and repair; do not stop at a plan or partial change.
+- When `tdd` is routed, confirming the seams under test is part of that work. State what each seam catches and what it misses before writing tests.
 - Prefer the smallest change that satisfies the current requirement.
 - Fix failures introduced by the change before moving on.
 - Use existing repository scripts and test conventions; do not invent replacement commands when the repository already defines them.
@@ -51,6 +52,7 @@ Do not claim a manual check was performed without executing it.
 ## Repository discovery and safety
 
 - Before introducing a new module, composable, domain, validation approach, test convention, or UI primitive, inspect adjacent code and reuse the existing pattern where one exists.
+- When `GLOSSARY.md` or `GLOSSARY-MAP.md` exists, read the entries for this task and use those terms. Follow `GLOSSARY-MAP.md` to the glossaries it names. When neither file exists, keep the vocabulary already in the code.
 - Inspect existing dependencies and local patterns before adding a package. Do not add, replace, or upgrade dependencies solely to fit a preferred pattern.
 - Treat generated files, lockfiles, migrations, environment variables, and public API contracts as deliberate changes; update them only when the task requires it.
 - Keep secrets out of source, tests, fixtures, logs, and agent configuration.

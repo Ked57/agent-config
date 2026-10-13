@@ -360,6 +360,12 @@ test('routing and shared policy resolve without role files', () => {
   assert.match(sharedPolicy, /~\/\.agents\/skills\/manual-qa\/SKILL\.md/);
   assert.match(routing, /Changed runnable UI, API, or CLI behavior after implementation → `manual-qa`/);
   assert.match(routing, /Browser automation with the agent-browser CLI → `agent-browser`/);
+  assert.match(routing, /Multi-session build → `to-spec`, then `to-tickets`, then `implement` per ticket\./);
+  assert.match(routing, /`implement-spec`, `retro`, `triage`, `handoff`, `to-questionnaire`, and `wait-what` run only when the user names them/);
+  assert.match(routing, /`code-review` uses the merge-base with the base branch as its fixed point/);
+  assert.match(routing, /\*\*Domain language\*\* \(terms, glossary, ADRs\) → `domain-modeling`/);
+  assert.match(sharedPolicy, /When `tdd` is routed, confirming the seams under test is part of that work/);
+  assert.match(sharedPolicy, /When `GLOSSARY.md` or `GLOSSARY-MAP.md` exists, read the entries for this task/);
   assert.ok(!fs.existsSync(path.join(root, 'policy/orchestration.md')));
   assert.ok(!fs.existsSync(path.join(root, 'agents')));
   const manualQa = fs.readFileSync(path.join(root, 'skills/manual-qa/SKILL.md'), 'utf8');
@@ -671,7 +677,7 @@ test('routes interface skills at precise task boundaries', () => {
     /- Working with Sonner toasts → `ask-sonner`\./,
     /- Writing, reviewing, or migrating Swift → `write-swift`\./,
     /- Design-engineering craft, animation taste, or the details that make UI feel right → `emil-design-eng`\./,
-    /- Product copy, labels, errors, empty states, voice, or terminology → `better-writing`\./
+    /- Product copy, labels, errors, empty states, or voice → `better-writing`\./
   ]) assert.match(routing, route);
   assert.match(routing, /`better-interface` owns review orchestration only; implementation and remediation route to the focused/s);
   assert.match(routing, /A branch, pull request, commit range, or working-tree review.*starts only when the user explicitly invokes `interface-review`.*hands the cross-discipline audit to `better-interface`/s);
