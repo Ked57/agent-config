@@ -11,6 +11,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cli = path.join(root, 'bin/agent-config.mjs');
 const mattPocockSkills = [
   'ask-matt',
+  'chief-of-staff',
   'claude-handoff',
   'code-review',
   'codebase-design',
@@ -26,9 +27,9 @@ const mattPocockSkills = [
   'improve-codebase-architecture',
   'loop-me',
   'migrate-to-shoehorn',
+  'pr',
   'prototype',
   'research',
-  'resolving-merge-conflicts',
   'retro',
   'scaffold-exercises',
   'setup-matt-pocock-skills',
@@ -48,6 +49,7 @@ const mattPocockSkills = [
   'writing-fragments',
   'writing-shape'
 ];
+const mattPocockLock = JSON.parse(fs.readFileSync(path.join(root, 'skills/mattpocock-skills.lock.json'), 'utf8'));
 const modelInvokedJakubKrehelSkills = [
   'better-accessibility',
   'better-colors',
@@ -358,6 +360,12 @@ test('routing and shared policy resolve without role files', () => {
   assert.match(sharedPolicy, /~\/\.agents\/skills\/manual-qa\/SKILL\.md/);
   assert.match(routing, /Changed runnable UI, API, or CLI behavior after implementation → `manual-qa`/);
   assert.match(routing, /Browser automation with the agent-browser CLI → `agent-browser`/);
+  assert.match(routing, /Multi-session build → `to-spec`, then `to-tickets`, then `implement` per ticket\./);
+  assert.match(routing, /`implement-spec`, `retro`, `triage`, `handoff`, `to-questionnaire`, and `wait-what` run only when the user names them/);
+  assert.match(routing, /`code-review` uses the merge-base with the base branch as its fixed point/);
+  assert.match(routing, /\*\*Domain language\*\* \(terms, glossary, ADRs\) → `domain-modeling`/);
+  assert.match(sharedPolicy, /When `tdd` is routed, confirming the seams under test is part of that work/);
+  assert.match(sharedPolicy, /When `GLOSSARY.md` or `GLOSSARY-MAP.md` exists, read the entries for this task/);
   assert.ok(!fs.existsSync(path.join(root, 'policy/orchestration.md')));
   assert.ok(!fs.existsSync(path.join(root, 'agents')));
   const manualQa = fs.readFileSync(path.join(root, 'skills/manual-qa/SKILL.md'), 'utf8');
@@ -437,6 +445,53 @@ test('vendors Matt Pocock skills with licenses and supporting files', () => {
   assert.ok(fs.existsSync(path.join(root, 'skills/wizard/template.sh')));
   assert.ok(fs.existsSync(path.join(root, 'skills/diagnosing-bugs/scripts/hitl-loop.template.sh')));
   assert.ok(fs.existsSync(path.join(root, 'skills/setup-ts-deep-modules/dependency-cruiser.config.cjs')));
+  assert.ok(fs.existsSync(path.join(root, 'skills/domain-modeling/GLOSSARY-FORMAT.md')));
+  assert.ok(!fs.existsSync(path.join(root, 'skills/domain-modeling/CONTEXT-FORMAT.md')));
+  assert.ok(fs.existsSync(path.join(root, 'skills/pr/CREDITS.md')));
+});
+
+test('locks every vendored Matt Pocock file and license to its upstream commit', () => {
+  assert.equal(mattPocockLock.version, 1);
+  assert.equal(mattPocockLock.source, 'https://github.com/mattpocock/skills');
+  assert.equal(mattPocockLock.commit, '49dd158d1076134a641b33efb035946536778336');
+  assert.equal(mattPocockLock.license.sourcePath, 'LICENSE');
+  assert.equal(mattPocockLock.license.installedAs, 'LICENSE.txt');
+  assert.deepEqual(Object.keys(mattPocockLock.skills).sort(), mattPocockSkills);
+
+  let canonicalLicense;
+  for (const name of mattPocockSkills) {
+    const skillDirectory = path.join(root, 'skills', name);
+    const lockedSkill = mattPocockLock.skills[name];
+    assert.match(lockedSkill.upstreamPath, new RegExp(`^skills/(engineering|productivity|misc|in-progress)/${name}$`));
+    const lockedFiles = Object.keys(lockedSkill.files).map((file) => file.split(/[\\\\/]/).join('/')).sort();
+    const installedFiles = listFiles(skillDirectory)
+      .map((file) => file.split(path.sep).join('/'))
+      .sort();
+    assert.deepEqual(
+      installedFiles,
+      [...lockedFiles, mattPocockLock.license.installedAs].sort(),
+      `vendored inventory drifted for ${name}`
+    );
+
+    for (const file of lockedFiles) {
+      const lockedFileKey = Object.keys(lockedSkill.files).find((key) => key.split(/[\\\\/]/).join('/') === file);
+      assert.equal(
+        normalizedContentSha256(path.join(skillDirectory, file)),
+        lockedSkill.files[lockedFileKey],
+        `vendored content drifted for ${name}/${file}`
+      );
+    }
+
+    const licenseFile = path.join(skillDirectory, mattPocockLock.license.installedAs);
+    assert.equal(
+      normalizedContentSha256(licenseFile),
+      mattPocockLock.license.normalizedSha256,
+      `license drifted for ${name}`
+    );
+    canonicalLicense ??= normalizedContent(licenseFile);
+    assert.equal(normalizedContent(licenseFile), canonicalLicense, `license content differs for ${name}`);
+    assert.match(canonicalLicense, /Copyright \(c\) 2026 Matt Pocock/);
+  }
 });
 
 test('locks every vendored Jakub Krehel file and license to its upstream commit', () => {
@@ -622,7 +677,7 @@ test('routes interface skills at precise task boundaries', () => {
     /- Working with Sonner toasts → `ask-sonner`\./,
     /- Writing, reviewing, or migrating Swift → `write-swift`\./,
     /- Design-engineering craft, animation taste, or the details that make UI feel right → `emil-design-eng`\./,
-    /- Product copy, labels, errors, empty states, voice, or terminology → `better-writing`\./
+    /- Product copy, labels, errors, empty states, or voice → `better-writing`\./
   ]) assert.match(routing, route);
   assert.match(routing, /`better-interface` owns review orchestration only; implementation and remediation route to the focused/s);
   assert.match(routing, /A branch, pull request, commit range, or working-tree review.*starts only when the user explicitly invokes `interface-review`.*hands the cross-discipline audit to `better-interface`/s);
