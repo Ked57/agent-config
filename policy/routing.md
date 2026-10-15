@@ -1,95 +1,62 @@
 # Task router
 
-Read this first for every task. Route on the three axes below, load only what matches, then
-take the exit. Paths are user-scoped (`~/.agents/...`); a project-scoped install carries the
-same files under `.agents/` in the repository root. Use whichever exists.
-Repository-specific instructions take precedence.
+Read this first for every task and route on tech, skill, and topic. Prefer a project
+`.agents/` install when present; otherwise use `~/.agents/`. Resolve every policy and
+skill pointer in that scope. Repository-specific instructions take precedence.
+The global paths below also identify the corresponding project-local files.
 
-## 1. Tech (files touched → pack)
+## 1. Tech
 
-- `.ts`, `.tsx`, `.mts` → `~/.agents/policy/typescript.md`
-- React components, hooks, `.jsx`/`.tsx` → `~/.agents/policy/react.md`
-- `.vue`, composables, PrimeVue UI, Vue forms → `~/.agents/policy/vue-primevue.md`
-- `<domain>.model|interface|service|mock.ts` modules → `~/.agents/policy/domain-module.md`, only when the repository already uses the four-file convention or the user asks for it.
+- TypeScript (`.ts`, `.tsx`, `.mts`, `.cts`, or Vue SFC scripts) → `~/.agents/policy/typescript.md`.
+- React components/hooks (`.jsx`, `.tsx`, or React imports) → `~/.agents/policy/react.md`.
+- Vue components/composables/forms → `~/.agents/policy/vue-primevue.md`; apply PrimeVue rules only when that dependency exists.
+- Established `<domain>.model|interface|service|mock.ts` convention, or an explicit request for it → `~/.agents/policy/domain-module.md`.
 
-## 2. Skill (task type → `~/.agents/skills/<name>/SKILL.md`)
+## 2. Skills
 
-- Vague idea or unclear requirements → `grill-with-docs` in a repository, `grill-me` without one.
-- Design question that needs a runnable answer → `prototype`.
-- Bug, regression, flake, or performance problem → `diagnosing-bugs`.
-- New behaviour with a known target → `tdd`; with a ticket, `implement` drives it.
-- Multi-session build → `to-spec`, then `to-tickets`, then `implement` per ticket.
-- Effort too foggy for one session → `wayfinder`.
-- Module shape or seam → `codebase-design`; codebase upkeep → `improve-codebase-architecture`.
-- Terminology, `GLOSSARY.md`, or ADR → `domain-modeling`.
-- Review of a branch, PR, or diff → `code-review`.
-- Writing a pull request body → `pr`.
-- Reading legwork against primary sources → `research`.
-- Steps only a human can perform → `wizard`.
-- Exact visual spec: a supplied Figma node, Code Connect mapping, approved design screenshot, or other exact visual spec → `figma-design-to-code`. The spec wins over taste.
-- Original UI: designing or substantially reshaping an interface with no supplied spec → `frontend-design`.
-- Complexity: auditing or reducing cyclomatic complexity, nested branching, or a function that is hard to test because of too many paths → `complexity-audit`.
-- Quality tooling install, upgrade, or audit → `fullstack-typescript-quality`.
-- Writing skills, `AGENTS.md`, or agent-facing docs → `writing-for-agents`.
-- Changed runnable UI, API, or CLI behavior after implementation → `manual-qa`.
-- Browser automation with the agent-browser CLI → `agent-browser`.
-- Cross-discipline audit of an existing screen, flow, or repository → `better-interface`.
-- Semantic HTML, keyboard or focus behaviour, forms, or assistive technology → `better-accessibility`.
-- Palettes, color tokens or formats, or measured contrast → `better-colors`.
-- Grouping, alignment, spacing, responsive structure, or spatial RTL → `better-layout`.
-- Type systems, fonts, wrapping, truncation, or rendered text → `better-typography`.
-- Surfaces, icons, or visual polish → `better-ui`.
-- Building web animation or motion → `animate`.
-- Building React Native or Expo motion → `animate-expo`.
-- Searching an interface for places that should animate → `find-animation-opportunities`.
-- Auditing existing motion and producing implementation plans → `improve-animations`.
-- Naming a motion effect from a vague description → `animation-vocabulary`.
-- Apple-style fluid motion, springs, or gesture-driven UI → `apple-design`.
-- Working with Sonner toasts → `ask-sonner`.
-- Writing, reviewing, or migrating Swift → `write-swift`.
-- Design-engineering craft, animation taste, or the details that make UI feel right → `emil-design-eng`.
-- Product copy, labels, errors, empty states, or voice → `better-writing`.
+Resolve names as `~/.agents/skills/<name>/SKILL.md`; load the matching owner and its
+declared dependencies. Use the following automatic routes; explicit workflows follow
+in their own registry.
 
-`manual-qa` loads `agent-browser` for browser UI. Specialized agent-browser workflows
-(`core`, `dogfood`, `electron`, and the rest) are served by `agent-browser skills get`,
-not as separate installed skills.
+- Unclear target → inspect context and ask the minimum blocking question; offer an explicit interview workflow when substantial discovery is wanted.
+- Requested interview or stress-test → `grilling`; its manual wrappers choose persistence and output.
+- Reported bug, regression, flake, or performance defect → `diagnosing-bugs`.
+- New behaviour or regression coverage → `tdd` at agreed public seams.
+- Runnable design question → `prototype`; module boundaries → `codebase-design`; terminology, glossary, or ADR → `domain-modeling`.
+- Branch, PR, range, or working-tree review → `code-review`; its procedure owns scope, default-base selection, and standards discovery.
+- PR body → `pr`; primary-source investigation → `research`; genuinely human-only steps → `wizard`.
+- Supplied Figma node, Code Connect mapping, approved screenshot, or other exact visual spec → `figma-design-to-code` (load `build-design` for design-file token mapping); original direction or substantial redesign without one → `frontend-design`.
+- Complexity or path-count problem → `complexity-audit`; TypeScript quality-tooling work → `fullstack-typescript-quality`.
+- Agent-facing instructions → `writing-for-agents`; implemented runnable UI, API, or CLI change → `manual-qa`.
+- Browser automation → `agent-browser`; specialized workflows come from `agent-browser skills get`. `manual-qa` loads this owner for browser UI.
+- Existing-interface audit → `better-interface`; this owner orchestrates review and delegates implementation to the focused owners below.
+- Interface implementation → choose `better-accessibility`, `better-colors`, `better-layout`, `better-typography`, `better-ui`, or `better-writing` for semantics/focus, color, structure, type, polish, or product copy respectively.
+- Build web motion → `animate`; build Expo/React Native motion → `animate-expo`; motion opportunities → `find-animation-opportunities`; motion roadmap → `improve-animations`.
+- Motion terminology → `animation-vocabulary`; Apple-style interaction → `apple-design`; Sonner → `ask-sonner`; Swift → `write-swift`; design-engineering craft → `emil-design-eng`.
+- Animation frame-budget diagnosis → `animation-performance`; mobile-web viewport, touch, or browser behaviour → `mobile-native`; realistic worst-case UI data → `break-ui`; static physical-object drawings → `technical-drawing`.
+- Pre-commit setup → `setup-pre-commit`; requested Claude Git hooks → `git-guardrails-claude-code`; requested ShoeHorn migration → `migrate-to-shoehorn`; course exercise scaffolding → `scaffold-exercises`.
+- `fullstack-typescript-quality` loads `fullstack-typescript-static`, `fullstack-typescript-tests`, and `fullstack-typescript-mutation`; those children own their gates.
 
-`fullstack-typescript-quality` owns quality-tooling orchestration; it loads
-`fullstack-typescript-static`, `fullstack-typescript-tests`, and
-`fullstack-typescript-mutation`. Static analysis, tests/coverage, and mutation rules belong
-to those siblings.
+### Explicit workflows
 
-`better-interface` owns review orchestration only; implementation and remediation route to the focused
-`better-accessibility`, `better-colors`, `better-layout`, `better-typography`, `better-ui`,
-or `better-writing` skill. A branch, pull request, commit range, or working-tree review
-starts only when the user explicitly invokes `interface-review`; it resolves the change
-scope and hands the cross-discipline audit to `better-interface`.
+Run these only when selected by the user; ordinary task matching may suggest them but
+cannot silently invoke them. Preserve the skill's native invocation metadata.
 
-`break`, `explain-interface`, `interface-review`, and `variant` are explicitly user-invoked
-named workflows; route to them only when the user names one. `review-animations`,
-`pick-ui-library`, and `design-prototype` are the same: animation review, curated library
-lookup, and picker-based UI variants fire only when named. `frontend-design` remains the
-route for original visual direction or substantial redesign without a source-of-truth
-design; `figma-design-to-code` remains the route for faithful implementation of a supplied
-Figma node or other exact visual spec. `better-ui` remains surfaces, icons, and visual
-polish on an existing interface; building motion routes to `animate` or `animate-expo`.
+- Engineering workflow: `grill-me`, `grill-with-docs`, `to-spec`, `to-tickets`, `implement`, `implement-spec`, `wayfinder`, `triage`, `retro`, `improve-codebase-architecture`.
+- Setup and navigation: `ask-matt`, `setup-matt-pocock-skills`, `setup-ts-deep-modules`, `handoff`, `claude-handoff`, `to-questionnaire`, `wait-what`.
+- Interface alternatives and review: `break`, `explain-interface`, `interface-review`, `variant`, `design-prototype`, `pick-ui-library`, `review-animations`, `state-machine`, `design-taste-frontend` (also selected by the name Taste Skill).
+- Personal, learning, and writing: `chief-of-staff`, `loop-me`, `teach`, `writing-fragments`, `writing-beats`, `writing-shape`.
 
-`code-review` uses the merge-base with the base branch as its fixed point when the user names none. Standards sources are the routed packs under `~/.agents/policy/`, `~/.agents/AGENTS.md`, and the files the repository documents.
+## 3. Topic and evidence
 
-`implement-spec`, `retro`, `triage`, `handoff`, `to-questionnaire`, and `wait-what` run only when the user names them. `implement-spec` lands a whole spec on one integration branch. `triage` covers incoming issues the user did not create. `retro` looks back at the session's environment.
-
-`ask-matt` is the human-invoked full map of these skills and their flows; agents route with this table instead.
-
-## 3. Topic (discipline → packs, skills, evidence)
-
-- **Design** (visual direction, redesign, Figma, interface quality) → use the matching interface route above. Evidence: rendered screenshots at narrow and wide viewports, keyboard and assistive-technology checks when relevant, measured contrast, and Figma comparison when supplied.
-- **Frontend** (components, forms, UI state) → `typescript.md` plus `react.md` or `vue-primevue.md`. Evidence: component tests, screenshots, accessibility selectors.
-- **Backend** (services, APIs, data access, business rules) → `typescript.md`; `domain-module.md` when the convention is detected; `codebase-design`. Evidence: unit and integration tests.
-- **Domain language** (terms, glossary, ADRs) → `domain-modeling`. Evidence: `GLOSSARY.md` and ADRs updated.
-- **SRE** (CI, pipelines, infrastructure, secrets, releases) → `wizard` for human-only steps; `setup-pre-commit` and `fullstack-typescript-quality` for quality gates. Evidence: pipeline pass, `.agents/agent-config.json` checks.
-- **Agent configuration** (skills, policy, `AGENTS.md`) → `writing-for-agents`. Evidence: the repository's own verify script.
+- Design/frontend → matching tech and interface owners; existing test layer plus rendered, keyboard, and accessibility checks where relevant. Exact specs require visual comparison; check narrow and wide layouts and measure relevant contrast.
+- Backend/domain → matching tech pack and module-design owner; unit/integration checks and relevant glossary/ADR updates.
+- SRE → quality owners for gates and `wizard` for human-only steps; relevant pipeline and verification-map evidence.
+- Agent configuration → `writing-for-agents`; the repository's actual verification scripts.
 
 ## Exit
 
-- **Coding task** (new behaviour, bug fix, refactor, tests, tooling or configuration change) → do the work with the routed packs and skills.
-- **Non-coding task** (question, explanation, documentation-only edit) → answer directly with the routed packs and skills.
+Coding tasks implement with the routed owners and follow the shared completion contract
+in `~/.agents/AGENTS.md` or the project `AGENTS.md` managed block. Questions are answered
+with the loaded guidance. Keep detailed procedures and the definition of done in their
+owners.

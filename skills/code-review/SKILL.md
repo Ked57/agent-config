@@ -3,7 +3,8 @@ name: code-review
 description: "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"."
 ---
 
-Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
+Two-axis review of the scope the user requests: committed changes, staged changes,
+unstaged changes, or the whole working tree including untracked files:
 
 - **Standards**: does the code conform to this repo's documented coding standards?
 - **Spec**: does the code faithfully implement the originating issue / spec?
@@ -14,13 +15,23 @@ The issue tracker should have been provided to you. If not, tell the user to run
 
 ## Process
 
-### 1. Pin the fixed point
+### 1. Pin the review scope
 
-Whatever the user said is the fixed point (a commit SHA, branch name, tag, `main`, `HEAD~5`, etc.). If they didn't specify one, ask for it.
+Resolve scope once with the bundled helper; `<skill>` means this skill's installed folder:
 
-Capture the diff command once: `git diff <fixed-point>...HEAD` (three-dot, so the comparison is against the merge-base). Also note the list of commits via `git log <fixed-point>..HEAD --oneline`.
+```sh
+node <skill>/scripts/review-scope.mjs
+node <skill>/scripts/review-scope.mjs --base main
+node <skill>/scripts/review-scope.mjs --scope staged
+node <skill>/scripts/review-scope.mjs --scope unstaged
+node <skill>/scripts/review-scope.mjs --scope worktree
+```
 
-Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here, not inside two parallel sub-agents.
+- A supplied branch/tag/commit selects a committed range from its merge-base to `HEAD`.
+- Without a supplied scope, local changes select the working tree; otherwise use the base branch's merge-base. The helper checks `origin/HEAD`, then main/master refs; ask only when no base can be resolved.
+- `worktree` includes both the staged diff against the captured `HEAD` and the unstaged diff against the index, plus untracked files; `staged` and `unstaged` select only their respective tracked changes.
+- Capture the returned scope, file list, commit IDs and `diffs`; execute each Git argument array. Inspect both patches even when staged and unstaged edits cancel in the final working copy. Read every returned untracked file separately as a new file, including binary-file metadata where relevant. Never omit these files merely because `git diff` cannot show them.
+- An invalid ref or empty selected scope stops here, before dispatching reviewers. State the resolved scope to the user. Do not change it silently or mix a committed range with unrelated local changes.
 
 ### 2. Identify the spec source
 
@@ -34,6 +45,8 @@ Look for the originating spec, in this order:
 ### 3. Identify the standards sources
 
 Search the repo for every file that documents how code should be written. When `CODING_STANDARDS.md` or `CONTRIBUTING.md` exists, it must be on the list.
+
+Include the routed packs under `~/.agents/policy/`, `~/.agents/AGENTS.md`, and the repository's own instructions; use project-scoped equivalents when installed.
 
 On top of whatever the repo documents, the Standards axis always carries the **smell baseline** below: a fixed set of Fowler code smells (_Refactoring_, ch.3) that applies even when a repo documents nothing. Two rules bind it:
 
@@ -62,12 +75,14 @@ Issue both sub-agent calls together, in the foreground, and aggregate the report
 **Standards sub-agent prompt** should include:
 
 - The full diff command and commit list.
+- The resolved scope and complete file list, including the content or read instructions for every untracked new file.
 - The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full (the sub-agent has no other access to it).
 - The brief: "Report, per file/hunk where relevant, (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls: documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
 
 **Spec sub-agent prompt** should include:
 
 - The diff command and commit list.
+- The same resolved scope and untracked-file material as the Standards reviewer.
 - The path or fetched contents of the spec.
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
 

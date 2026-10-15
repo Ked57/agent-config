@@ -218,7 +218,7 @@ const dependencies = {
   ...(packageJson?.dependencies ?? {}),
   ...(packageJson?.devDependencies ?? {})
 };
-const sourceRoots = ['src', 'app', 'apps', 'pages', 'components', 'packages']
+const sourceRoots = ['src', 'app', 'apps', 'pages', 'components', 'packages', 'lib', 'server', 'api', 'bin', 'scripts', 'test', 'tests', '.github/workflows']
   .map((directory) => path.join(projectRoot, directory))
   .filter((directory) => exists(directory) && fs.statSync(directory).isDirectory());
 const ignoredSourceDirectories = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt']);
@@ -233,12 +233,26 @@ const collectSourceFiles = (directory) => {
   }
 };
 for (const directory of sourceRoots) collectSourceFiles(directory);
+if (!userScope && exists(projectRoot)) {
+  for (const entry of fs.readdirSync(projectRoot, { withFileTypes: true })) {
+    if (entry.isFile()) sourceFiles.push(path.join(projectRoot, entry.name));
+  }
+}
+for (const file of sourceFiles.filter((file) => path.basename(file) === 'package.json' && file !== packagePath)) {
+  const manifest = JSON.parse(read(file));
+  Object.assign(dependencies, manifest.dependencies, manifest.devDependencies);
+}
+const codeExtensions = ['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts', '.vue'];
+const verificationInput = (file) => codeExtensions.includes(path.extname(file))
+  || ['package.json', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb'].includes(path.basename(file))
+  || /^tsconfig(?:\..+)?\.json$|\.config\.(?:json|ya?ml)$/.test(path.basename(file))
+  || relative(file).split(path.sep).join('/').startsWith('.github/workflows/');
 const hasExtension = (...extensions) => sourceFiles.some((file) => extensions.includes(path.extname(file)));
 const sourceContains = (pattern) => sourceFiles.some((file) => {
-  if (!['.js', '.jsx', '.mjs', '.ts', '.tsx', '.mts', '.vue'].includes(path.extname(file))) return false;
+  if (!codeExtensions.includes(path.extname(file))) return false;
   return pattern.test(read(file));
 });
-const hasTypeScriptSource = hasExtension('.ts', '.tsx', '.mts') || sourceFiles.some((file) => path.extname(file) === '.vue' && /<script\b[^>]*\blang\s*=\s*["']ts["']/.test(read(file)));
+const hasTypeScriptSource = hasExtension('.ts', '.tsx', '.mts', '.cts') || sourceFiles.some((file) => path.extname(file) === '.vue' && /<script\b[^>]*\blang\s*=\s*["']ts["']/.test(read(file)));
 const hasVueSource = hasExtension('.vue') || sourceContains(/from\s*['"]vue(?:\/|['"])/);
 const hasReactSource = Boolean(dependencies.react || dependencies['react-dom'] || dependencies.next)
   && (hasExtension('.tsx', '.jsx') || sourceContains(/from\s*['"]react(?:\/|['"])/) || sourceContains(/require\(\s*['"]react(?:\/|['"])/));
@@ -271,7 +285,7 @@ const candidates = {
   component: ['test:component', 'cypress:component'],
   e2e: ['test:e2e', 'cypress:e2e'],
   build: ['build'],
-  fast: ['verify:fast'],
+  fast: ['verify:fast', 'verify'],
   full: ['verify:full'],
   mutation: ['test:mutation:domain', 'test:mutation']
 };
@@ -291,8 +305,7 @@ const config = {
   commands,
   routing: [
     ...(isTypeScript ? [{
-      match: ['**/*.ts', '**/*.tsx'],
-      except: ['**/*.cy.ts', '**/*.spec.ts', '**/*.test.ts'],
+      match: ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts'],
       required: requiredChecks('unit'),
       recommended: configured('mutation')
     }] : []),
@@ -308,6 +321,10 @@ const config = {
       match: ['src/domain/**', 'packages/domain/**', 'src/lib/permissions/**'],
       required: requiredChecks('unit'),
       recommended: configured('mutation')
+    },
+    {
+      match: ['**/*'],
+      required: requiredChecks(...(commands.full ? ['full'] : ['build']))
     }
   ]
 };
@@ -319,7 +336,7 @@ const cursorRuleDirectory = target('.cursor', 'rules');
 const lockFile = target('.agents', 'agent-config.lock.json');
 const configFile = target('.agents', 'agent-config.json');
 const prettierIgnoreFile = target('.prettierignore');
-const prettierIgnoreContents = '.agents/\n.cursor/rules/\nAGENTS.md\nCLAUDE.md';
+const prettierIgnoreContents = '.agents/\n.claude/skills/\n.cursor/rules/\nAGENTS.md\nCLAUDE.md';
 const policyDirectory = target('.agents', 'policy');
 const agentsDirectory = target('.agents', 'agents');
 const skillsDirectory = target('.agents', 'skills');
@@ -346,7 +363,10 @@ const projectPackEnabled = Object.fromEntries(policyPacks.map(({ name }) => [
 const managedFiles = [
   ...policyPacks.map(({ name, source }) => [path.join(policyDirectory, `${name}.md`), source, projectPackEnabled[name]]),
   ...roleFiles.map(({ name, source }) => [path.join(agentsDirectory, name), source, true]),
-  ...portableSkillFiles.map(({ name, file, source }) => [path.join(skillsDirectory, name, file), source, true])
+  ...portableSkillFiles.flatMap(({ name, file, source }) => [
+    [path.join(skillsDirectory, name, file), source, true],
+    [target('.claude', 'skills', name, file), source, true]
+  ])
 ];
 
 const claudeBridgePolicy = 'Read and follow `AGENTS.md`.\n\nProject-specific quality routing is in `.agents/agent-config.json`. Before reporting implementation work complete, run the required verification for the changed files.';
@@ -455,7 +475,7 @@ const readLock = () => {
 };
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isTrustedLock = (lock) => lock?.source === 'Ked57/agent-config'
-  && lock.version === 1
+  && [1, 2].includes(lock.version)
   && typeof lock.revision === 'string'
   && /^[a-f0-9]{12}$/.test(lock.revision)
   && typeof lock.installedAt === 'string'
@@ -466,7 +486,10 @@ const isTrustedLock = (lock) => lock?.source === 'Ked57/agent-config'
   && (lock.detected.react === undefined || typeof lock.detected.react === 'boolean')
   && Array.isArray(lock.managedFiles)
   && lock.managedFiles.every((file) => typeof file === 'string')
-  && new Set(lock.managedFiles).size === lock.managedFiles.length;
+  && new Set(lock.managedFiles).size === lock.managedFiles.length
+  && (lock.version === 1 || (isRecord(lock.hashes)
+    && Object.keys(lock.hashes).length === lock.managedFiles.length
+    && lock.managedFiles.every((file) => /^[a-f0-9]{64}$/.test(lock.hashes[file]))));
 const isTrustedUserLock = (lock) => lock?.source === 'Ked57/agent-config'
   && lock.scope === 'user'
   && lock.version === 1
@@ -477,6 +500,20 @@ const isTrustedUserLock = (lock) => lock?.source === 'Ked57/agent-config'
   && Array.isArray(lock.managedFiles)
   && lock.managedFiles.every((file) => typeof file === 'string')
   && new Set(lock.managedFiles).size === lock.managedFiles.length;
+const matchesGlob = (file, glob) => {
+  let pattern = '';
+  for (let index = 0; index < glob.length; index += 1) {
+    const character = glob[index];
+    if (character === '*' && glob[index + 1] === '*') {
+      index += 1;
+      if (glob[index + 1] === '/') { pattern += '(?:.*/)?'; index += 1; }
+      else pattern += '.*';
+    } else if (character === '*') pattern += '[^/]*';
+    else if (character === '?') pattern += '[^/]';
+    else pattern += character.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(`^${pattern}$`).test(file);
+};
 const validateProjectConfig = (value) => {
   const errors = [];
   if (!isRecord(value)) return ['root must be a JSON object'];
@@ -490,6 +527,16 @@ const validateProjectConfig = (value) => {
     for (const [name, commandValue] of Object.entries(value.commands)) {
       if (!name || typeof commandValue !== 'string' || !commandValue.trim()) {
         errors.push(`commands.${name || '<empty>'} must be a non-empty string`);
+        continue;
+      }
+      const scriptCommand = /^(?:npm|pnpm|yarn|bun)\s+run\s+(?:"([^"]+)"|'([^']+)'|([^\s"';&|<>`$]+))$/.exec(commandValue.trim());
+      if (scriptCommand) {
+        const script = scriptCommand[1] ?? scriptCommand[2] ?? scriptCommand[3];
+        if (!Object.hasOwn(scripts, script) || typeof scripts[script] !== 'string' || !scripts[script].trim()) {
+          errors.push(`commands.${name} references missing package script: ${script}`);
+        }
+      } else {
+        console.warn(`Unverified command ${name}: ${commandValue}; check its task-runner contract and execute it separately.`);
       }
     }
   }
@@ -524,6 +571,15 @@ const validateProjectConfig = (value) => {
       }
     }
   }
+  if (errors.length === 0) {
+    for (const file of sourceFiles.filter(verificationInput)) {
+      const name = relative(file).split(path.sep).join('/');
+      const covered = value.routing.some((route) => route.required.length
+        && route.match.some((glob) => matchesGlob(name, glob))
+        && !(route.except ?? []).some((glob) => matchesGlob(name, glob)));
+      if (!covered) errors.push(`No required verification for ${name}; update the project-owned routing map.`);
+    }
+  }
   return errors;
 };
 
@@ -534,6 +590,18 @@ const install = () => {
   const trustedPreviousLock = isTrustedLock(previousLock);
   const ownedManagedFiles = new Set(trustedPreviousLock ? previousLock.managedFiles : []);
   const nextManagedFiles = [];
+  const currentManagedFiles = new Set(managedFiles.filter(([, , enabled]) => enabled).map(([file]) => relative(file)));
+  const obsoleteSkills = [...ownedManagedFiles].filter((file) => !currentManagedFiles.has(file)
+    && /^\.(agents|claude)\/skills\//.test(file.split(path.sep).join('/'))).map((file) => {
+    const parts = file.split(path.sep);
+    if (parts.some((part) => !part || part === '.' || part === '..')
+      || !/^\.(agents|claude)\/skills\/[a-z][a-z0-9-]*\/[a-zA-Z0-9_./-]+$/.test(parts.join('/'))) {
+      throw new Error(`Invalid obsolete skill path: ${file}`);
+    }
+    const destination = target(...parts);
+    assertSafeTarget(destination);
+    return { file, destination };
+  });
 
   const policyBlock = marker('shared-policy', sharedPolicy);
   if (!exists(policyFile)) {
@@ -553,6 +621,16 @@ const install = () => {
   safe = writeBridge(claudeFile, 'claude-bridge', claudeBridgePolicy, '# Claude Code project entry point\n\n') && safe;
   safe = writeBridge(cursorBridgeFile, 'cursor-bridge', cursorBridgePolicy, '---\ndescription: Load shared project agent guidance.\nalwaysApply: true\n---\n\n') && safe;
   safe = writePrettierIgnore() && safe;
+
+  for (const { file, destination } of obsoleteSkills) {
+    if (!exists(destination)) continue;
+    if (previousLock.version === 2 && sha256(read(destination)) === previousLock.hashes[file]) {
+      remove(destination);
+      console.log(`Removed obsolete ${file}`);
+    } else {
+      console.warn(`Preserved obsolete ${file}; no unchanged installed hash proves ownership.`);
+    }
+  }
 
   for (const legacyFile of legacyGeneratedFiles) {
     const name = relative(legacyFile).split(path.sep).join('/');
@@ -603,12 +681,13 @@ const install = () => {
     safe = false;
   } else {
     const lock = {
-      version: 1,
+      version: 2,
       source: 'Ked57/agent-config',
       revision,
       installedAt: new Date().toISOString(),
       detected: { runtime, typescript: isTypeScript, react: isReact, vue: isVue },
-      managedFiles: nextManagedFiles
+      managedFiles: nextManagedFiles,
+      hashes: Object.fromEntries(nextManagedFiles.map((file) => [file, sha256(read(target(file)))]))
     };
     write(lockFile, `${JSON.stringify(lock, null, 2)}\n`);
     console.log(`Wrote ${relative(lockFile)}`);
@@ -721,6 +800,9 @@ const userOperationFor = (file) => {
 const userDestinationForKey = (key) => {
   const current = userStandaloneFiles.find((file) => file.key === key);
   if (current) return current.destination;
+  if (key === 'portable-skill' || key === 'claude:portable-skill') {
+    return path.join(userHome, key.startsWith('claude:') ? '.claude' : '.agents', 'skills', 'fullstack-typescript-quality', 'SKILL.md');
+  }
   const agent = /^(?:(codex|claude|cursor):)?agent:([a-z][a-z0-9-]*)\.(md|toml)$/.exec(key);
   if (agent && agent[3] === (agent[1] === 'codex' ? 'toml' : 'md')) return path.join(agent[1] === 'codex' ? configuredCodexHome : path.join(userHome, `.${agent[1] ?? 'agents'}`), 'agents', `${agent[2]}.${agent[3]}`);
   const policy = /^policy:([a-z][a-z0-9-]*)$/.exec(key);
@@ -801,9 +883,10 @@ const planUser = () => {
     const before = read(destination);
     const isAgent = /^(?:(codex|claude|cursor):)?agent:/.test(key);
     const isPolicy = /^policy:[a-z][a-z0-9-]*$/.test(key);
+    const isSkill = /^(claude:)?skill:/.test(key) || key === 'portable-skill' || key === 'claude:portable-skill';
     const hasMarker = /^(?:# agent-config:managed|<!-- agent-config:managed -->)$/m.test(before.replace(/\r\n/g, '\n'));
     const hashMatches = previous.version === 2 && sha256(before) === previous.hashes[key];
-    const removable = hashMatches && (isPolicy || (isAgent && hasMarker));
+    const removable = hashMatches && (isSkill || isPolicy || (isAgent && hasMarker));
     actions.push({ destination, before, contents: removable ? null : before, action: removable ? 'removed' : 'preserved' });
   }
   const lock = {

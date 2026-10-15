@@ -8,6 +8,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const canonicalTemporaryDirectory = fs.realpathSync(os.tmpdir());
 const cli = path.join(root, 'bin/agent-config.mjs');
 const mattPocockSkills = [
   'ask-matt',
@@ -57,12 +58,15 @@ const modelInvokedJakubKrehelSkills = [
   'better-layout',
   'better-typography',
   'better-ui',
-  'better-writing'
+  'better-writing',
+  'build-design',
+  'technical-drawing'
 ];
 const userInvokedJakubKrehelSkills = [
   'break',
   'explain-interface',
   'interface-review',
+  'state-machine',
   'variant'
 ];
 const jakubKrehelSkills = [
@@ -73,12 +77,15 @@ const jakubKrehelLock = JSON.parse(fs.readFileSync(path.join(root, 'skills/jakub
 const modelInvokedEmilKowalskiSkills = [
   'animate',
   'animate-expo',
+  'animation-performance',
   'animation-vocabulary',
   'apple-design',
   'ask-sonner',
+  'break-ui',
   'emil-design-eng',
   'find-animation-opportunities',
   'improve-animations',
+  'mobile-native',
   'write-swift'
 ];
 const userInvokedEmilKowalskiSkills = [
@@ -94,6 +101,7 @@ const emilKowalskiLock = JSON.parse(fs.readFileSync(path.join(root, 'skills/emil
 const emilKowalskiUpstreamName = (name) => name === 'design-prototype' ? 'prototype' : name;
 const agentBrowserSkills = ['agent-browser'];
 const agentBrowserLock = JSON.parse(fs.readFileSync(path.join(root, 'skills/agent-browser-skills.lock.json'), 'utf8'));
+const tasteSkills = ['design-taste-frontend'];
 const policyPacks = fs.readdirSync(path.join(root, 'policy'))
   .filter((name) => name.endsWith('.md') && name !== 'shared-policy.md')
   .map((name) => name.slice(0, -'.md'.length))
@@ -138,7 +146,7 @@ const normalizedContentSha256 = (file) => crypto.createHash('sha256')
   .digest('hex');
 
 test('installs one personal policy across Codex, Claude Code, and Cursor', () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-user-'));
+  const home = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-user-'));
   const codexPolicy = path.join(home, '.codex/AGENTS.md');
   const claudePolicy = path.join(home, '.claude/CLAUDE.md');
   fs.mkdirSync(path.dirname(codexPolicy), { recursive: true });
@@ -169,7 +177,7 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   }
   assert.ok(!fs.existsSync(path.join(home, '.agents/policy/orchestration.md')));
   assert.ok(!fs.existsSync(path.join(home, '.agents/agents')));
-  assert.match(fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8'), /Changed runnable UI, API, or CLI behavior after implementation → `manual-qa`/);
+  assert.match(fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8'), /implemented runnable UI, API, or CLI change → `manual-qa`/);
   assert.match(fs.readFileSync(path.join(home, '.agents/skills/manual-qa/SKILL.md'), 'utf8'), /Hands-on verification of a running surface/);
 
   const installedClaudePolicy = fs.readFileSync(claudePolicy, 'utf8');
@@ -199,9 +207,9 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   assert.ok(fs.existsSync(path.join(home, '.claude/skills/complexity-audit/SKILL.md')));
   const installedRouting = fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8');
   assert.match(installedRouting, /## 2\. Skill/);
-  assert.match(installedRouting, /Exact visual spec:.*`figma-design-to-code`/s);
-  assert.match(installedRouting, /Original UI:.*`frontend-design`/s);
-  assert.match(installedRouting, /Complexity:.*`complexity-audit`/s);
+  assert.match(installedRouting, /Supplied Figma node,.*exact visual spec → `figma-design-to-code`/);
+  assert.match(installedRouting, /original direction or substantial redesign without one → `frontend-design`/);
+  assert.match(installedRouting, /Complexity or path-count problem → `complexity-audit`/);
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/tdd/SKILL.md')));
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/tdd/tests.md')));
   assert.ok(fs.existsSync(path.join(home, '.agents/skills/tdd/LICENSE.txt')));
@@ -220,6 +228,10 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
     assertInstalledSkillTree(path.join(home, '.agents/skills'), name);
     assertInstalledSkillTree(path.join(home, '.claude/skills'), name);
   }
+  for (const name of tasteSkills) {
+    assertInstalledSkillTree(path.join(home, '.agents/skills'), name);
+    assertInstalledSkillTree(path.join(home, '.claude/skills'), name);
+  }
 
   assert.doesNotThrow(() => runUser(home, 'check'));
   fs.rmSync(userAgentsMd);
@@ -231,7 +243,7 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
 });
 
 test('preserves colliding user-level standalone files', () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-user-collision-'));
+  const home = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-user-collision-'));
   const cursorRule = path.join(home, '.cursor/plugins/local/agent-config/rules/00-agent-config.mdc');
   fs.mkdirSync(path.dirname(cursorRule), { recursive: true });
   fs.writeFileSync(cursorRule, '# My existing Cursor rule\n');
@@ -241,8 +253,8 @@ test('preserves colliding user-level standalone files', () => {
 });
 
 test('honours a custom Codex home for the canonical user policy', () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-user-custom-home-'));
-  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-codex-home-'));
+  const home = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-user-custom-home-'));
+  const codexHome = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-codex-home-'));
   const environment = { ...userEnvironment(home), CODEX_HOME: codexHome };
 
   execFileSync(process.execPath, [cli, 'init', '--user'], {
@@ -266,8 +278,8 @@ test('honours a custom Codex home for the canonical user policy', () => {
 test('refuses to write through a symlinked user configuration path', {
   skip: process.platform === 'win32'
 }, () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-user-symlink-'));
-  const external = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-user-external-'));
+  const home = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-user-symlink-'));
+  const external = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-user-external-'));
   fs.symlinkSync(external, path.join(home, '.agents'));
 
   assert.throws(() => runUser(home, 'init'));
@@ -275,7 +287,7 @@ test('refuses to write through a symlinked user configuration path', {
 });
 
 test('initialises a Vue TypeScript workspace and preserves project-owned routing', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-vue-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-vue-'));
   fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
     dependencies: { vue: '^3.5.0' },
     devDependencies: { typescript: '^5.0.0' },
@@ -317,9 +329,9 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/complexity-audit/SKILL.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/complexity-audit/references/typescript-before-after.md')));
   assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /## 2\. Skill/);
-  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /Exact visual spec:.*`figma-design-to-code`/s);
-  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /Original UI:.*`frontend-design`/s);
-  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /Complexity:.*`complexity-audit`/s);
+  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /Supplied Figma node,.*exact visual spec → `figma-design-to-code`/);
+  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /original direction or substantial redesign without one → `frontend-design`/);
+  assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /Complexity or path-count problem → `complexity-audit`/);
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/tdd/SKILL.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/tdd/tests.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/grilling/SKILL.md')));
@@ -328,6 +340,9 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
     assertInstalledSkillTree(path.join(project, '.agents/skills'), name);
   }
   for (const name of emilKowalskiSkills) {
+    assertInstalledSkillTree(path.join(project, '.agents/skills'), name);
+  }
+  for (const name of tasteSkills) {
     assertInstalledSkillTree(path.join(project, '.agents/skills'), name);
   }
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /# agent-config:begin prettier-ignore/);
@@ -339,7 +354,7 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   assert.equal(config.commands.fast, 'npm run verify:fast');
   assert.ok(!fs.existsSync(path.join(project, '.agents/scripts/agent-check.mjs')));
 
-  fs.writeFileSync(configPath, JSON.stringify({ version: 1, commands: { fast: 'custom fast' }, routing: [] }, null, 2));
+  fs.writeFileSync(configPath, JSON.stringify({ version: 1, commands: { fast: 'custom fast' }, routing: [{ match: ['**/*'], required: ['fast'] }] }, null, 2));
   run(project, 'sync');
   assert.equal(JSON.parse(fs.readFileSync(configPath, 'utf8')).commands.fast, 'custom fast');
 
@@ -358,12 +373,12 @@ test('routing and shared policy resolve without role files', () => {
   assert.doesNotMatch(routing, /orchestration\.md/);
   assert.doesNotMatch(sharedPolicy, /orchestration\.md/);
   assert.match(sharedPolicy, /~\/\.agents\/skills\/manual-qa\/SKILL\.md/);
-  assert.match(routing, /Changed runnable UI, API, or CLI behavior after implementation → `manual-qa`/);
-  assert.match(routing, /Browser automation with the agent-browser CLI → `agent-browser`/);
-  assert.match(routing, /Multi-session build → `to-spec`, then `to-tickets`, then `implement` per ticket\./);
-  assert.match(routing, /`implement-spec`, `retro`, `triage`, `handoff`, `to-questionnaire`, and `wait-what` run only when the user names them/);
-  assert.match(routing, /`code-review` uses the merge-base with the base branch as its fixed point/);
-  assert.match(routing, /\*\*Domain language\*\* \(terms, glossary, ADRs\) → `domain-modeling`/);
+  assert.match(routing, /implemented runnable UI, API, or CLI change → `manual-qa`/);
+  assert.match(routing, /Browser automation → `agent-browser`/);
+  assert.match(routing, /### Explicit workflows/);
+  assert.match(routing, /Run these only when selected by the user/);
+  assert.match(routing, /`code-review`; its procedure owns scope, default-base selection, and standards discovery/);
+  assert.match(routing, /terminology, glossary, or ADR → `domain-modeling`/);
   assert.match(sharedPolicy, /When `tdd` is routed, confirming the seams under test is part of that work/);
   assert.match(sharedPolicy, /When `GLOSSARY.md` or `GLOSSARY-MAP.md` exists, read the entries for this task/);
   assert.ok(!fs.existsSync(path.join(root, 'policy/orchestration.md')));
@@ -379,7 +394,7 @@ test('routing and shared policy resolve without role files', () => {
 });
 
 test('preserves an unmanaged AGENTS.md instead of overwriting it', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-safe-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-safe-'));
   fs.writeFileSync(path.join(project, 'AGENTS.md'), '# Existing project guidance\n');
 
   assert.throws(() => run(project, 'init'));
@@ -387,7 +402,7 @@ test('preserves an unmanaged AGENTS.md instead of overwriting it', () => {
 });
 
 test('runs from a source checkout path containing spaces', () => {
-  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agent config source-'));
+  const temporaryRoot = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent config source-'));
   const spacedSource = path.join(temporaryRoot, 'source checkout');
   const project = path.join(temporaryRoot, 'target workspace');
   fs.cpSync(root, spacedSource, { recursive: true, filter: (entry) => !entry.includes(`${path.sep}.git`) });
@@ -402,7 +417,7 @@ test('runs from a source checkout path containing spaces', () => {
 });
 
 test('preserves colliding unmanaged generated-target files', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-collision-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-collision-'));
   const collision = path.join(project, '.agents/skills/fullstack-typescript-quality/SKILL.md');
   fs.mkdirSync(path.dirname(collision), { recursive: true });
   fs.writeFileSync(collision, '// Project-owned implementation\n');
@@ -426,7 +441,7 @@ test('vendors Matt Pocock skills with licenses and supporting files', () => {
     'manual-qa'
   ]);
   const discovered = fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && !originalSkills.has(entry.name) && !jakubKrehelSkills.includes(entry.name) && !emilKowalskiSkills.includes(entry.name) && !agentBrowserSkills.includes(entry.name))
+    .filter((entry) => entry.isDirectory() && !originalSkills.has(entry.name) && !jakubKrehelSkills.includes(entry.name) && !emilKowalskiSkills.includes(entry.name) && !agentBrowserSkills.includes(entry.name) && !tasteSkills.includes(entry.name))
     .map((entry) => entry.name)
     .sort();
   assert.deepEqual(discovered, [...mattPocockSkills]);
@@ -497,7 +512,7 @@ test('locks every vendored Matt Pocock file and license to its upstream commit',
 test('locks every vendored Jakub Krehel file and license to its upstream commit', () => {
   assert.equal(jakubKrehelLock.version, 1);
   assert.equal(jakubKrehelLock.source, 'https://github.com/jakubkrehel/skills');
-  assert.equal(jakubKrehelLock.commit, '267330e1adfc66a718fb65fa6918c1f06d0a689e');
+  assert.equal(jakubKrehelLock.commit, '4c66b1fa86e9ab70187b43d7da9b6fdb29f2ef63');
   assert.equal(jakubKrehelLock.license.sourcePath, 'LICENSE');
   assert.equal(jakubKrehelLock.license.installedAs, 'LICENSE.txt');
   assert.deepEqual(Object.keys(jakubKrehelLock.skills).sort(), jakubKrehelSkills);
@@ -540,7 +555,7 @@ test('locks every vendored Jakub Krehel file and license to its upstream commit'
 test('locks every vendored Emil Kowalski file and license to its upstream commit', () => {
   assert.equal(emilKowalskiLock.version, 1);
   assert.equal(emilKowalskiLock.source, 'https://github.com/emilkowalski/skills');
-  assert.equal(emilKowalskiLock.commit, 'd23d7f88a2e21c9e4b1418c7abe420f5c1052ba7');
+  assert.equal(emilKowalskiLock.commit, '2d228630ba1446365f614a108cb8252f1feda202');
   assert.equal(emilKowalskiLock.license.sourcePath, 'LICENSE');
   assert.equal(emilKowalskiLock.license.installedAs, 'LICENSE.txt');
   assert.deepEqual(Object.keys(emilKowalskiLock.skills).sort(), emilKowalskiSkills);
@@ -630,6 +645,37 @@ test('locks the vendored agent-browser discovery skill and license to its upstre
   }
 });
 
+test('locks Taste Skill with supporting files and explicit invocation', () => {
+  const lock = JSON.parse(fs.readFileSync(path.join(root, 'skills/taste-skills.lock.json'), 'utf8'));
+  assert.equal(lock.version, 1);
+  assert.equal(lock.source, 'https://github.com/Leonxlnx/taste-skill');
+  assert.equal(lock.commit, 'f624f37a8c650b9cc550253104925efe4c8de246');
+  assert.equal(lock.license.sourcePath, 'LICENSE');
+  assert.equal(lock.license.installedAs, 'LICENSE.txt');
+  assert.deepEqual(Object.keys(lock.skills), tasteSkills);
+
+  const directory = path.join(root, 'skills/design-taste-frontend');
+  const lockedSkill = lock.skills['design-taste-frontend'];
+  assert.equal(lockedSkill.upstreamPath, 'skills/taste-skill');
+  const files = Object.keys(lockedSkill.files).sort();
+  assert.deepEqual(listFiles(directory).map((file) => file.split(path.sep).join('/')).sort(),
+    [...files, lock.license.installedAs].sort());
+  for (const file of files) {
+    assert.equal(normalizedContentSha256(path.join(directory, file)), lockedSkill.files[file], `Taste Skill drifted: ${file}`);
+  }
+  assert.equal(normalizedContentSha256(path.join(directory, lock.license.installedAs)), lock.license.normalizedSha256);
+  assert.match(fs.readFileSync(path.join(directory, 'LICENSE.txt'), 'utf8'), /Copyright \(c\) 2026 Leonxlnx/);
+  for (const file of ['scripts/draw.mjs', 'scripts/inspect.mjs', 'scripts/assets.mjs', 'scripts/lint.mjs',
+    'scripts/lib/cdp.mjs', 'library/directions.json', 'references/critique.md', 'assets/base.css']) {
+    assert.ok(files.includes(file), `missing Taste Skill support file ${file}`);
+  }
+  const skill = fs.readFileSync(path.join(directory, 'SKILL.md'), 'utf8');
+  assert.match(skill, /^name: design-taste-frontend$/m);
+  assert.match(skill, /^disable-model-invocation: true$/m);
+  assert.match(fs.readFileSync(path.join(directory, 'agents/openai.yaml'), 'utf8'), /allow_implicit_invocation: false/);
+  assert.match(fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8'), /### Explicit workflows[\s\S]*`design-taste-frontend` \(also selected by the name Taste Skill\)/);
+});
+
 test('keeps Jakub Krehel model and user invocation boundaries', () => {
   for (const name of modelInvokedJakubKrehelSkills) {
     const skill = fs.readFileSync(path.join(root, 'skills', name, 'SKILL.md'), 'utf8');
@@ -643,6 +689,27 @@ test('keeps Jakub Krehel model and user invocation boundaries', () => {
     const openAiMetadata = fs.readFileSync(path.join(root, 'skills', name, 'agents/openai.yaml'), 'utf8');
     assert.equal((skill.match(/^disable-model-invocation: true$/gm) ?? []).length, 1, `${name} must remain user-invoked`);
     assert.equal((openAiMetadata.match(/^\s*allow_implicit_invocation: false$/gm) ?? []).length, 1, `${name} must reject implicit invocation`);
+  }
+});
+
+test('routing registers every skill and respects both clients explicit-only metadata', () => {
+  const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
+  const [automatic, tail] = routing.split('### Explicit workflows');
+  assert.ok(tail, 'an explicit-only registry must exist');
+  const explicit = tail.split('## 3.')[0];
+  const skillNames = fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  const registered = new Set([...automatic.matchAll(/`([a-z][a-z0-9-]+)`/g)].map((match) => match[1]));
+  for (const name of skillNames) {
+    const skill = fs.readFileSync(path.join(root, 'skills', name, 'SKILL.md'), 'utf8');
+    const metadataPath = path.join(root, 'skills', name, 'agents/openai.yaml');
+    const metadata = fs.existsSync(metadataPath) ? fs.readFileSync(metadataPath, 'utf8') : '';
+    const manual = /^disable-model-invocation: true$/m.test(skill) || /allow_implicit_invocation:\s*false/.test(metadata);
+    assert.equal(registered.has(name), !manual, `${name} must belong to the matching invocation registry`);
+    assert.equal(explicit.includes('`' + name + '`'), manual, `${name} explicit registry drifted`);
+  }
+  for (const name of [...registered, ...[...explicit.matchAll(/`([a-z][a-z0-9-]+)`/g)].map((match) => match[1])]) {
+    assert.ok(skillNames.includes(name), `router references missing skill ${name}`);
   }
 });
 
@@ -660,32 +727,14 @@ test('keeps Emil Kowalski model and user invocation boundaries', () => {
 
 test('routes interface skills at precise task boundaries', () => {
   const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
-
-  for (const route of [
-    /- Cross-discipline audit of an existing screen, flow, or repository → `better-interface`\./,
-    /- Semantic HTML, keyboard or focus behaviour, forms, or assistive technology → `better-accessibility`\./,
-    /- Palettes, color tokens or formats, or measured contrast → `better-colors`\./,
-    /- Grouping, alignment, spacing, responsive structure, or spatial RTL → `better-layout`\./,
-    /- Type systems, fonts, wrapping, truncation, or rendered text → `better-typography`\./,
-    /- Surfaces, icons, or visual polish → `better-ui`\./,
-    /- Building web animation or motion → `animate`\./,
-    /- Building React Native or Expo motion → `animate-expo`\./,
-    /- Searching an interface for places that should animate → `find-animation-opportunities`\./,
-    /- Auditing existing motion and producing implementation plans → `improve-animations`\./,
-    /- Naming a motion effect from a vague description → `animation-vocabulary`\./,
-    /- Apple-style fluid motion, springs, or gesture-driven UI → `apple-design`\./,
-    /- Working with Sonner toasts → `ask-sonner`\./,
-    /- Writing, reviewing, or migrating Swift → `write-swift`\./,
-    /- Design-engineering craft, animation taste, or the details that make UI feel right → `emil-design-eng`\./,
-    /- Product copy, labels, errors, empty states, or voice → `better-writing`\./
-  ]) assert.match(routing, route);
-  assert.match(routing, /`better-interface` owns review orchestration only; implementation and remediation route to the focused/s);
-  assert.match(routing, /A branch, pull request, commit range, or working-tree review.*starts only when the user explicitly invokes `interface-review`.*hands the cross-discipline audit to `better-interface`/s);
-  assert.match(routing, /`break`, `explain-interface`, `interface-review`, and `variant` are explicitly user-invoked/);
-  assert.match(routing, /`review-animations`,\s*`pick-ui-library`, and `design-prototype` are the same/);
-  assert.match(routing, /`frontend-design` remains the.*original visual direction or substantial redesign/s);
-  assert.match(routing, /`figma-design-to-code` remains the.*faithful implementation of a supplied.*Figma node or other exact visual spec/s);
-  assert.match(routing, /building motion routes to `animate` or `animate-expo`/);
+  const automatic = routing.split('### Explicit workflows')[0];
+  assert.match(automatic, /exact visual spec → `figma-design-to-code` \(load `build-design` for design-file token mapping\); original direction or substantial redesign without one → `frontend-design`/);
+  assert.match(automatic, /Existing-interface audit → `better-interface`; this owner orchestrates review and delegates implementation/);
+  assert.match(automatic, /Interface implementation → choose `better-accessibility`, `better-colors`, `better-layout`, `better-typography`, `better-ui`, or `better-writing`/);
+  assert.match(automatic, /Build web motion → `animate`; build Expo\/React Native motion → `animate-expo`/);
+  assert.match(automatic, /motion opportunities → `find-animation-opportunities`; motion roadmap → `improve-animations`/);
+  assert.match(automatic, /Motion terminology → `animation-vocabulary`; Apple-style interaction → `apple-design`; Sonner → `ask-sonner`; Swift → `write-swift`; design-engineering craft → `emil-design-eng`/);
+  assert.match(routing, /### Explicit workflows[\s\S]*`interface-review`/);
   assert.doesNotMatch(routing, /spawn the Designer/);
   assert.doesNotMatch(routing, /~\/\.agents\/agents\//);
 });
@@ -712,9 +761,9 @@ test('frontend skills keep distinct triggers and required completion contracts',
   assert.match(examples, /Every Layout/);
 
   assert.match(routing, /## 2\. Skill/);
-  assert.match(routing, /Exact visual spec:.*`figma-design-to-code`/s);
-  assert.match(routing, /Original UI:.*`frontend-design`/s);
-  assert.match(routing, /Complexity:.*`complexity-audit`/s);
+  assert.match(routing, /Supplied Figma node,.*exact visual spec → `figma-design-to-code`/);
+  assert.match(routing, /original direction or substantial redesign without one → `frontend-design`/);
+  assert.match(routing, /Complexity or path-count problem → `complexity-audit`/);
 });
 
 test('complexity-audit requires tool metrics and behaviour-preserving reduction', () => {
@@ -744,7 +793,7 @@ test('fullstack-typescript-static requires persistent complexity gates', () => {
 });
 
 test('preserves a colliding project-owned lock file', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-lock-collision-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-lock-collision-'));
   const lock = path.join(project, '.agents/agent-config.lock.json');
   fs.mkdirSync(path.dirname(lock), { recursive: true });
   fs.writeFileSync(lock, JSON.stringify({ projectOwned: true }, null, 2));
@@ -754,7 +803,7 @@ test('preserves a colliding project-owned lock file', () => {
 });
 
 test('does not mistake a similarly named prettier-ignore block for its own', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-prettier-collision-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-prettier-collision-'));
   const prettierIgnore = path.join(project, '.prettierignore');
   fs.writeFileSync(prettierIgnore, '# agent-config:begin prettier-ignore-custom\nKEEP-ME\n# agent-config:end prettier-ignore-custom\n');
 
@@ -763,10 +812,11 @@ test('does not mistake a similarly named prettier-ignore block for its own', () 
 });
 
 test('migrates lock-owned legacy Cursor rules to shared policy packs', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-legacy-rules-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-legacy-rules-'));
   fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
     dependencies: { vue: '^3.5.0' },
-    devDependencies: { typescript: '^5.0.0' }
+    devDependencies: { typescript: '^5.0.0' },
+    scripts: { test: 'node --test' }
   }, null, 2));
   fs.writeFileSync(path.join(project, 'tsconfig.json'), '{}');
   fs.mkdirSync(path.join(project, 'src/domain'), { recursive: true });
@@ -805,7 +855,7 @@ test('migrates lock-owned legacy Cursor rules to shared policy packs', () => {
 });
 
 test('preserves legacy Cursor rules not owned by a trusted lock', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-unowned-legacy-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-unowned-legacy-'));
   const legacyRule = path.join(project, '.cursor/rules/10-agent-config-typescript.mdc');
   fs.mkdirSync(path.dirname(legacyRule), { recursive: true });
   fs.writeFileSync(legacyRule, '# Project-owned legacy rule\n');
@@ -816,7 +866,7 @@ test('preserves legacy Cursor rules not owned by a trusted lock', () => {
 });
 
 test('preserves matching legacy content when the lock lacks a complete trusted shape', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-partial-lock-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-partial-lock-'));
   const legacyRule = path.join(project, '.cursor/rules/10-agent-config-typescript.mdc');
   fs.mkdirSync(path.dirname(legacyRule), { recursive: true });
   fs.copyFileSync(path.join(root, 'tests/fixtures/legacy-typescript.mdc'), legacyRule);
@@ -833,7 +883,7 @@ test('preserves matching legacy content when the lock lacks a complete trusted s
 });
 
 test('falls back to individual quality checks and detects pnpm', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-pnpm-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-pnpm-'));
   fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
     packageManager: 'pnpm@10.0.0',
     devDependencies: { typescript: '^5.0.0' },
@@ -855,8 +905,53 @@ test('falls back to individual quality checks and detects pnpm', () => {
   assert.deepEqual(new Set(config.routing[0].required), new Set(['unit', 'lint', 'typecheck']));
 });
 
+test('routes module extensions, tests, root tooling and package-local React through real gates', () => {
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-file-routing-'));
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({ scripts: {
+    typecheck: 'tsc --noEmit', test: 'node --test', build: 'vite build', 'verify:full': 'npm test'
+  } }));
+  fs.writeFileSync(path.join(project, 'tool.cts'), 'export {};\n');
+  fs.mkdirSync(path.join(project, 'packages/web/src'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'packages/web/package.json'), JSON.stringify({ dependencies: { react: '*' } }));
+  for (const file of ['module.mts', 'module.test.ts', 'App.tsx']) {
+    fs.writeFileSync(path.join(project, 'packages/web/src', file), 'export {};\n');
+  }
+  run(project, 'init');
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/react.md')));
+  const config = JSON.parse(fs.readFileSync(path.join(project, '.agents/agent-config.json'), 'utf8'));
+  const typescript = config.routing.find((route) => route.match.includes('**/*.mts'));
+  assert.ok(typescript, 'MTS must have a TypeScript verification route');
+  assert.ok(typescript.match.includes('**/*.cts'));
+  assert.ok(!typescript.except, 'test files must retain TypeScript checks');
+  const baseline = config.routing.find((route) => route.match.includes('**/*'));
+  assert.ok(baseline.required.includes('full'), 'the full gate must be required when available');
+  run(project, 'check');
+  config.routing = [];
+  fs.writeFileSync(path.join(project, '.agents/agent-config.json'), JSON.stringify(config));
+  assert.throws(() => run(project, 'check'), /No required verification.*tool\.cts/s);
+});
+
+test('check rejects removed package scripts and identifies unverified custom commands', () => {
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-script-validation-'));
+  const manifest = path.join(project, 'package.json');
+  fs.writeFileSync(manifest, JSON.stringify({ scripts: { typecheck: 'tsc --noEmit', test: 'node --test' } }));
+  fs.writeFileSync(path.join(project, 'module.ts'), 'export {};\n');
+  run(project, 'init');
+  run(project, 'check');
+  fs.writeFileSync(manifest, JSON.stringify({ scripts: { test: 'node --test' } }));
+  assert.throws(() => run(project, 'check'), /missing package script.*typecheck/s);
+  fs.writeFileSync(manifest, JSON.stringify({ scripts: { typecheck: 'tsc --noEmit', test: 'node --test' } }));
+  const configFile = path.join(project, '.agents/agent-config.json');
+  const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+  config.commands.typecheck = 'custom-check-types';
+  fs.writeFileSync(configFile, JSON.stringify(config));
+  const checked = spawnSync(process.execPath, [cli, 'check', '--project', project], { encoding: 'utf8' });
+  assert.equal(checked.status, 0, checked.stderr);
+  assert.match(checked.stderr, /Unverified command.*custom-check-types/);
+});
+
 test('check rejects an invalid project-owned routing file', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-invalid-routing-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-invalid-routing-'));
   run(project, 'init');
   const configFile = path.join(project, '.agents/agent-config.json');
   fs.writeFileSync(configFile, '{ definitely not json');
@@ -873,7 +968,7 @@ test('check rejects an invalid project-owned routing file', () => {
 });
 
 test('check rejects incomplete lock ownership metadata', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-invalid-lock-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-invalid-lock-'));
   run(project, 'init');
   const lockFile = path.join(project, '.agents/agent-config.lock.json');
   const lock = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
@@ -886,10 +981,10 @@ test('check rejects incomplete lock ownership metadata', () => {
 test('refuses to write through a symlinked managed target', {
   skip: process.platform === 'win32'
 }, () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-symlink-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-symlink-'));
   run(project, 'init');
   const skill = path.join(project, '.agents/skills/fullstack-typescript-quality/SKILL.md');
-  const externalFile = path.join(os.tmpdir(), `agent-config-external-${crypto.randomUUID()}.md`);
+  const externalFile = path.join(canonicalTemporaryDirectory, `agent-config-external-${crypto.randomUUID()}.md`);
   fs.writeFileSync(externalFile, 'project-external content');
   fs.unlinkSync(skill);
   fs.symlinkSync(externalFile, skill);
@@ -911,7 +1006,7 @@ test('rejects unknown commands and accepts options before the command', () => {
   });
   assert.notEqual(conflictingScopes.status, 0);
 
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-option-order-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-option-order-'));
   const output = execFileSync(process.execPath, [cli, '--project', project, 'status'], {
     cwd: root,
     encoding: 'utf8'
@@ -920,7 +1015,7 @@ test('rejects unknown commands and accepts options before the command', () => {
 });
 
 test('installs React guidance only when React source exists', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-react-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-react-'));
   fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
     dependencies: { react: '^19.0.0', 'react-dom': '^19.0.0' },
     devDependencies: { typescript: '^5.0.0' }
@@ -938,7 +1033,7 @@ test('installs React guidance only when React source exists', () => {
 });
 
 test('does not install framework packs from dependencies alone', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-no-framework-source-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-no-framework-source-'));
   fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
     dependencies: { react: '^19.0.0', vue: '^3.5.0' },
     devDependencies: { typescript: '^5.0.0' }
@@ -956,7 +1051,7 @@ test('does not install framework packs from dependencies alone', () => {
 });
 
 test('detects Vue TypeScript source under apps/ monorepo layouts', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-config-apps-mono-'));
+  const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-apps-mono-'));
   fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
     dependencies: { vue: '^3.5.0', primevue: '^4.0.0' },
     devDependencies: { typescript: '^5.0.0' },

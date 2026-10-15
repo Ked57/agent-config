@@ -23,6 +23,11 @@ The same fidelity contract applies when the source of truth is not Figma: a desi
 
 ## Inspect the application
 
+For a design file, load `~/.agents/skills/build-design/SKILL.md` for its token/component
+mapping recipe. This skill owns integration, implied interaction states, accessibility,
+and completion when the recipe conflicts; preserve the supplied spec and report
+unresolved design-system conflicts.
+
 Before implementation, identify the target framework, routing and data patterns, styling system, component library, design tokens, typography, asset conventions, and relevant verification commands. Inspect the nearest existing screens and components.
 
 Build a mapping from spec elements to repository primitives. Apply evidence in this order when available:
