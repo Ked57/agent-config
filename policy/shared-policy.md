@@ -8,7 +8,8 @@ in a project `AGENTS.md`.
    directly with what routing loaded.
 
 Paths are user-scoped; a project-scoped install carries the same files under `.agents/` in
-the repository root. Use whichever exists.
+the repository root. Prefer the project install when present and resolve all pointers in
+that scope; otherwise use the user install.
 
 # Core completion contract
 

@@ -66,7 +66,7 @@ node bin/agent-config.mjs check --user
 
 The dry run previews file diffs and action counts without changing the installation.
 `check --user` detects missing, modified, and obsolete managed files. Sync removes
-obsolete leftover role files, dropped policy packs, and native wrappers only when the prior ownership lock
+obsolete skill files, leftover role files, dropped policy packs, and native wrappers only when the prior ownership lock
 and content hash prove they are unchanged installer output; locally modified obsolete
 files are preserved.
 Preserved obsolete files become unmanaged after sync. Legacy locks without content
@@ -110,6 +110,7 @@ CLAUDE.md                                  thin Claude Code bridge to AGENTS.md
 .agents/policy/domain-module.md            domain work, when the convention is detected
 .agents/policy/vue-primevue.md             Vue work, when detected
 .agents/skills/<portable-skill>/
+.claude/skills/<portable-skill>/             managed native Claude registrations
 .agents/agent-config.json                  project-owned command/routing map
 .agents/agent-config.lock.json
 .prettierignore                            managed ignore block for generated guidance
@@ -133,6 +134,24 @@ Project sessions read `.agents/agent-config.json` directly to identify the verif
 commands relevant to their changed files. `check` validates this file's structure,
 command references, managed content, and lock ownership metadata.
 
+Generated routing covers module extensions (`.mts` and `.cts` included), test files,
+tooling and configuration through a baseline route, and adds framework-specific checks.
+The baseline requires the existing `verify:full` gate when present, otherwise the build
+when available, alongside fast checks. Root source and package-local React dependencies
+are detected. An existing routing map remains project-owned: update it deliberately
+when `check` reports source/configuration files without required verification.
+
+`check` verifies direct `npm|pnpm|yarn|bun run <script>` references against the root
+package scripts and reports other task-runner commands as unverified. It does not execute
+those commands. Routing globs support `**`, `*` and `?`; `**/*` also matches root files.
+Execute the required gates separately before declaring a product change complete.
+
+Project locks now record per-file hashes. Sync removes obsolete `.agents/skills/` and
+`.claude/skills/` files only when their prior installed hashes still match, preserving
+local edits and unrelated files. Version 1 project locks migrate without deleting
+unhashed obsolete output; a fresh hash-bearing installation is needed to prove later
+cleanup safe. Preserved obsolete files become unmanaged after synchronization.
+
 ## Leftover native agents
 
 This repository does not ship shared roles or native harness wrappers. `sync --user`
@@ -149,14 +168,17 @@ documented in the [Codex](adapters/codex/README.md),
 The installer copies every `skills/<name>/` directory that contains a `SKILL.md`. That
 includes this repository's frontend, quality, and manual-qa skills, plus skills vendored under the
 MIT License from [`mattpocock/skills` at commit `49dd158`](https://github.com/mattpocock/skills/tree/49dd158d1076134a641b33efb035946536778336),
-[`jakubkrehel/skills` at commit `267330e`](https://github.com/jakubkrehel/skills/tree/267330e1adfc66a718fb65fa6918c1f06d0a689e),
-and [`emilkowalski/skills` at commit `d23d7f8`](https://github.com/emilkowalski/skills/tree/d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7),
+[`jakubkrehel/skills` at commit `4c66b1f`](https://github.com/jakubkrehel/skills/tree/4c66b1fa86e9ab70187b43d7da9b6fdb29f2ef63),
+and [`emilkowalski/skills` at commit `2d22863`](https://github.com/emilkowalski/skills/tree/2d228630ba1446365f614a108cb8252f1feda202),
 and the Apache-2.0 discovery stub from
 [`vercel-labs/agent-browser` at commit `72007a6`](https://github.com/vercel-labs/agent-browser/tree/72007a6788d863611b23bed0b59d0d659c638d8e).
+Taste Skill's default v2 skill is vendored under the MIT License from
+[`Leonxlnx/taste-skill` at commit `f624f37`](https://github.com/Leonxlnx/taste-skill/tree/f624f37a8c650b9cc550253104925efe4c8de246).
 Each vendored skill keeps its original files and a `LICENSE.txt`; the pinned upstream
-inventory and normalized-content hashes are recorded in
+inventory, normalized-content hashes, and intentional local adaptations are recorded in
 `skills/mattpocock-skills.lock.json`, `skills/jakubkrehel-skills.lock.json`,
-`skills/emilkowalski-skills.lock.json`, and `skills/agent-browser-skills.lock.json`.
+`skills/emilkowalski-skills.lock.json`, `skills/agent-browser-skills.lock.json`, and
+`skills/taste-skills.lock.json`.
 
 Run `setup-matt-pocock-skills` once in a repository before using the engineering
 workflow skills (issue tracker, triage labels, and domain-doc layout). Domain docs
@@ -165,13 +187,16 @@ are `GLOSSARY.md` and ADRs; rename an existing `CONTEXT.md` or `CONTEXT-MAP.md` 
 skills; `policy/routing.md` carries the agent-side task type → skill mapping so agents
 route without invoking it.
 
-Jakub Krehel's seven model-invoked skills cover existing-interface work by discipline:
+Jakub Krehel's model-invoked skills cover interface work and technical drawings:
 `better-interface` for cross-discipline audits, plus
 `better-accessibility`, `better-colors`, `better-layout`, `better-typography`, `better-ui`,
-and `better-writing` for focused work. The four named workflows are user-invoked only:
+and `better-writing` for focused work. `build-design` supplies the design-file token
+mapping recipe under `figma-design-to-code`; `technical-drawing` builds physical-object
+drawings with a standalone viewer and exports. Five named workflows are user-invoked only:
 `break` stress-tests one component, `explain-interface` explains how a site or effect was
 built, `interface-review` scopes a review to a branch, pull request, range, or working
-tree, and `variant` builds alternatives behind a picker.
+tree, `variant` builds alternatives behind a picker, and `state-machine` provides an
+interactive component-state workbench.
 
 These skills improve or inspect an existing interface. `frontend-design` still owns
 original visual direction and substantial redesign without a supplied source-of-truth
@@ -184,15 +209,40 @@ Emil Kowalski's model-invoked skills cover motion and design-engineering craft:
 `find-animation-opportunities` for hunting places that should move,
 `improve-animations` for auditing existing motion, `animation-vocabulary` for naming
 effects, `apple-design` for Apple-style fluid interfaces, `ask-sonner` for Sonner, and
-`write-swift` for Swift. The three named workflows are user-invoked only:
+`write-swift` for Swift. `animation-performance` diagnoses dropped frames,
+`mobile-native` handles mobile-web platform behaviour, and `break-ui` tests realistic
+worst-case data behind a toggle. The three named workflows are user-invoked only:
 `review-animations` reviews motion against a strict bar, `pick-ui-library` picks from a
 curated library list, and `design-prototype` (Emil's `prototype`, renamed to sit beside
 Matt Pocock's `prototype`) builds picker-based UI variants. Jakub Krehel's `variant`
-remains the interface-review picker workflow.
+remains the interface-review picker workflow. The `break-ui` reference to Emil's
+`prototype` is adapted to `design-prototype` too; both adaptations are recorded in the
+Emil lock. The technical-drawing skill declares a CommonJS package scope so its bundled
+Node checks run inside ESM projects; its four upstream regression scripts run in this
+repository's test suite. Upstream initial-response prompts apply only to invocations without a task;
+requests with a concrete target proceed through the skill's workflow.
 
 `agent-browser` is the installed discovery stub for the agent-browser CLI. Usage
 instructions stay in the CLI (`agent-browser skills get core`) so they match the
 installed binary. `manual-qa` loads that stub for browser UI.
+
+`code-review` carries a local adaptation: its scope resolver selects a committed range,
+staged changes, unstaged changes, or both working-tree patches plus untracked files. With
+no supplied scope it selects local changes when present, otherwise the base branch's
+merge-base. Its installed `scripts/review-scope.mjs` resolves the scope once for both
+reviewers; its procedure and helper hashes are recorded in the Matt Pocock lock.
+
+Invoke `design-taste-frontend` (Taste Skill) explicitly for landing pages, marketing
+sites, portfolios and product pages. Its full default skill includes direction libraries,
+references, starter assets, source linting and browser inspection scripts. It requires
+Node 22+ and Chrome, Edge or Chromium for the inspector; image search requires network
+access. Other Taste Skill variants are not bundled. Automatic routing still uses
+`frontend-design`, `figma-design-to-code` and the focused interface skills.
+
+Local adaptations are limited to the skill's frontmatter (a concise description and
+`disable-model-invocation: true`) and `agents/openai.yaml` (implicit invocation disabled
+for Codex). The lock records the installed content hashes, including these adaptations;
+the upstream skill body and supporting files are unchanged.
 
 ## Routing and skills
 

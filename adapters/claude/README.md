@@ -24,6 +24,10 @@ workspace-local `AGENTS.md`, whose managed block carries the same "Start here" s
 routing pack, conditional policy packs, and skills are mirrored under `.agents/`
 alongside quality routing. Commit these project files.
 
+Project installs also create managed `.claude/skills/<name>/` copies for native Claude
+skill discovery. `.agents/skills/` remains the portable location for policy pointers;
+the importer accepting that directory is distinct from Claude's native discovery root.
+
 Claude-specific settings and native hook registrations remain in `.claude/`.
 When adding a Claude hook, make it call the project-owned verification command from
 `.agents/agent-config.json`; do not duplicate policy in the hook body.

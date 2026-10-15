@@ -14,6 +14,7 @@ Owned by `fullstack-typescript-quality`, which loads this skill for test and cov
 - Cypress Component Testing plus Testing Library for `.tsx` / `.vue` component behaviour.
 - One owner per behaviour: keep the same component behaviour out of both Vitest and Cypress CT by default.
 - Cypress E2E only for critical complete user journeys.
+- For changed async UI, resolve controllable responses in reverse order and assert that stale work cannot overwrite the current result; cover unmount/remount where work or integrations outlive a render, proving one active handler/subscription and no obsolete update. Use the existing designated runner.
 
 ## Coverage
 

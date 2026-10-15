@@ -7,9 +7,10 @@ import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import test from 'node:test';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const temporaryRoot = fs.realpathSync(os.tmpdir());
 const put = (file, value) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, value); };
 function fixture(t) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'native-agents-'));
+  const directory = fs.mkdtempSync(path.join(temporaryRoot, 'native-agents-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const repo = path.join(directory, 'repo');
   const home = path.join(directory, 'home');
@@ -43,6 +44,102 @@ test('synchronizes policy without installing shared roles', (t) => {
   put(path.join(home, '.agents/policy/routing.md'), '# changed\n');
   assert.notEqual(run('check').status, 0);
   ok(run('sync'));
+  ok(run('check'));
+});
+
+test('sync removes unchanged obsolete skill files and preserves local edits', (t) => {
+  const { repo, home, run } = fixture(t);
+  put(path.join(repo, 'skills/obsolete/SKILL.md'), '---\nname: obsolete\ndescription: Fixture\n---\nOld skill\n');
+  put(path.join(repo, 'skills/obsolete/guide.md'), 'Old guide\n');
+  put(path.join(repo, 'skills/retained/SKILL.md'), '---\nname: retained\ndescription: Fixture\n---\nRetained skill\n');
+  put(path.join(repo, 'skills/retained/removed.md'), 'Removed support file\n');
+  ok(run('init'));
+  for (const client of ['.agents', '.claude']) {
+    put(path.join(home, client, 'skills/obsolete/notes.md'), 'User notes\n');
+    put(path.join(home, client, 'skills/obsolete/guide.md'), 'Locally edited guide\n');
+  }
+  fs.rmSync(path.join(repo, 'skills/obsolete'), { recursive: true });
+  fs.unlinkSync(path.join(repo, 'skills/retained/removed.md'));
+  assert.notEqual(run('check').status, 0);
+  const preview = run('sync', ['--dry-run']);
+  ok(preview);
+  assert.match(preview.stdout.trim().split('\n').at(-1), /removed=4/);
+  for (const client of ['.agents', '.claude']) assert.ok(fs.existsSync(path.join(home, client, 'skills/obsolete/SKILL.md')));
+  const result = run('sync');
+  ok(result);
+  assert.match(result.stdout, /preserved=2/);
+  for (const client of ['.agents', '.claude']) {
+    assert.ok(!fs.existsSync(path.join(home, client, 'skills/obsolete/SKILL.md')));
+    assert.ok(!fs.existsSync(path.join(home, client, 'skills/retained/removed.md')));
+    assert.equal(fs.readFileSync(path.join(home, client, 'skills/obsolete/guide.md'), 'utf8'), 'Locally edited guide\n');
+    assert.equal(fs.readFileSync(path.join(home, client, 'skills/obsolete/notes.md'), 'utf8'), 'User notes\n');
+  }
+  ok(run('check'));
+  assert.match(run('sync').stdout, /created=0 updated=0 removed=0/);
+});
+
+test('project sync removes only hash-proven obsolete skill output', (t) => {
+  const { repo, home, directory } = fixture(t);
+  const project = path.join(directory, 'project');
+  fs.mkdirSync(project);
+  put(path.join(repo, 'skills/obsolete/SKILL.md'), '---\nname: obsolete\ndescription: Fixture\n---\nOld skill\n');
+  put(path.join(repo, 'skills/obsolete/guide.md'), 'Original guide\n');
+  const run = (command) => spawnSync(process.execPath, [path.join(repo, 'bin/agent-config.mjs'), command, '--project', project], {
+    env: { ...process.env, HOME: home, USERPROFILE: home }, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024
+  });
+  ok(run('init'));
+  assert.ok(!fs.existsSync(path.join(home, '.claude/skills')), 'global skills must not mask project discovery');
+  for (const client of ['.agents', '.claude']) {
+    assert.equal(fs.readFileSync(path.join(project, client, 'skills/obsolete/SKILL.md'), 'utf8'),
+      fs.readFileSync(path.join(repo, 'skills/obsolete/SKILL.md'), 'utf8'));
+    put(path.join(project, client, 'skills/obsolete/guide.md'), 'Local guide\n');
+    put(path.join(project, client, 'skills/obsolete/user.md'), 'User file\n');
+  }
+  fs.rmSync(path.join(repo, 'skills/obsolete'), { recursive: true });
+  assert.notEqual(run('check').status, 0);
+  ok(run('sync'));
+  for (const client of ['.agents', '.claude']) {
+    assert.ok(!fs.existsSync(path.join(project, client, 'skills/obsolete/SKILL.md')));
+    assert.equal(fs.readFileSync(path.join(project, client, 'skills/obsolete/guide.md'), 'utf8'), 'Local guide\n');
+    assert.equal(fs.readFileSync(path.join(project, client, 'skills/obsolete/user.md'), 'utf8'), 'User file\n');
+  }
+  ok(run('check'));
+  ok(run('sync'));
+});
+
+test('skill cleanup preserves legacy unhashed output and rejects poisoned project paths', (t) => {
+  const { repo, home, directory } = fixture(t);
+  const project = path.join(directory, 'project');
+  fs.mkdirSync(project);
+  put(path.join(repo, 'skills/legacy/SKILL.md'), '---\nname: legacy\ndescription: Fixture\n---\nLegacy skill\n');
+  const run = (command) => spawnSync(process.execPath, [path.join(repo, 'bin/agent-config.mjs'), command, '--project', project], {
+    env: { ...process.env, HOME: home, USERPROFILE: home }, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024
+  });
+  ok(run('init'));
+  const lockFile = path.join(project, '.agents/agent-config.lock.json');
+  const lock = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+  lock.version = 1;
+  delete lock.hashes;
+  put(lockFile, JSON.stringify(lock));
+  fs.rmSync(path.join(repo, 'skills/legacy'), { recursive: true });
+  ok(run('sync'));
+  assert.ok(fs.existsSync(path.join(project, '.agents/skills/legacy/SKILL.md')));
+  const after = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+  assert.equal(after.version, 2);
+  after.managedFiles.push('.agents/skills/obsolete/../../outside.md');
+  after.hashes['.agents/skills/obsolete/../../outside.md'] = 'a'.repeat(64);
+  put(lockFile, JSON.stringify(after));
+  const before = snapshot(project);
+  assert.notEqual(run('sync').status, 0);
+  assert.deepEqual(snapshot(project), before);
+});
+
+test('user cleanup handles the original portable-skill ownership keys', (t) => {
+  const { repo, home, run } = fixture(t);
+  ok(run('init'));
+  fs.rmSync(path.join(repo, 'skills/fullstack-typescript-quality'), { recursive: true });
+  ok(run('sync'));
+  for (const client of ['.agents', '.claude']) assert.ok(!fs.existsSync(path.join(home, client, 'skills/fullstack-typescript-quality/SKILL.md')));
   ok(run('check'));
 });
 
