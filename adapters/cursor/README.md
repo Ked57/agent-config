@@ -36,8 +36,10 @@ committed.
 
 ## Skills
 
-This installer does not write native Cursor agent files. Procedures live in
-`~/.agents/skills/<name>/SKILL.md`. Edit the corresponding source under `skills/`, then
-run `node bin/agent-config.mjs sync --user --dry-run` to inspect the changes before
-syncing. See [Cursor subagents](https://cursor.com/docs/subagents) if you register a
-native Cursor agent yourself.
+Procedures live in `~/.agents/skills/<name>/SKILL.md`. Edit the corresponding source
+under `skills/`, then run `node bin/agent-config.mjs sync --user --dry-run` to inspect
+the changes before syncing. The installer also writes one Cursor supervisor,
+`~/.cursor/agents/codex-review.md`, from
+`skills/codex-review/cursor-agent.md`. It runs the Codex review and returns
+the output. See [Cursor subagents](https://cursor.com/docs/subagents) for any other
+native agent you register yourself.

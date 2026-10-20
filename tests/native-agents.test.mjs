@@ -31,12 +31,16 @@ const ok = (result) => assert.equal(result.status, 0, result.stderr);
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
 test('synchronizes policy without installing shared roles', (t) => {
-  const { home, run } = fixture(t);
+  const { repo, home, run } = fixture(t);
   ok(run('init'));
   assert.ok(!fs.existsSync(path.join(home, '.agents/agents')));
   for (const file of ['.codex/agents/coder.toml', '.claude/agents/coder.md', '.cursor/agents/coder.md']) {
     assert.ok(!fs.existsSync(path.join(home, file)));
   }
+  assert.equal(
+    fs.readFileSync(path.join(home, '.cursor/agents/codex-review.md'), 'utf8'),
+    fs.readFileSync(path.join(repo, 'skills/codex-review/cursor-agent.md'), 'utf8')
+  );
   ok(run('check'));
   const lock = fs.readFileSync(path.join(home, '.agent-config/agent-config.lock.json'), 'utf8');
   assert.match(run('sync').stdout, /created=0 updated=0 removed=0/);

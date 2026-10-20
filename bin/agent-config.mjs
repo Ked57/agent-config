@@ -392,6 +392,7 @@ alwaysApply: true
 Before doing any work, read and follow \`~/.agents/AGENTS.md\`.
 
 Repository-specific instructions take precedence when they conflict. If the file cannot be read, report that before continuing.`;
+const cursorCodexReviewAgent = read(path.join(sourceRoot, 'skills/codex-review/cursor-agent.md'));
 const cursorPluginManifestContents = `${JSON.stringify({
   name: 'agent-config',
   version: '1.0.0',
@@ -401,6 +402,11 @@ const userStandaloneFiles = [
   ...(userScope ? discoverAgents(sourceRoot, userHome) : []),
   { key: 'cursor:plugin-manifest', destination: cursorPluginManifest, contents: cursorPluginManifestContents },
   { key: 'cursor:user-rule', destination: cursorUserRule, contents: cursorUserRuleContents },
+  {
+    key: 'cursor:agent:codex-review.md',
+    destination: path.join(userHome, '.cursor', 'agents', 'codex-review.md'),
+    contents: cursorCodexReviewAgent
+  },
   { key: 'agents:AGENTS.md', destination: userAgentsFile, contents: sharedPolicy },
   ...policyPacks.map(({ name, source }) => ({
     key: `policy:${name}`,

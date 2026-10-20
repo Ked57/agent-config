@@ -12,6 +12,7 @@ const canonicalTemporaryDirectory = fs.realpathSync(os.tmpdir());
 const cli = path.join(root, 'bin/agent-config.mjs');
 const keptSkills = [
   'agent-browser',
+  'codex-review',
   'fullstack-typescript-mutation',
   'fullstack-typescript-quality',
   'fullstack-typescript-static',
@@ -112,6 +113,10 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
     }
   );
   assert.match(fs.readFileSync(path.join(cursorPlugin, 'rules/00-agent-config.mdc'), 'utf8'), /~\/\.agents\/AGENTS\.md/);
+  assert.equal(
+    fs.readFileSync(path.join(home, '.cursor/agents/codex-review.md'), 'utf8'),
+    fs.readFileSync(path.join(root, 'skills/codex-review/cursor-agent.md'), 'utf8')
+  );
   const installedRouting = fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8');
   assert.match(installedRouting, /## 2\. Skill/);
   assert.match(installedRouting, /TypeScript quality-tooling work → `fullstack-typescript-quality`/);

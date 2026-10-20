@@ -31,6 +31,7 @@ declared dependencies.
 - Places that should move → `find-animation-opportunities`.
 - Motion audit and a fix plan → `improve-animations`.
 - Review of animation code → `review-animations`.
+- Codex review of the current branch against `origin/main` → `codex-review`. The parent delegates to the Cursor subagent `codex-review`, which runs Codex.
 
 ## Exit
 

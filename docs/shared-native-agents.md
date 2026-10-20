@@ -7,8 +7,10 @@ This repository does not ship shared roles or a `harnesses/` tree. Behavior live
 ## Acceptance criteria
 
 - Do not install planner, designer, coder, reviewer, or native harness wrappers.
-- `init --user` and `sync --user` install policy and skills only. Repeated sync is
-  unchanged. Existing policy outside managed blocks is preserved.
+- `init --user` and `sync --user` install policy, skills, and one Cursor supervisor:
+  `~/.cursor/agents/codex-review.md`. That file only forwards a review of
+  `origin/main...HEAD` to Codex. Repeated sync is unchanged. Existing policy
+  outside managed blocks is preserved.
 - Validate sources, destinations, and ownership conflicts before any writes.
   Refuse unsafe paths and unmanaged collisions. Validation failure leaves the
   installation unchanged.

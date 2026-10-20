@@ -171,6 +171,8 @@ The installer copies every `skills/<name>/` directory that contains a `SKILL.md`
 - `fullstack-typescript-quality`, which loads `fullstack-typescript-static`,
   `fullstack-typescript-tests`, and `fullstack-typescript-mutation`
 - `manual-qa`
+- `codex-review`, which a Cursor subagent uses to run a read-only Codex
+  review of the current branch against `origin/main`
 - `agent-browser`, the Apache-2.0 discovery stub from
   [`vercel-labs/agent-browser` at commit `72007a6`](https://github.com/vercel-labs/agent-browser/tree/72007a6788d863611b23bed0b59d0d659c638d8e)
 
