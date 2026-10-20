@@ -18,7 +18,7 @@ Apply this policy when editing TypeScript, including TSX, MTS, CTS, and Vue SFC 
 ## Code design
 
 - Use clear names that describe behaviour and domain meaning.
-- Keep functions and watchers focused on one responsibility. When branching, nesting, or path count is the problem, follow `complexity-audit`.
+- Keep functions and watchers focused on one responsibility. Keep branching, nesting, and path count small enough that each function stays easy to test.
 - Prefer pure functions for business rules and transformations.
 - Separate domain logic from framework, UI, and transport concerns.
 - Use dependency injection at I/O boundaries when it materially improves testability; do not add abstraction layers without a concrete benefit.

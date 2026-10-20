@@ -11,9 +11,8 @@ Cursor, Claude Code, and Codex.
   coding/non-coding exit). After implementation, shared policy requires the `manual-qa`
   skill when a runnable UI, API, or CLI surface changed.
 - Conditional TypeScript, React, Vue + PrimeVue, and DDD domain-module policy packs shared across Cursor, Claude Code, and Codex.
-- Portable skills for distinctive frontend design, high-fidelity Figma implementation,
-  complexity audits, deterministic full-stack TypeScript quality tooling, hands-on
-  verification, and Matt Pocock's engineering and productivity workflows.
+- Portable skills for deterministic full-stack TypeScript quality tooling, hands-on
+  verification, and browser automation.
 - A user installer that gives Cursor, Claude Code, and Codex the same personal policy
   without changing application repositories.
 - An optional workspace installer that detects npm, pnpm, Yarn, or Bun; creates thin
@@ -165,84 +164,21 @@ documented in the [Codex](adapters/codex/README.md),
 
 ## Portable skills
 
-The installer copies every `skills/<name>/` directory that contains a `SKILL.md`. That
-includes this repository's frontend, quality, and manual-qa skills, plus skills vendored under the
-MIT License from [`mattpocock/skills` at commit `49dd158`](https://github.com/mattpocock/skills/tree/49dd158d1076134a641b33efb035946536778336),
-[`jakubkrehel/skills` at commit `4c66b1f`](https://github.com/jakubkrehel/skills/tree/4c66b1fa86e9ab70187b43d7da9b6fdb29f2ef63),
-and [`emilkowalski/skills` at commit `2d22863`](https://github.com/emilkowalski/skills/tree/2d228630ba1446365f614a108cb8252f1feda202),
-and the Apache-2.0 discovery stub from
-[`vercel-labs/agent-browser` at commit `72007a6`](https://github.com/vercel-labs/agent-browser/tree/72007a6788d863611b23bed0b59d0d659c638d8e).
-Taste Skill's default v2 skill is vendored under the MIT License from
-[`Leonxlnx/taste-skill` at commit `f624f37`](https://github.com/Leonxlnx/taste-skill/tree/f624f37a8c650b9cc550253104925efe4c8de246).
-Each vendored skill keeps its original files and a `LICENSE.txt`; the pinned upstream
-inventory, normalized-content hashes, and intentional local adaptations are recorded in
-`skills/mattpocock-skills.lock.json`, `skills/jakubkrehel-skills.lock.json`,
-`skills/emilkowalski-skills.lock.json`, `skills/agent-browser-skills.lock.json`, and
-`skills/taste-skills.lock.json`.
+The installer copies every `skills/<name>/` directory that contains a `SKILL.md`:
 
-Run `setup-matt-pocock-skills` once in a repository before using the engineering
-workflow skills (issue tracker, triage labels, and domain-doc layout). Domain docs
-are `GLOSSARY.md` and ADRs; rename an existing `CONTEXT.md` or `CONTEXT-MAP.md` to
-`GLOSSARY.md` or `GLOSSARY-MAP.md`. `ask-matt` is the human-invoked router over those
-skills; `policy/routing.md` carries the agent-side task type → skill mapping so agents
-route without invoking it.
+- `fullstack-typescript-quality`, which loads `fullstack-typescript-static`,
+  `fullstack-typescript-tests`, and `fullstack-typescript-mutation`
+- `manual-qa`
+- `agent-browser`, the Apache-2.0 discovery stub from
+  [`vercel-labs/agent-browser` at commit `72007a6`](https://github.com/vercel-labs/agent-browser/tree/72007a6788d863611b23bed0b59d0d659c638d8e)
 
-Jakub Krehel's model-invoked skills cover interface work and technical drawings:
-`better-interface` for cross-discipline audits, plus
-`better-accessibility`, `better-colors`, `better-layout`, `better-typography`, `better-ui`,
-and `better-writing` for focused work. `build-design` supplies the design-file token
-mapping recipe under `figma-design-to-code`; `technical-drawing` builds physical-object
-drawings with a standalone viewer and exports. Five named workflows are user-invoked only:
-`break` stress-tests one component, `explain-interface` explains how a site or effect was
-built, `interface-review` scopes a review to a branch, pull request, range, or working
-tree, `variant` builds alternatives behind a picker, and `state-machine` provides an
-interactive component-state workbench.
+The vendored `agent-browser` skill keeps its original files and a `LICENSE.txt`. The
+pinned upstream inventory and normalized-content hashes are recorded in
+`skills/agent-browser-skills.lock.json`.
 
-These skills improve or inspect an existing interface. `frontend-design` still owns
-original visual direction and substantial redesign without a supplied source-of-truth
-design; `figma-design-to-code` still owns faithful implementation of a supplied Figma
-node.
-
-Emil Kowalski's model-invoked skills cover motion and design-engineering craft:
-`emil-design-eng` for animation taste and the details that make UI feel right,
-`animate` and `animate-expo` for building web or React Native motion,
-`find-animation-opportunities` for hunting places that should move,
-`improve-animations` for auditing existing motion, `animation-vocabulary` for naming
-effects, `apple-design` for Apple-style fluid interfaces, `ask-sonner` for Sonner, and
-`write-swift` for Swift. `animation-performance` diagnoses dropped frames,
-`mobile-native` handles mobile-web platform behaviour, and `break-ui` tests realistic
-worst-case data behind a toggle. The three named workflows are user-invoked only:
-`review-animations` reviews motion against a strict bar, `pick-ui-library` picks from a
-curated library list, and `design-prototype` (Emil's `prototype`, renamed to sit beside
-Matt Pocock's `prototype`) builds picker-based UI variants. Jakub Krehel's `variant`
-remains the interface-review picker workflow. The `break-ui` reference to Emil's
-`prototype` is adapted to `design-prototype` too; both adaptations are recorded in the
-Emil lock. The technical-drawing skill declares a CommonJS package scope so its bundled
-Node checks run inside ESM projects; its four upstream regression scripts run in this
-repository's test suite. Upstream initial-response prompts apply only to invocations without a task;
-requests with a concrete target proceed through the skill's workflow.
-
-`agent-browser` is the installed discovery stub for the agent-browser CLI. Usage
-instructions stay in the CLI (`agent-browser skills get core`) so they match the
-installed binary. `manual-qa` loads that stub for browser UI.
-
-`code-review` carries a local adaptation: its scope resolver selects a committed range,
-staged changes, unstaged changes, or both working-tree patches plus untracked files. With
-no supplied scope it selects local changes when present, otherwise the base branch's
-merge-base. Its installed `scripts/review-scope.mjs` resolves the scope once for both
-reviewers; its procedure and helper hashes are recorded in the Matt Pocock lock.
-
-Invoke `design-taste-frontend` (Taste Skill) explicitly for landing pages, marketing
-sites, portfolios and product pages. Its full default skill includes direction libraries,
-references, starter assets, source linting and browser inspection scripts. It requires
-Node 22+ and Chrome, Edge or Chromium for the inspector; image search requires network
-access. Other Taste Skill variants are not bundled. Automatic routing still uses
-`frontend-design`, `figma-design-to-code` and the focused interface skills.
-
-Local adaptations are limited to the skill's frontmatter (a concise description and
-`disable-model-invocation: true`) and `agents/openai.yaml` (implicit invocation disabled
-for Codex). The lock records the installed content hashes, including these adaptations;
-the upstream skill body and supporting files are unchanged.
+`agent-browser` is a discovery stub. Usage instructions stay in the CLI
+(`agent-browser skills get core`) so they match the installed binary. `manual-qa` loads
+that stub for browser UI. `policy/routing.md` carries the task type → skill mapping.
 
 ## Routing and skills
 
@@ -283,26 +219,6 @@ Cursor Cloud Agents replace the plugin rule with the account User Rule from
 [cloud-agent-install.md](cloud-agent-install.md); the rest of the chain is unchanged. A
 project-scoped install mirrors the `~/.agents/` files under `.agents/`, and `check` in both
 scopes fails when any hop is missing or stale.
-
-## Frontend skill scopes
-
-- `frontend-design` owns original visual direction and substantial redesigns. It grounds
-  palette, typography, composition, and motion in the product while preserving an
-  existing design system when one is in scope. Stack exemplars live in its `EXAMPLES.md`.
-  Building the motion itself routes to `animate` or `animate-expo`.
-- `figma-design-to-code` owns faithful implementation of a supplied Figma node or other
-  exact visual spec. It requires structured target context, repository component and
-  token reuse, and rendered comparison with the spec.
-- `complexity-audit` owns measuring and reducing cyclomatic complexity. Metrics come
-  from a tool; extracts must stay behaviour-preserving and pass the deletion test.
-
-Always-on routing for these skills lives in `policy/routing.md`. Conditional packs add
-stack-specific pointers (`shadcn` in the React pack, PrimeVue composition in the Vue pack,
-`complexity-audit` in the TypeScript pack).
-
-Use `frontend-design` and `figma-design-to-code` together only when a spec leaves a real
-implementation gap, such as responsive reflow or an unspecified state. Defined spec
-details remain the source of truth.
 
 ## Ownership model
 

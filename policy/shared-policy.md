@@ -30,7 +30,6 @@ Do not claim a manual check was performed without executing it.
 ## Execution and verification
 
 - Work through implementation, verification, and repair; do not stop at a plan or partial change.
-- When `tdd` is routed, confirming the seams under test is part of that work. State what each seam catches and what it misses before writing tests.
 - Prefer the smallest change that satisfies the current requirement.
 - Fix failures introduced by the change before moving on.
 - Use existing repository scripts and test conventions; do not invent replacement commands when the repository already defines them.
