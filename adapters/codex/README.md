@@ -26,6 +26,8 @@ same "Start here" step; the routing pack, conditional policy packs, and portable
 are mirrored under `.agents/` alongside the quality-routing file. Commit these project
 files.
 
+`sync --user` also installs the Codex entries in `bin/external-plugins.mjs`: Taste Skill, Matt Pocock's skills, and the Emil Kowalski skills. pstack is omitted because it has no Codex adapter.
+
 ## Skills
 
 This installer does not write native Codex agent files. Procedures live in

@@ -3,9 +3,8 @@
 You are reading `~/.agents/AGENTS.md` (user-scoped) or the `shared-policy` managed block
 in a project `AGENTS.md`.
 
-1. Read `~/.agents/policy/routing.md` and route the task on its three axes: tech, skill, topic.
-2. Coding task → do the work with the routed packs and skills. Non-coding task → answer
-   directly with what routing loaded.
+1. Read `~/.agents/policy/routing.md` and follow it. The router owns tech, skill, and the
+   coding-versus-question exit.
 
 Paths are user-scoped; a project-scoped install carries the same files under `.agents/` in
 the repository root. Prefer the project install when present and resolve all pointers in
@@ -30,7 +29,6 @@ Do not claim a manual check was performed without executing it.
 ## Execution and verification
 
 - Work through implementation, verification, and repair; do not stop at a plan or partial change.
-- When `tdd` is routed, confirming the seams under test is part of that work. State what each seam catches and what it misses before writing tests.
 - Prefer the smallest change that satisfies the current requirement.
 - Fix failures introduced by the change before moving on.
 - Use existing repository scripts and test conventions; do not invent replacement commands when the repository already defines them.

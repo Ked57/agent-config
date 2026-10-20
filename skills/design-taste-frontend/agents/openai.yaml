@@ -1,5 +1,0 @@
-interface:
-  display_name: "Taste Skill"
-  short_description: "Art direction and browser checks for public-facing pages"
-policy:
-  allow_implicit_invocation: false

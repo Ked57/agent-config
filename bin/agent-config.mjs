@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { discoverAgents } from './native-agents.mjs';
+import { installExternalPlugins } from './external-plugins.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -390,6 +392,7 @@ alwaysApply: true
 Before doing any work, read and follow \`~/.agents/AGENTS.md\`.
 
 Repository-specific instructions take precedence when they conflict. If the file cannot be read, report that before continuing.`;
+const cursorCodexReviewAgent = read(path.join(sourceRoot, 'skills/codex-review/cursor-agent.md'));
 const cursorPluginManifestContents = `${JSON.stringify({
   name: 'agent-config',
   version: '1.0.0',
@@ -399,6 +402,11 @@ const userStandaloneFiles = [
   ...(userScope ? discoverAgents(sourceRoot, userHome) : []),
   { key: 'cursor:plugin-manifest', destination: cursorPluginManifest, contents: cursorPluginManifestContents },
   { key: 'cursor:user-rule', destination: cursorUserRule, contents: cursorUserRuleContents },
+  {
+    key: 'cursor:agent:codex-review.md',
+    destination: path.join(userHome, '.cursor', 'agents', 'codex-review.md'),
+    contents: cursorCodexReviewAgent
+  },
   { key: 'agents:AGENTS.md', destination: userAgentsFile, contents: sharedPolicy },
   ...policyPacks.map(({ name, source }) => ({
     key: `policy:${name}`,
@@ -931,6 +939,14 @@ const showUserActions = (actions, preview = false) => {
   }
   console.log(['created', 'updated', 'removed', 'unchanged', 'preserved'].map((action) => `${action}=${actions.filter((item) => item.action === action).length}`).join(' '));
 };
+const runExternalCommand = (command, args) => {
+  const result = spawnSync(command, args, { encoding: 'utf8', env: process.env });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`${command} ${args.join(' ')} failed:\n${result.stderr || result.stdout || `exit ${result.status}`}`);
+  }
+  return result;
+};
 const installUser = () => {
   const actions = planUser();
   if (!dryRun) for (const { action, destination, contents } of actions) {
@@ -939,6 +955,7 @@ const installUser = () => {
     else if (action === 'removed') operations.remove(destination);
   }
   showUserActions(actions, dryRun);
+  for (const line of installExternalPlugins({ userHome, dryRun, run: runExternalCommand })) console.log(line);
 };
 const statusUser = () => {
   console.log(`User home: ${userHome}\nCodex home: ${configuredCodexHome}`);
@@ -958,7 +975,7 @@ try {
   else if (command === 'check') userScope ? checkUser() : check();
   else if (command === 'status') userScope ? statusUser() : status();
   else if (command === 'help') {
-    console.log(`${usage}\n\ninit/sync installs managed configuration without overwriting project-owned instructions or routing. Use --user for personal configuration shared across repositories. Add --dry-run to sync --user to preview file diffs without writing.`);
+    console.log(`${usage}\n\ninit/sync installs managed configuration without overwriting project-owned instructions or routing. Use --user for personal configuration shared across repositories. Add --dry-run to sync --user to preview file diffs without writing. sync --user also installs the external plugins declared in bin/external-plugins.mjs on every harness that plugin supports. Set AGENT_CONFIG_EXTERNAL_PLUGINS=skip to update policy files without contacting those marketplaces.`);
   } else {
     console.error(`Unknown command: ${command}\n${usage}`);
     process.exitCode = 1;

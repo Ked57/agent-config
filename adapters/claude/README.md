@@ -32,6 +32,8 @@ Claude-specific settings and native hook registrations remain in `.claude/`.
 When adding a Claude hook, make it call the project-owned verification command from
 `.agents/agent-config.json`; do not duplicate policy in the hook body.
 
+`sync --user` also installs the Claude Code entries in `bin/external-plugins.mjs`: Taste Skill, Matt Pocock's skills, and pstack, plus the Emil Kowalski skills that have no Claude marketplace plugin.
+
 ## Skills
 
 This installer does not write native Claude Code agent files. Procedures live in

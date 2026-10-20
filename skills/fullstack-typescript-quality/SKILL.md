@@ -41,7 +41,7 @@ If an owning skill is unavailable, mark that layer unmet, name it, and continue.
 | Component behaviour | Cypress CT + Testing Library | `fullstack-typescript-tests` |
 | Critical journeys | Cypress E2E | `fullstack-typescript-tests` |
 | Coverage and CRAP | Vitest / Cypress CT coverage | `fullstack-typescript-tests` |
-| Branch count | ESLint complexity gates | `fullstack-typescript-static`; reduction via `complexity-audit` |
+| Branch count | ESLint complexity gates | `fullstack-typescript-static` |
 | Mutation testing | Stryker on selected pure TS | `fullstack-typescript-mutation` |
 
 ## Required commands
