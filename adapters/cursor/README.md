@@ -32,6 +32,8 @@ and Vue/PrimeVue conditional policy packs live under `.agents/`, so Codex, Claud
 and Cursor follow the same source of truth. These repository files are intended to be
 committed.
 
+`sync --user` also installs the Cursor entries in `bin/external-plugins.mjs`. Taste Skill, the Emil Kowalski UI skills, and Matt Pocock's skills are installed with the skills CLI. pstack is copied to `~/.cursor/plugins/local/pstack` from the Cursor plugins repository. Reload Cursor after that copy.
+
 ## Skills
 
 This installer does not write native Cursor agent files. Procedures live in

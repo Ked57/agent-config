@@ -3,9 +3,8 @@
 You are reading `~/.agents/AGENTS.md` (user-scoped) or the `shared-policy` managed block
 in a project `AGENTS.md`.
 
-1. Read `~/.agents/policy/routing.md` and route the task on its three axes: tech, skill, topic.
-2. Coding task → do the work with the routed packs and skills. Non-coding task → answer
-   directly with what routing loaded.
+1. Read `~/.agents/policy/routing.md` and follow it. The router owns tech, skill, and the
+   coding-versus-question exit.
 
 Paths are user-scoped; a project-scoped install carries the same files under `.agents/` in
 the repository root. Prefer the project install when present and resolve all pointers in

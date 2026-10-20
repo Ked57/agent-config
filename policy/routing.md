@@ -1,6 +1,6 @@
 # Task router
 
-Read this first for every task and route on tech, skill, and topic. Prefer a project
+Read this first for every task and route on tech and skill. Prefer a project
 `.agents/` install when present; otherwise use `~/.agents/`. Resolve every policy and
 skill pointer in that scope. Repository-specific instructions take precedence.
 The global paths below also identify the corresponding project-local files.
@@ -22,13 +22,15 @@ declared dependencies.
 - Implemented runnable UI, API, or CLI change → `manual-qa`.
 - Browser automation → `agent-browser`; specialized workflows come from `agent-browser skills get`. `manual-qa` loads this owner for browser UI.
 - `fullstack-typescript-quality` loads `fullstack-typescript-static`, `fullstack-typescript-tests`, and `fullstack-typescript-mutation`; those children own their gates.
-
-## 3. Topic and evidence
-
-- Design/frontend → matching tech packs; existing test layer plus rendered, keyboard, and accessibility checks where relevant. Exact specs require visual comparison; check narrow and wide layouts and measure relevant contrast.
-- Backend/domain → matching tech pack; unit and integration checks, and glossary or ADR updates when those files exist.
-- SRE → quality owners for gates; relevant pipeline and verification-map evidence.
-- Agent configuration → the repository's actual verification scripts.
+- Public page or app screen that needs a designed look → `design-taste-frontend`. Cursor reads `~/.cursor/skills/design-taste-frontend/SKILL.md`. Claude and Codex load the taste-skill plugin.
+- UI implementation or visual critique → `emil-design-eng`.
+- Worst-case data and layout breakage → `break-ui`.
+- New motion → `animate`.
+- Dropped frames or which property to animate → `animation-performance`.
+- Naming a motion effect → `animation-vocabulary`.
+- Places that should move → `find-animation-opportunities`.
+- Motion audit and a fix plan → `improve-animations`.
+- Review of animation code → `review-animations`.
 
 ## Exit
 

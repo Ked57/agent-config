@@ -17,7 +17,7 @@ function fixture(t) {
   fs.mkdirSync(home);
   for (const folder of ['bin', 'policy', 'skills']) fs.cpSync(path.join(root, folder), path.join(repo, folder), { recursive: true });
   const run = (command, extra = [], environment = {}) => {
-    const env = { ...process.env, HOME: home, USERPROFILE: home, ...environment };
+    const env = { ...process.env, HOME: home, USERPROFILE: home, AGENT_CONFIG_EXTERNAL_PLUGINS: 'skip', ...environment };
     if (!('CODEX_HOME' in environment)) delete env.CODEX_HOME;
     return spawnSync(process.execPath, [path.join(repo, 'bin/agent-config.mjs'), command, '--user', ...extra], {
       env,

@@ -7,7 +7,7 @@ Cursor, Claude Code, and Codex.
 
 - A concise shared completion, verification, safety, and anti-slop policy that starts
   every task at the task router.
-- One always-installed pack: `routing.md` (tech, skill, and topic routing, then the
+- One always-installed pack: `routing.md` (tech and skill routing, then the
   coding/non-coding exit). After implementation, shared policy requires the `manual-qa`
   skill when a runnable UI, API, or CLI surface changed.
 - Conditional TypeScript, React, Vue + PrimeVue, and DDD domain-module policy packs shared across Cursor, Claude Code, and Codex.
@@ -62,6 +62,8 @@ node bin/agent-config.mjs sync --user --dry-run
 node bin/agent-config.mjs status --user
 node bin/agent-config.mjs check --user
 ```
+
+`sync --user` then installs the external plugins declared in `bin/external-plugins.mjs` on every harness that plugin supports. Taste Skill and Matt Pocock's skills install as Claude Code and Codex marketplace plugins. Their Cursor copies are moved to `~/.cursor/skills` so they do not sit in the shared skill directory next to those plugins. Emil Kowalski's UI skills have no marketplace plugin, so the selected skills install into `~/.agents/skills` for Cursor and Codex and are mirrored to `~/.claude/skills`. pstack installs as a Claude Code plugin and as a local Cursor plugin; it is not installed for Codex. Already-installed plugin ids and skill names are left in place. `sync --user --dry-run` prints the plugin plan and does not contact the marketplaces. Set `AGENT_CONFIG_EXTERNAL_PLUGINS=skip` to update policy files without installing plugins.
 
 The dry run previews file diffs and action counts without changing the installation.
 `check --user` detects missing, modified, and obsolete managed files. Sync removes
@@ -185,10 +187,13 @@ that stub for browser UI. `policy/routing.md` carries the task type → skill ma
 Two layers, each a single source of truth, installed for every user and workspace:
 
 - `policy/routing.md` — the task router, read first for every task. Tech (file type →
-  pack), skill (task type → skill), topic (discipline → packs, skills, evidence),
-  then the exit: coding task → do the work with the routed packs and skills; question
-  or documentation-only edit → answer directly. This is the only place that exit is
-  stated.
+  pack), skill (task type → skill), then the exit: coding task → do the work with the
+  routed packs and skills; question or documentation-only edit → answer directly. This
+  is the only place that exit is stated. UI work also routes to the installed Taste and
+  Emil skills: `design-taste-frontend`, `emil-design-eng`, `break-ui`, `animate`,
+  `animation-performance`, `animation-vocabulary`, `find-animation-opportunities`,
+  `improve-animations`, and `review-animations`. Their bodies stay with the external
+  installer in `bin/external-plugins.mjs`.
 - `policy/shared-policy.md` — the completion contract. After implementation, when a
   runnable UI, API, or CLI surface changed, read and run `manual-qa`.
 

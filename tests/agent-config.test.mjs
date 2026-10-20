@@ -31,7 +31,7 @@ const run = (project, ...args) => execFileSync(process.execPath, [cli, ...args, 
 });
 const userEnvironment = (home) => {
   // Node's os.homedir() prefers USERPROFILE on Windows and ignores HOME.
-  const environment = { ...process.env, HOME: home, USERPROFILE: home };
+  const environment = { ...process.env, HOME: home, USERPROFILE: home, AGENT_CONFIG_EXTERNAL_PLUGINS: 'skip' };
   delete environment.CODEX_HOME;
   return environment;
 };
@@ -244,6 +244,8 @@ test('routing and shared policy resolve without role files', () => {
   assert.match(routing, /Implemented runnable UI, API, or CLI change → `manual-qa`/);
   assert.match(routing, /Browser automation → `agent-browser`/);
   assert.match(routing, /TypeScript quality-tooling work → `fullstack-typescript-quality`/);
+  assert.doesNotMatch(routing, /## 3\. Topic and evidence/);
+  assert.doesNotMatch(sharedPolicy, /Non-coding task → answer/);
   assert.doesNotMatch(routing, /### Explicit workflows/);
   assert.doesNotMatch(sharedPolicy, /When `tdd` is routed/);
   assert.match(sharedPolicy, /When `GLOSSARY.md` or `GLOSSARY-MAP.md` exists, read the entries for this task/);
@@ -352,11 +354,22 @@ test('locks the vendored agent-browser discovery skill and license to its upstre
 
 test('routing registers every kept skill', () => {
   const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
-  const skillsSection = routing.split('## 2. Skills')[1].split('## 3.')[0];
+  const skillsSection = routing.split('## 2. Skills')[1].split(/^## /m)[0];
   const skillNames = fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true })
     .filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  const externalUiSkills = [
+    'animation-performance',
+    'animation-vocabulary',
+    'animate',
+    'break-ui',
+    'design-taste-frontend',
+    'emil-design-eng',
+    'find-animation-opportunities',
+    'improve-animations',
+    'review-animations'
+  ];
   const registered = new Set([...skillsSection.matchAll(/`([a-z][a-z0-9-]+)`/g)].map((match) => match[1]));
-  assert.deepEqual([...registered].sort(), [...skillNames].sort());
+  assert.deepEqual([...registered].sort(), [...skillNames, ...externalUiSkills].sort());
   for (const name of skillNames) {
     const skill = fs.readFileSync(path.join(root, 'skills', name, 'SKILL.md'), 'utf8');
     const metadataPath = path.join(root, 'skills', name, 'agents/openai.yaml');
