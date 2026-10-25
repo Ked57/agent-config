@@ -2,10 +2,8 @@
 
 Start here: read `~/.agents/policy/routing.md` and route the task. This repository is Node.js
 tooling (`bin/agent-config.mjs`, `tests/*.test.mjs`, `node --test`) on the agent-configuration
-topic, so routing lands on `~/.agents/skills/writing-for-agents/SKILL.md` for every edit to
-`policy/`, `skills/`, or an `AGENTS.md`. Changes to `bin/`, `tests/`, `policy/`, or
-`skills/` are coding tasks: do the work with the routed packs and skills. Questions and
-explanations are answered directly.
+topic. Changes to `bin/`, `tests/`, `policy/`, or `skills/` are coding tasks: do the work
+with the routed packs and skills.
 
 This repository is the source of truth for portable configuration shared by Cursor,
 Codex, and Claude Code.

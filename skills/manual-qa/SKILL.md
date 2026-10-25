@@ -12,10 +12,6 @@ description: >-
 Hands-on verification of a running surface. A test-suite pass or code inspection is
 not a manual result.
 
-Load `~/.agents/skills/better-accessibility/SKILL.md` for keyboard, focus, or assistive
-technology checks and `~/.agents/skills/figma-design-to-code/SKILL.md` when an exact
-visual spec is in play.
-
 Browser UI is driven with `agent-browser`. Load `~/.agents/skills/agent-browser/SKILL.md`
 and follow it. If `agent-browser` is missing, UI scenarios are `blocked`: tell the user
 to run `npm i -g agent-browser && agent-browser install`.
