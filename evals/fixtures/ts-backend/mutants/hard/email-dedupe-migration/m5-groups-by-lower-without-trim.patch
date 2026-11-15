@@ -1,0 +1,119 @@
+diff --git a/drizzle/0001_normalise_user_emails.sql b/drizzle/0001_normalise_user_emails.sql
+new file mode 100644
+index 0000000..4888740
+--- /dev/null
++++ b/drizzle/0001_normalise_user_emails.sql
+@@ -0,0 +1,22 @@
++-- Hand the tasks of duplicate accounts to the account that survives: the earliest created
++-- one among users whose trimmed, lower-cased emails match.
++UPDATE `tasks` SET `assignee_id` = (
++	SELECT k.`id` FROM `users` d
++	JOIN `users` k ON lower(k.`email`) = lower(d.`email`)
++	WHERE d.`id` = `tasks`.`assignee_id`
++	ORDER BY k.`created_at`, k.`id` LIMIT 1
++) WHERE `assignee_id` IS NOT NULL;
++--> statement-breakpoint
++DELETE FROM `users` WHERE `id` NOT IN (
++	SELECT `id` FROM (
++		SELECT `id`, row_number() OVER (
++			PARTITION BY lower(`email`) ORDER BY `created_at`, `id`
++		) AS position FROM `users`
++	) WHERE position = 1
++);
++--> statement-breakpoint
++UPDATE `users` SET `email` = lower(trim(`email`));
++--> statement-breakpoint
++DROP INDEX `users_email_unique`;
++--> statement-breakpoint
++CREATE UNIQUE INDEX `users_email_unique` ON `users` (lower(`email`));
+diff --git a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+index 711e2b9..a16ea76 100644
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794774883005,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794774883006,
++      "tag": "0001_normalise_user_emails",
++      "breakpoints": true
+     }
+   ]
+-}
+\ No newline at end of file
++}
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 6a14aa4..f40656f 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -1,4 +1,11 @@
+-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
++import { sql } from "drizzle-orm";
++import {
++  index,
++  integer,
++  sqliteTable,
++  text,
++  uniqueIndex,
++} from "drizzle-orm/sqlite-core";
+ 
+ const createdAt = () =>
+   integer("created_at", { mode: "timestamp_ms" })
+@@ -22,7 +29,7 @@ export const users = sqliteTable(
+     orgId: text("org_id")
+       .notNull()
+       .references(() => organizations.id, { onDelete: "cascade" }),
+-    email: text("email").notNull().unique(),
++    email: text("email").notNull(),
+     name: text("name").notNull(),
+     passwordHash: text("password_hash").notNull(),
+     role: text("role", { enum: ["admin", "member"] })
+@@ -30,7 +37,11 @@ export const users = sqliteTable(
+       .default("member"),
+     createdAt: createdAt(),
+   },
+-  (table) => [index("users_org_idx").on(table.orgId)],
++  (table) => [
++    index("users_org_idx").on(table.orgId),
++    // Emails are stored trimmed and lower-cased; the index also rejects case variants.
++    uniqueIndex("users_email_unique").on(sql`lower(${table.email})`),
++  ],
+ );
+ 
+ export const apiTokens = sqliteTable("api_tokens", {
+diff --git a/src/routes/auth.test.ts b/src/routes/auth.test.ts
+index c997791..294f0f3 100644
+--- a/src/routes/auth.test.ts
++++ b/src/routes/auth.test.ts
+@@ -20,6 +20,14 @@ describe("auth", () => {
+     });
+   });
+ 
++  it("accepts the email in any letter case", async () => {
++    const { request } = await createTestContext();
++    const login = await request("POST", "/api/auth/token", {
++      body: { email: "ADA@Acme.Test", password: SEED_PASSWORD },
++    });
++    expect(login.status).toBe(200);
++  });
++
+   it("rejects a wrong password", async () => {
+     const { request } = await createTestContext();
+     const login = await request("POST", "/api/auth/token", {
+diff --git a/src/routes/auth.ts b/src/routes/auth.ts
+index 2b17fec..eb24e43 100644
+--- a/src/routes/auth.ts
++++ b/src/routes/auth.ts
+@@ -17,7 +17,7 @@ export const authRoutes = (db: Db) =>
+         const user = await db
+           .select()
+           .from(users)
+-          .where(eq(users.email, body.email.toLowerCase()))
++          .where(eq(users.email, body.email.trim().toLowerCase()))
+           .get();
+         if (!user || !verifyPassword(body.password, user.passwordHash)) {
+           return status(401, { error: "invalid email or password" });

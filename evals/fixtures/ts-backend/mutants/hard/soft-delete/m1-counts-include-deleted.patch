@@ -1,0 +1,157 @@
+diff --git a/drizzle/0001_task_soft_delete.sql b/drizzle/0001_task_soft_delete.sql
+new file mode 100644
+index 0000000..3b5c0f6
+--- /dev/null
++++ b/drizzle/0001_task_soft_delete.sql
+@@ -0,0 +1 @@
++ALTER TABLE `tasks` ADD `deleted_at` integer;
+diff --git a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+index 711e2b9..9321db0 100644
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794774883005,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794774883006,
++      "tag": "0001_task_soft_delete",
++      "breakpoints": true
+     }
+   ]
+-}
+\ No newline at end of file
++}
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 6a14aa4..a647de5 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -80,6 +80,8 @@ export const tasks = sqliteTable(
+       onDelete: "set null",
+     }),
+     dueDate: text("due_date"),
++    // Soft delete: every read and write path must ignore rows where this is set.
++    deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+     createdAt: createdAt(),
+     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+       .notNull()
+diff --git a/src/routes/projects.ts b/src/routes/projects.ts
+index 3143433..6d830b4 100644
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -1,4 +1,4 @@
+-import { and, asc, count, eq } from "drizzle-orm";
++import { and, asc, count, eq, isNull } from "drizzle-orm";
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+@@ -91,7 +91,7 @@ export const projectRoutes = (db: Db) =>
+         const rows = await db
+           .select()
+           .from(tasks)
+-          .where(eq(tasks.projectId, project.id))
++          .where(and(eq(tasks.projectId, project.id), isNull(tasks.deletedAt)))
+           .orderBy(asc(tasks.createdAt));
+         return { items: rows.map(toTaskResponse) };
+       },
+diff --git a/src/routes/tasks.test.ts b/src/routes/tasks.test.ts
+index cd58f43..2ec041b 100644
+--- a/src/routes/tasks.test.ts
++++ b/src/routes/tasks.test.ts
+@@ -70,6 +70,17 @@ describe("tasks", () => {
+     expect(transport).toHaveBeenCalledTimes(1);
+   });
+ 
++  it("hides a deleted task until an admin restores it", async () => {
++    const { request } = await createTestContext();
++    const admin = { token: SEED_TOKENS.acmeAdmin };
++    await request("DELETE", "/api/tasks/tsk_2", admin);
++    expect((await request("GET", "/api/tasks/tsk_2", admin)).status).toBe(404);
++    expect(
++      (await request("POST", "/api/tasks/tsk_2/restore", admin)).status,
++    ).toBe(200);
++    expect((await request("GET", "/api/tasks/tsk_2", admin)).status).toBe(200);
++  });
++
+   it("only lets admins delete tasks", async () => {
+     const { request } = await createTestContext();
+     expect(
+diff --git a/src/routes/tasks.ts b/src/routes/tasks.ts
+index c62bf5d..802790d 100644
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -1,4 +1,4 @@
+-import { and, eq } from "drizzle-orm";
++import { and, eq, isNotNull, isNull } from "drizzle-orm";
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+@@ -16,7 +16,7 @@ export const taskRoutes = (db: Db) =>
+         const task = await db
+           .select()
+           .from(tasks)
+-          .where(eq(tasks.id, params.id))
++          .where(and(eq(tasks.id, params.id), isNull(tasks.deletedAt)))
+           .get();
+         if (!task) return status(404, { error: "task not found" });
+         return toTaskResponse(task);
+@@ -29,7 +29,13 @@ export const taskRoutes = (db: Db) =>
+         const task = await db
+           .select()
+           .from(tasks)
+-          .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
++          .where(
++            and(
++              eq(tasks.id, params.id),
++              eq(tasks.orgId, user.orgId),
++              isNull(tasks.deletedAt),
++            ),
++          )
+           .get();
+         if (!task) return status(404, { error: "task not found" });
+ 
+@@ -139,12 +145,39 @@ export const taskRoutes = (db: Db) =>
+       async ({ params, user, status }) => {
+         if (user.role !== "admin") return status(403, "Forbidden");
+         const deleted = await db
+-          .delete(tasks)
+-          .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
++          .update(tasks)
++          .set({ deletedAt: new Date() })
++          .where(
++            and(
++              eq(tasks.id, params.id),
++              eq(tasks.orgId, user.orgId),
++              isNull(tasks.deletedAt),
++            ),
++          )
+           .returning();
+         if (deleted.length === 0)
+           return status(404, { error: "task not found" });
+         return new Response(null, { status: 204 });
+       },
+       { requireAuth: true },
++    )
++    .post(
++      "/:id/restore",
++      async ({ params, user, status }) => {
++        if (user.role !== "admin") return status(403, "Forbidden");
++        const task = await db
++          .select()
++          .from(tasks)
++          .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
++          .get();
++        if (!task) return status(404, { error: "task not found" });
++        const [restored] = await db
++          .update(tasks)
++          .set({ deletedAt: null })
++          .where(and(eq(tasks.id, task.id), isNotNull(tasks.deletedAt)))
++          .returning();
++        if (!restored) return status(409, { error: "task is not deleted" });
++        return toTaskResponse(restored);
++      },
++      { requireAuth: true },
+     );

@@ -1,0 +1,200 @@
+diff --git a/drizzle/0001_credit_spends.sql b/drizzle/0001_credit_spends.sql
+new file mode 100644
+index 0000000..dfffe6c
+--- /dev/null
++++ b/drizzle/0001_credit_spends.sql
+@@ -0,0 +1,14 @@
++CREATE TABLE `credit_spends` (
++	`id` text PRIMARY KEY NOT NULL,
++	`org_id` text NOT NULL,
++	`user_id` text NOT NULL,
++	`idempotency_key` text,
++	`amount` integer NOT NULL,
++	`reason` text,
++	`approved` integer NOT NULL,
++	`credits_after` integer NOT NULL,
++	`created_at` integer NOT NULL,
++	FOREIGN KEY (`org_id`) REFERENCES `organizations`(`id`) ON UPDATE no action ON DELETE cascade
++);
++--> statement-breakpoint
++CREATE UNIQUE INDEX `credit_spends_org_key_unique` ON `credit_spends` (`org_id`,`idempotency_key`);
+diff --git a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+index 711e2b9..020f2e6 100644
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794774883005,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794774883006,
++      "tag": "0001_credit_spends",
++      "breakpoints": true
+     }
+   ]
+-}
+\ No newline at end of file
++}
+diff --git a/src/app.ts b/src/app.ts
+index 80209e4..3de4590 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -4,6 +4,7 @@ import type { Db } from "./db/client";
+ import { logger } from "./lib/logger";
+ import { requestLogger } from "./plugins/request-logger";
+ import { authRoutes } from "./routes/auth";
++import { creditRoutes } from "./routes/credits";
+ import { healthRoutes } from "./routes/health";
+ import { projectRoutes } from "./routes/projects";
+ import { taskRoutes } from "./routes/tasks";
+@@ -26,7 +27,8 @@ export function createApp({ db }: { db: Db }) {
+     .use(authRoutes(db))
+     .use(projectRoutes(db))
+     .use(taskRoutes(db))
+-    .use(webhookRoutes(db));
++    .use(webhookRoutes(db))
++    .use(creditRoutes(db));
+ }
+ 
+ export type App = ReturnType<typeof createApp>;
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 6a14aa4..bd0509a 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -1,4 +1,10 @@
+-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
++import {
++  index,
++  integer,
++  sqliteTable,
++  text,
++  uniqueIndex,
++} from "drizzle-orm/sqlite-core";
+ 
+ const createdAt = () =>
+   integer("created_at", { mode: "timestamp_ms" })
+@@ -93,3 +99,26 @@ export const tasks = sqliteTable(
+ 
+ export type Task = typeof tasks.$inferSelect;
+ export type User = typeof users.$inferSelect;
++
++export const creditSpends = sqliteTable(
++  "credit_spends",
++  {
++    id: text("id").primaryKey(),
++    orgId: text("org_id")
++      .notNull()
++      .references(() => organizations.id, { onDelete: "cascade" }),
++    userId: text("user_id").notNull(),
++    idempotencyKey: text("idempotency_key"),
++    amount: integer("amount").notNull(),
++    reason: text("reason"),
++    approved: integer("approved", { mode: "boolean" }).notNull(),
++    creditsAfter: integer("credits_after").notNull(),
++    createdAt: createdAt(),
++  },
++  (table) => [
++    uniqueIndex("credit_spends_org_key_unique").on(
++      table.orgId,
++      table.idempotencyKey,
++    ),
++  ],
++);
+diff --git a/src/routes/credits.test.ts b/src/routes/credits.test.ts
+new file mode 100644
+index 0000000..0d7c183
+--- /dev/null
++++ b/src/routes/credits.test.ts
+@@ -0,0 +1,19 @@
++import { describe, expect, it } from "vitest";
++
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++
++describe("POST /api/credits/spend", () => {
++  it("deducts credits and refuses to overdraw", async () => {
++    const { request } = await createTestContext();
++    const spent = await request("POST", "/api/credits/spend", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { amount: 30 },
++    });
++    expect(await spent.json()).toEqual({ credits: 70 });
++    const refused = await request("POST", "/api/credits/spend", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { amount: 71 },
++    });
++    expect(refused.status).toBe(402);
++  });
++});
+diff --git a/src/routes/credits.ts b/src/routes/credits.ts
+new file mode 100644
+index 0000000..593c56d
+--- /dev/null
++++ b/src/routes/credits.ts
+@@ -0,0 +1,64 @@
++import { and, eq, sql } from "drizzle-orm";
++import { Elysia, t } from "elysia";
++
++import type { Db } from "../db/client";
++import { creditSpends, organizations } from "../db/schema";
++import { newId } from "../lib/ids";
++import { authGuard } from "../plugins/auth";
++
++export const creditRoutes = (db: Db) =>
++  new Elysia({ prefix: "/api/credits" }).use(authGuard(db)).post(
++    "/spend",
++    async ({ body, headers, user, status }) => {
++      const id = newId("spd");
++      const key = headers["idempotency-key"] ?? null;
++      const { amount } = body;
++      // One batch = one write transaction on one connection: the decision is recorded,
++      // applied and read back without another request interleaving. Interactive
++      // transactions would fail with SQLITE_BUSY under concurrent requests.
++      const [, , rows] = await db.batch([
++        db.run(sql`
++          INSERT INTO credit_spends
++            (id, org_id, user_id, idempotency_key, amount, reason, approved, credits_after, created_at)
++          SELECT ${id}, o.id, ${user.id}, ${key}, ${amount}, ${body.reason ?? null},
++            o.credits >= ${amount},
++            CASE WHEN o.credits >= ${amount} THEN o.credits - ${amount} ELSE o.credits END,
++            ${Date.now()}
++          FROM organizations o WHERE o.id = ${user.orgId}
++          ON CONFLICT (org_id, idempotency_key) DO NOTHING`),
++        db
++          .update(organizations)
++          .set({ credits: sql`${organizations.credits} - ${amount}` })
++          .where(
++            and(
++              eq(organizations.id, user.orgId),
++              sql`EXISTS (SELECT 1 FROM credit_spends s WHERE s.id = ${id} AND s.approved = 1)`,
++            ),
++          ),
++        db
++          .select()
++          .from(creditSpends)
++          .where(
++            key === null
++              ? eq(creditSpends.id, id)
++              : and(
++                  eq(creditSpends.orgId, user.orgId),
++                  eq(creditSpends.idempotencyKey, key),
++                ),
++          ),
++      ]);
++      const spend = rows[0];
++      if (!spend) throw new Error("spend was not recorded");
++      if (!spend.approved) {
++        return status(402, { error: "insufficient credits" });
++      }
++      return { credits: spend.creditsAfter };
++    },
++    {
++      requireAuth: true,
++      body: t.Object({
++        amount: t.Integer({ minimum: 1 }),
++        reason: t.Optional(t.String({ maxLength: 500 })),
++      }),
++    },
++  );
