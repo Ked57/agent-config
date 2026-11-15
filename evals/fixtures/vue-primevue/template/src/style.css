@@ -1,0 +1,9 @@
+@layer theme, base, primevue, components, utilities;
+
+@import 'tailwindcss';
+@import 'tailwindcss-primeui';
+
+body {
+  @apply bg-surface-50 text-surface-900 antialiased;
+  font-family: 'Inter', system-ui, sans-serif;
+}

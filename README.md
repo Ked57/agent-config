@@ -247,7 +247,20 @@ scopes fails when any hop is missing or stale.
 npm run verify
 ```
 
-This syntax-checks the scripts and executes the installer integration tests.
+This syntax-checks the scripts and executes the installer and eval-suite unit tests.
+
+## Evaluating a change
+
+`evals/` A/B tests a policy, skill or routing change against `main` with headless agents on a
+fixture project. Each arm is installed into a temporary home, never into your live config.
+
+```sh
+npm run eval -- --b feat/my-policy --smoke          # quick check
+npm run eval -- --a main --b feat/my-policy --reps 3 --max-usd 60
+```
+
+See [evals/README.md](evals/README.md) for arms and toggles, fixtures, task sets, the judge's noise
+floor, budgets and resuming.
 
 ## License
 

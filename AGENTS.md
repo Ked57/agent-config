@@ -30,5 +30,7 @@ Codex, and Claude Code.
   generated files or explicitly marked managed blocks.
 - After changing installable `policy/` or `skills/` sources, run
   `node bin/agent-config.mjs sync --user` so the local install matches the checkout.
+- `evals/` is the A/B eval suite (`npm run eval`, see `evals/README.md`). It must only install
+  arms into temporary homes and keep results outside the repository.
 - Before committing, run `npm run verify` and ensure the repository contains no
   secrets.

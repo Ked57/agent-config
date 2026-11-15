@@ -1,0 +1,130 @@
+// Claude Code provider: headless agent runs in an isolated CLAUDE_CONFIG_DIR, transcript parsing, judging.
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { baseEnv } from '../env.mjs';
+
+/**
+ * Auth for isolated config dirs. Prefers ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN from the
+ * caller's env; otherwise reads the live login's short-lived access token, read-only, on every
+ * spawn. The refresh token is never copied, so isolated runs cannot rotate the live login.
+ */
+export function claudeAuthEnv(env = process.env, home = os.homedir()) {
+  if (env.ANTHROPIC_API_KEY) return { ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY };
+  if (env.CLAUDE_CODE_OAUTH_TOKEN) return { CLAUDE_CODE_OAUTH_TOKEN: env.CLAUDE_CODE_OAUTH_TOKEN };
+  const credentials = path.join(home, '.claude', '.credentials.json');
+  try {
+    const token = JSON.parse(fs.readFileSync(credentials, 'utf8')).claudeAiOauth?.accessToken;
+    if (token) return { CLAUDE_CODE_OAUTH_TOKEN: token };
+  } catch {
+    // fall through to the error below
+  }
+  throw new Error('No Claude credentials: set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN, or log in with `claude`.');
+}
+
+const claudeEnv = (home, extra = {}) => ({
+  ...baseEnv(home),
+  CLAUDE_CONFIG_DIR: path.join(home, '.claude'),
+  ...claudeAuthEnv(),
+  ...extra
+});
+
+/** Normalises Claude Code `--output-format stream-json --verbose` output. */
+export function parseTranscript(text) {
+  const result = {
+    model: null,
+    events: { reads: [], commands: [], skills: [] },
+    toolCalls: 0,
+    toolsByName: {},
+    turns: null,
+    durationMs: null,
+    costUsd: null,
+    usage: null,
+    resultText: '',
+    subtype: null,
+    isError: null
+  };
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (message.type === 'system' && message.subtype === 'init') result.model = message.model ?? null;
+    if (message.type === 'assistant') {
+      for (const block of message.message?.content ?? []) {
+        if (block.type !== 'tool_use') continue;
+        result.toolCalls += 1;
+        result.toolsByName[block.name] = (result.toolsByName[block.name] ?? 0) + 1;
+        const input = block.input ?? {};
+        if (block.name === 'Bash' && input.command) result.events.commands.push(String(input.command));
+        if (block.name === 'Read' && input.file_path) result.events.reads.push(String(input.file_path));
+        if (block.name === 'Skill' && input.skill) result.events.skills.push(String(input.skill));
+      }
+    }
+    if (message.type === 'result') {
+      const usage = message.usage ?? {};
+      result.usage = {
+        inputTokens: usage.input_tokens ?? 0,
+        outputTokens: usage.output_tokens ?? 0,
+        cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+        cacheWriteTokens: usage.cache_creation_input_tokens ?? 0
+      };
+      result.costUsd = message.total_cost_usd ?? null;
+      result.durationMs = message.duration_ms ?? null;
+      result.turns = message.num_turns ?? null;
+      result.resultText = message.result ?? '';
+      result.subtype = message.subtype ?? null;
+      result.isError = message.is_error ?? null;
+    }
+  }
+  return result;
+}
+
+const runProcess = ({ args, cwd, env, stdoutFile, stderrFile, stdin, timeoutMs }) => new Promise((resolve) => {
+  const started = Date.now();
+  const out = stdoutFile ? fs.openSync(stdoutFile, 'w') : 'pipe';
+  const err = stderrFile ? fs.openSync(stderrFile, 'w') : 'pipe';
+  const child = spawn('claude', args, { cwd, env, stdio: [stdin === undefined ? 'ignore' : 'pipe', out, err], detached: true });
+  let stdout = '';
+  if (out === 'pipe') child.stdout.on('data', (chunk) => { stdout += chunk; });
+  if (stdin !== undefined) child.stdin.end(stdin);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already gone */ }
+  }, timeoutMs);
+  const finish = (code) => {
+    clearTimeout(timer);
+    if (typeof out === 'number') fs.closeSync(out);
+    if (typeof err === 'number') fs.closeSync(err);
+    resolve({ exitCode: code, timedOut, wallMs: Date.now() - started, stdout });
+  };
+  child.on('error', () => finish(-1));
+  child.on('exit', finish);
+});
+
+export const claudeProvider = {
+  name: 'claude',
+  parseTranscript,
+  transcriptFile: 'transcript.jsonl',
+
+  async runAgent({ home, cwd, prompt, model, effort, transcriptPath, stderrPath, timeoutMs, env = {} }) {
+    const args = ['-p', prompt, '--model', model, '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions', '--strict-mcp-config'];
+    if (effort) args.push('--effort', effort);
+    return runProcess({ args, cwd, env: claudeEnv(home, env), stdoutFile: transcriptPath, stderrFile: stderrPath, timeoutMs });
+  },
+
+  async ask({ home, prompt, model, effort, timeoutMs = 10 * 60 * 1000 }) {
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    const args = ['-p', '--model', model, '--tools', '', '--output-format', 'json', '--strict-mcp-config'];
+    if (effort) args.push('--effort', effort);
+    const { stdout, exitCode } = await runProcess({ args, cwd: home, env: claudeEnv(home), stdin: prompt, timeoutMs });
+    if (exitCode !== 0) throw new Error(`claude judge exited ${exitCode}: ${stdout.slice(0, 300)}`);
+    const envelope = JSON.parse(stdout);
+    return { text: envelope.result ?? '', costUsd: envelope.total_cost_usd ?? 0 };
+  }
+};
