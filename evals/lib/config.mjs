@@ -25,7 +25,7 @@ export const DEFAULTS = Object.freeze({
 });
 
 const LIST_FLAGS = new Set(['a-add', 'a-remove', 'b-add', 'b-remove', 'env', 'watch', 'only']);
-const BOOLEAN_FLAGS = new Set(['smoke', 'browser', 'http', 'no-judge', 'dry-run', 'report-only', 'rejudge', 'recheck', 'help']);
+const BOOLEAN_FLAGS = new Set(['smoke', 'browser', 'http', 'no-judge', 'dry-run', 'report-only', 'rejudge', 'recheck', 'single-arm', 'help']);
 const NUMBER_FLAGS = new Set(['reps', 'concurrency', 'timeout-min', 'judge-reps', 'judge-controls', 'max-usd', 'max-runs']);
 const STRING_FLAGS = new Set(['a', 'b', 'tasks', 'provider', 'model', 'effort', 'judge-provider', 'judge-model', 'judge-effort', 'judge-command', 'out', 'resume', 'name']);
 
@@ -85,8 +85,13 @@ const parseEnv = (pairs = []) => Object.fromEntries(pairs.map((pair) => {
  * The smoke preset selects the task set's `smoke` list and one rep unless overridden.
  */
 export function resolveConfig(raw, taskSet) {
-  if (!raw.b && !raw.reportOnly) throw new Error('--b <ref> is required (use --b main for an A/A control run)');
+  if (!raw.b && !raw.reportOnly && !raw.singleArm) throw new Error('--b <ref> is required (use --b main for an A/A control run, or --single-arm)');
   const config = { ...DEFAULTS, ...raw };
+  // Single-arm runs exercise tasks and checks on one install; there is nothing to compare or judge.
+  if (raw.singleArm) {
+    config.b = config.a;
+    config.judge = false;
+  }
   config.env = parseEnv(raw.env);
   config.arms = {
     A: { ref: config.a, add: (raw.aAdd ?? []).map(parseToggle), remove: raw.aRemove ?? [] },
@@ -108,7 +113,7 @@ export function resolveConfig(raw, taskSet) {
   if (config.concurrency < 1) throw new Error('--concurrency must be at least 1');
   if (config.judgeReps < 1) throw new Error('--judge-reps must be at least 1');
   if (config.judgeCommand) config.judgeProvider = 'command';
-  config.name = raw.name ?? `${slug(config.a)}-vs-${slug(config.b ?? '')}${raw.smoke ? '-smoke' : ''}`;
+  config.name = raw.name ?? (raw.singleArm ? `${slug(config.a)}-single` : `${slug(config.a)}-vs-${slug(config.b ?? '')}${raw.smoke ? '-smoke' : ''}`);
   delete config.a;
   delete config.b;
   delete config.aAdd;

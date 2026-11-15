@@ -16,12 +16,12 @@ export const runId = (task, arm, rep) => `${task}__${arm}__r${rep}`;
  * Interleaves the matrix rep by rep (all tasks at rep 1 before rep 2) with task and arm order
  * shuffled per rep, so a budget stop leaves balanced arms and order effects are spread out.
  */
-export function buildRunQueue({ taskIds, reps, seed }) {
+export function buildRunQueue({ taskIds, reps, seed, arms = ['A', 'B'] }) {
   const random = seededRandom(seed);
   const queue = [];
   for (let rep = 1; rep <= reps; rep += 1) {
     for (const task of shuffle(taskIds, random)) {
-      for (const arm of shuffle(['A', 'B'], random)) queue.push({ id: runId(task, arm, rep), task, arm, rep });
+      for (const arm of shuffle(arms, random)) queue.push({ id: runId(task, arm, rep), task, arm, rep });
     }
   }
   return queue;

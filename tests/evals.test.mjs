@@ -382,3 +382,15 @@ test('runCommandCheck copies hidden files, runs the command and cleans up', () =
   assert.match(failing.detail, /boom/);
   assert.equal(runCommandCheck({ id: 'x', type: 'command', run: 'exit 1', expect: 'fail' }, { fixture, app }).pass, true);
 });
+
+test('single-arm mode needs no --b, skips judging and queues only arm A', () => {
+  const config = resolveConfig({ singleArm: true, judge: true }, miniTaskSet);
+  assert.equal(config.arms.B.ref, 'main');
+  assert.equal(config.judge, false);
+  assert.equal(config.name, 'main-single');
+  const queue = buildRunQueue({ taskIds: ['a', 'b'], reps: 2, seed: 3, arms: ['A'] });
+  assert.equal(queue.length, 4);
+  assert.ok(queue.every((job) => job.arm === 'A'));
+  const summary = aggregate({ config: { taskIds: ['t-web'], watch: [], singleArm: true }, taskSet: miniTaskSet, armsInfo: { identical: true, watched: [], A: { policies: [] }, B: { policies: [] } }, runs: [makeRun('t-web', 'A', 1)], judgments: [] });
+  assert.equal(summary.recommendation.verdict, 'single-arm validation');
+});

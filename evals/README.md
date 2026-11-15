@@ -19,6 +19,9 @@ npm run eval -- --b main --b-add policy/modern-web.md=feat/x --b-add policy/rout
 # A/A control: how noisy is the judge on identical arms?
 npm run eval -- --b main --smoke --reps 2
 
+# Validate new tasks and their checks cheaply: one arm, no judge
+npm run eval -- --tasks ts-backend --single-arm --only B1-task-comments --reps 1 --http
+
 # Continue after a stop (budget, Ctrl-C, crash); finished runs and judgments are skipped
 npm run eval -- --resume ~/agent-config-evals/<dir> [--max-usd 30]
 ```

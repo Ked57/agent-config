@@ -29,7 +29,8 @@ const USAGE = `Usage: npm run eval -- --b <ref> [options]
 
 Arms
   --a <ref>                 Arm A agent-config ref (default: main). WORKTREE = current working tree.
-  --b <ref>                 Arm B ref (required). Use --b main for an A/A control.
+  --b <ref>                 Arm B ref (required unless --single-arm). Use --b main for an A/A control.
+  --single-arm              Run only arm A (no --b, no judging): validate tasks and checks cheaply.
   --a-add / --b-add <path>[=<src>]   Add or replace policy/<x>.md or skills/<x> in that arm.
                             <src>: a ref (same path), <ref>:<path>, or a file/dir. Omit for the working tree.
   --a-remove / --b-remove <path>     Remove policy/<x>.md or skills/<x> from that arm.
@@ -138,10 +139,11 @@ async function main() {
   if (fs.existsSync(armsFile)) armsInfo = readJson(armsFile);
   else {
     const built = {};
-    for (const arm of ['A', 'B']) {
+    for (const arm of config.singleArm ? ['A'] : ['A', 'B']) {
       log(`Building arm ${arm} from ${config.arms[arm].ref}${config.arms[arm].add.length + config.arms[arm].remove.length ? ' with toggles' : ''}`);
       built[arm] = buildArm({ repoRoot: REPO_ROOT, spec: config.arms[arm], armDir: path.join(outDir, 'arms', arm) });
     }
+    built.B ??= built.A;
     armsInfo = { A: built.A, B: built.B, ...compareInventories(built.A, built.B) };
     writeJson(armsFile, armsInfo);
   }
@@ -173,7 +175,7 @@ async function main() {
     log('Interrupted: finishing in-flight work, then writing the report (Ctrl-C again to abort).');
   });
 
-  const queue = buildRunQueue({ taskIds: config.taskIds, reps: config.reps, seed: config.seed });
+  const queue = buildRunQueue({ taskIds: config.taskIds, reps: config.reps, seed: config.seed, arms: config.singleArm ? ['A'] : ['A', 'B'] });
   const done = new Set(runs.map((run) => run.id));
   if (raw.recheck) {
     // Pick up edited checks and hidden tests from the repo's copy of this task set.

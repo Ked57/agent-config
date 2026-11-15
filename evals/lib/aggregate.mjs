@@ -153,7 +153,9 @@ export function aggregate({ config, taskSet, armsInfo, runs, judgments, activeJu
   };
 
   const notable = notableDiffs({ perTask, judgments: ab, runs });
-  const recommendation = recommend({ armsInfo, comparison, noise, overall, overhead, telemetry });
+  const recommendation = config.singleArm
+    ? { verdict: 'single-arm validation', reasons: ['Only arm A ran: this report validates tasks, checks and gates, not a change. Judge, comparison and cost-overhead sections are empty by design.'] }
+    : recommend({ armsInfo, comparison, noise, overall, overhead, telemetry });
   const sum = (items, pick) => items.reduce((total, item) => total + (pick(item) ?? 0), 0);
   const cost = {
     runsUsd: sum(runs, (run) => run.cost?.usd),
