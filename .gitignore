@@ -8,3 +8,4 @@
 *.secret
 
 .cursor/hooks/state
+!.env.example
