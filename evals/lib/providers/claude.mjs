@@ -122,7 +122,17 @@ export const claudeProvider = {
     fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
     const args = ['-p', '--model', model, '--tools', '', '--output-format', 'json', '--strict-mcp-config'];
     if (effort) args.push('--effort', effort);
-    const { stdout, exitCode } = await runProcess({ args, cwd: home, env: claudeEnv(home), stdin: prompt, timeoutMs });
+    // Judge from a fresh empty directory outside the eval tree. Claude Code loads CLAUDE.md from the
+    // cwd's ancestors (a judge home under the user's home picked up the live ~/.claude/CLAUDE.md) and
+    // shows the cwd to the model, so the cwd must not sit under a home or carry the eval's name.
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-'));
+    let stdout;
+    let exitCode;
+    try {
+      ({ stdout, exitCode } = await runProcess({ args, cwd, env: claudeEnv(home), stdin: prompt, timeoutMs }));
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
     if (exitCode !== 0) throw new Error(`claude judge exited ${exitCode}: ${stdout.slice(0, 300)}`);
     const envelope = JSON.parse(stdout);
     return { text: envelope.result ?? '', costUsd: envelope.total_cost_usd ?? 0 };

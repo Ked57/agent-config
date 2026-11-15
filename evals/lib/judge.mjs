@@ -3,7 +3,19 @@
 
 export const DIMENSIONS = ['correctness', 'accessibility', 'fit', 'platform', 'scope'];
 
+/**
+ * Removes what a saved `diff -ruN` patch reveals beyond the change itself: the command line (its
+ * `--exclude=.eval-ready` arguments name the harness) and the file timestamps (when, and for how
+ * long, each run edited files). Applied to both patches before the judge sees them.
+ */
+export function sanitisePatch(patch) {
+  return String(patch)
+    .replace(/^diff (?:(?:'-[^'\n]*'|-\S+) )+/gm, 'diff ')
+    .replace(/^((?:---|\+\+\+) [^\t\n]+)\t\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)? [+-]\d{4}$/gm, '$1');
+}
+
 export function buildJudgePrompt({ context, task, patch1, patch2 }) {
+  [patch1, patch2] = [sanitisePatch(patch1), sanitisePatch(patch2)];
   return `You are reviewing two independent patches to the same codebase. ${context ?? ''}
 
 Score each patch from 1 (poor) to 5 (excellent) on:
@@ -65,7 +77,9 @@ export const overallScore = (scores) => DIMENSIONS.reduce((sum, dimension) => su
 /**
  * Combines one or more verdicts on the same pair. Each verdict is `{ order: [left, right], value }`
  * where `value` is a parsed reply and `order` maps patch1/patch2 to side keys. Scores are averaged per
- * side; the preference is the majority side, and any split (including order-dependent flips) is a tie.
+ * side. A side wins when it has more votes than the other side and more than half as many as the
+ * ties, so with two verdicts an order-dependent flip is a tie, but one vote for a side plus one tie
+ * is a win for that side (`unanimous` is false in both cases).
  */
 export function combineVerdicts(verdicts, sides) {
   const scores = Object.fromEntries(sides.map((side) => [side, Object.fromEntries(DIMENSIONS.map((dimension) => [dimension, 0]))]));
@@ -115,5 +129,7 @@ export async function judgePair({ ask, buildPrompt, sides, repeats = 2, retries 
     }
     if (lastError) throw new Error(`judge reply malformed after ${retries + 1} attempts: ${lastError}`);
   }
-  return { ...combineVerdicts(verdicts, sides), repeats: verdicts.length, costUsd };
+  // Keep each verdict with its presentation order so position bias can be audited from the record.
+  const calls = verdicts.map(({ order, value }) => ({ order, preference: value.preference, overall: [overallScore(value.patch1), overallScore(value.patch2)] }));
+  return { ...combineVerdicts(verdicts, sides), repeats: verdicts.length, calls, costUsd };
 }
