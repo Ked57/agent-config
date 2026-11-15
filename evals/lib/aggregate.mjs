@@ -92,7 +92,7 @@ export function noiseFloor(judgments, armsIdentical) {
   };
 }
 
-export function aggregate({ config, taskSet, armsInfo, runs, judgments }) {
+export function aggregate({ config, taskSet, armsInfo, runs, judgments, activeJudgeSet = null, otherJudgeSets = {} }) {
   const tasksById = Object.fromEntries(taskSet.tasks.map((task) => [task.id, task]));
   const taskIds = config.taskIds.filter((id) => runs.some((run) => run.task === id));
   const armRuns = (arm, filter = () => true) => runs.filter((run) => run.arm === arm && filter(run));
@@ -154,7 +154,67 @@ export function aggregate({ config, taskSet, armsInfo, runs, judgments }) {
 
   const notable = notableDiffs({ perTask, judgments: ab, runs });
   const recommendation = recommend({ armsInfo, comparison, noise, overall, overhead, telemetry });
-  return { generatedAt: new Date().toISOString(), runs: runs.length, judgments: judgments.length, perTask, perCategory, overall, overhead, overheadNonControl, telemetry, noise, comparison, notable, recommendation };
+  const sum = (items, pick) => items.reduce((total, item) => total + (pick(item) ?? 0), 0);
+  const cost = {
+    runsUsd: sum(runs, (run) => run.cost?.usd),
+    runsUsdByArm: { A: sum(runs.filter((run) => run.arm === 'A'), (run) => run.cost?.usd), B: sum(runs.filter((run) => run.arm === 'B'), (run) => run.cost?.usd) },
+    judgeSet: activeJudgeSet,
+    judgeUsd: sum(judgments, (judgment) => judgment.costUsd),
+    judgeUsdPerJudgment: judgments.length ? sum(judgments, (judgment) => judgment.costUsd) / judgments.length : null,
+    otherJudgeSetsUsd: Object.fromEntries(Object.entries(otherJudgeSets).map(([id, set]) => [id, sum(set, (judgment) => judgment.costUsd)]))
+  };
+  cost.totalUsd = cost.runsUsd + cost.judgeUsd + Object.values(cost.otherJudgeSetsUsd).reduce((total, value) => total + value, 0);
+  const judgeComparisons = Object.entries(otherJudgeSets).map(([id, set]) => ({ id, ...compareJudgeSets(judgments, set, armsInfo.identical) }));
+  const runtimeSmoke = Object.fromEntries(['A', 'B'].map((arm) => {
+    const checked = runs.filter((run) => run.arm === arm && (run.browser || run.http));
+    return [arm, checked.length ? { runs: checked.length, pass: checked.filter((run) => (run.browser?.ok ?? true) && (run.http?.ok ?? true)).length } : null];
+  }));
+  return { generatedAt: new Date().toISOString(), runs: runs.length, judgments: judgments.length, cost, judgeComparisons, runtimeSmoke, perTask, perCategory, overall, overhead, overheadNonControl, telemetry, noise, comparison, notable, recommendation };
+}
+
+const pearson = (xs, ys) => {
+  if (xs.length < 3) return null;
+  const mx = mean(xs);
+  const my = mean(ys);
+  let num = 0;
+  let dx = 0;
+  let dy = 0;
+  for (let i = 0; i < xs.length; i += 1) {
+    num += (xs[i] - mx) * (ys[i] - my);
+    dx += (xs[i] - mx) ** 2;
+    dy += (ys[i] - my) ** 2;
+  }
+  return dx && dy ? num / Math.sqrt(dx * dy) : null;
+};
+
+/**
+ * How far a second judge agrees with the active one on the same pairs: preference agreement,
+ * decisive flips (one prefers A, the other B), score deltas, correlation of B−A margins, cost and
+ * each judge's own noise floor.
+ */
+export function compareJudgeSets(primary, other, armsIdentical) {
+  const byId = new Map(other.map((judgment) => [judgment.id, judgment]));
+  const common = primary.filter((judgment) => byId.has(judgment.id));
+  const margin = (judgment) => judgment.scores[judgment.sides[1]].overall - judgment.scores[judgment.sides[0]].overall;
+  const decisiveBoth = common.filter((judgment) => judgment.preference !== 'tie' && byId.get(judgment.id).preference !== 'tie');
+  const summarise = (set) => ({
+    judgments: set.length,
+    costUsd: set.reduce((total, judgment) => total + (judgment.costUsd ?? 0), 0),
+    costPerJudgment: set.length ? set.reduce((total, judgment) => total + (judgment.costUsd ?? 0), 0) / set.length : null,
+    decisiveRate: set.length ? set.filter((judgment) => judgment.preference !== 'tie').length / set.length : null,
+    splitRate: set.length ? set.filter((judgment) => !judgment.unanimous).length / set.length : null,
+    noise: noiseFloor(set, armsIdentical)
+  });
+  return {
+    pairs: common.length,
+    preferenceAgreement: common.length ? common.filter((judgment) => judgment.preference === byId.get(judgment.id).preference).length / common.length : null,
+    decisiveBoth: decisiveBoth.length,
+    decisiveFlips: decisiveBoth.filter((judgment) => judgment.preference !== byId.get(judgment.id).preference).length,
+    meanAbsScoreDelta: mean(common.flatMap((judgment) => judgment.sides.map((side) => Math.abs(judgment.scores[side].overall - byId.get(judgment.id).scores[side].overall)))),
+    marginCorrelation: pearson(common.map(margin), common.map((judgment) => margin(byId.get(judgment.id)))),
+    active: summarise(common),
+    other: summarise(common.map((judgment) => byId.get(judgment.id)))
+  };
 }
 
 export function notableDiffs({ perTask, judgments, runs }) {
@@ -179,6 +239,7 @@ export function notableDiffs({ perTask, judgments, runs }) {
   for (const { j, diff } of ranked) {
     notes.push({ kind: 'judge', task: j.task, text: `rep ${j.reps.join('/')}: B ${diff > 0 ? '+' : ''}${diff.toFixed(2)} vs A, preferred ${j.preference}. ${j.reasons[0] ?? ''}`.trim(), notesA: j.notes.A[0], notesB: j.notes.B[0] });
   }
+  for (const run of runs.filter((r) => r.http && !r.http.ok)) notes.push({ kind: 'http', task: run.task, text: `${run.id} HTTP smoke failed: ${run.http.error ?? Object.entries(run.http.requests).filter(([, v]) => !v.ok).map(([name, v]) => `${name} got ${v.status}, expected ${v.expected}`).join('; ')}` });
   for (const run of runs.filter((r) => r.browser && !r.browser.ok)) notes.push({ kind: 'browser', task: run.task, text: `${run.id} browser smoke failed: ${run.browser.error ?? Object.entries(run.browser.routes).filter(([, v]) => v.errors.length || !v.textLength).map(([route, v]) => `${route} ${v.errors[0] ?? 'empty'}`).join('; ')}` });
   for (const run of runs.filter((r) => r.status !== 'ok')) notes.push({ kind: 'error', task: run.task, text: `${run.id} did not complete (${run.error ?? `exit ${run.exitCode}`})` });
   return notes;

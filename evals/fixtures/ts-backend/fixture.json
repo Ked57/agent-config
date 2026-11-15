@@ -1,0 +1,104 @@
+{
+  "name": "ts-backend",
+  "description": "Multi-tenant tasks API: Bun + Elysia (TypeBox validation, macro auth guard) + Drizzle ORM on SQLite via libSQL (drizzle-kit migrations, seed) + Vitest + ESLint (typescript-eslint) + Prettier. Mirrors the user's RacePlanr API with SQLite in place of Postgres.",
+  "setup": [
+    "bun install --frozen-lockfile"
+  ],
+  "linkPaths": [
+    "node_modules"
+  ],
+  "diffExclude": [
+    "node_modules",
+    "dist",
+    "data",
+    "*.db",
+    "*.db-journal",
+    "*.db-wal",
+    "*.db-shm",
+    "bun.lock",
+    "*.log",
+    "*_snapshot.json"
+  ],
+  "gates": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --check .",
+    "test": "vitest run",
+    "build": "bun build src/index.ts --target bun --outdir dist"
+  },
+  "dependencies": {
+    "type": "npm",
+    "file": "package.json"
+  },
+  "http": {
+    "env": {
+      "PORT": "{port}",
+      "DATABASE_URL": "file:{tmp}/smoke.db",
+      "WEBHOOK_SECRET": "smoke-webhook-secret",
+      "TOKEN_TTL_HOURS": "24",
+      "LOG_LEVEL": "warn"
+    },
+    "prepare": [
+      "bun run scripts/migrate.ts",
+      "bun run scripts/seed.ts"
+    ],
+    "start": "bun run src/index.ts",
+    "readyPath": "/api/health",
+    "requests": [
+      {
+        "name": "health",
+        "method": "GET",
+        "path": "/api/health",
+        "expectStatus": 200
+      },
+      {
+        "name": "unauthenticated",
+        "method": "GET",
+        "path": "/api/projects",
+        "expectStatus": 401
+      },
+      {
+        "name": "list projects",
+        "method": "GET",
+        "path": "/api/projects",
+        "token": "dev-acme-admin-token",
+        "expectStatus": 200
+      },
+      {
+        "name": "list tasks",
+        "method": "GET",
+        "path": "/api/projects/prj_web/tasks",
+        "token": "dev-acme-admin-token",
+        "expectStatus": 200
+      },
+      {
+        "name": "login",
+        "method": "POST",
+        "path": "/api/auth/token",
+        "body": {
+          "email": "ada@acme.test",
+          "password": "password123"
+        },
+        "expectStatus": 200
+      },
+      {
+        "name": "webhook",
+        "method": "POST",
+        "path": "/api/webhooks/billing",
+        "headers": {
+          "x-webhook-secret": "smoke-webhook-secret"
+        },
+        "body": {
+          "id": "evt_smoke",
+          "type": "payment.succeeded",
+          "data": {
+            "orgId": "org_acme",
+            "credits": 1
+          }
+        },
+        "expectStatus": 200
+      }
+    ]
+  },
+  "judgeContext": "The codebase is a multi-tenant tasks API on Bun + Elysia (TypeBox `t` validation, a `requireAuth` macro), Drizzle ORM over SQLite/libSQL with drizzle-kit SQL migrations, Vitest tests against a real temp database, ESLint and Prettier. Reward correct tenant scoping, real migrations, tests that cover the change, and following the existing route/plugin patterns; penalise unnecessary dependencies and scope creep."
+}

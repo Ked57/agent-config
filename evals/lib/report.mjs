@@ -34,7 +34,12 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture, spen
   lines.push(`- Judge: ${config.judge ? `provider \`${config.judgeProvider}\`${config.judgeProvider === 'command' ? ` (\`${config.judgeCommand}\`)` : `, model \`${config.judgeModel}\``}, ${config.judgeReps} verdict(s) per pair with alternating patch order, ${config.judgeControls} A#1-vs-A#2 control pair(s) per task` : 'disabled'}.`);
   lines.push(`- Isolation: each arm installed with its own ref's \`bin/agent-config.mjs sync --user\` into a temporary HOME; telemetry env vars off.`);
   if (summary.stoppedEarly) lines.push(`- **Stopped early:** ${summary.stoppedEarly}. Results are partial.`);
-  if (spend) lines.push(`- Spend: agent runs $${fmt(spend.runsUsd)}, judge $${fmt(spend.judgeUsd)}, total $${fmt(spend.runsUsd + spend.judgeUsd)}${config.maxUsd ? ` (cap $${config.maxUsd})` : ''}.`);
+  const cost = summary.cost;
+  if (cost) lines.push(`- Spend: agent runs $${fmt(cost.runsUsd)}, judge (\`${cost.judgeSet ?? 'n/a'}\`) $${fmt(cost.judgeUsd)}${Object.keys(cost.otherJudgeSetsUsd).length ? `, other judge sets $${fmt(Object.values(cost.otherJudgeSetsUsd).reduce((a, b) => a + b, 0))}` : ''}, total $${fmt(cost.totalUsd)}${config.maxUsd ? ` (cap $${config.maxUsd})` : ''}.`);
+  for (const arm of ['A', 'B']) {
+    const smoke = summary.runtimeSmoke?.[arm];
+    if (smoke) lines.push(`- Runtime smoke (browser/HTTP) arm ${arm}: ${smoke.pass}/${smoke.runs} runs passed.`);
+  }
   lines.push('');
 
   lines.push('## Per-task results', '');
@@ -64,6 +69,16 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture, spen
   const rows = [['Cost per run ($)', 'costUsd', 2], ['Output tokens', 'outputTokens', 0], ['Input tokens incl. cache', 'inputTokens', 0], ['Wall time (min)', 'wallMin', 2], ['Turns', 'turns', 1], ['Tool calls', 'toolCalls', 1]];
   for (const [label, key, digits] of rows) lines.push(`| ${label} | ${fmt(overall.A[key], digits)} | ${fmt(overall.B[key], digits)} | ${signedPct(summary.overhead[key])} |`);
   lines.push(`| Cost per run, non-control tasks | | | ${signedPct(summary.overheadNonControl)} |`, '');
+  if (cost) {
+    lines.push('Where the money went:', '');
+    lines.push('| Item | USD | Share |', '|---|---|---|');
+    const share = (value) => (cost.totalUsd ? pct(value / cost.totalUsd) : '–');
+    lines.push(`| Agent runs, arm A | ${fmt(cost.runsUsdByArm.A)} | ${share(cost.runsUsdByArm.A)} |`);
+    lines.push(`| Agent runs, arm B | ${fmt(cost.runsUsdByArm.B)} | ${share(cost.runsUsdByArm.B)} |`);
+    lines.push(`| Judge \`${cost.judgeSet ?? 'n/a'}\` (${summary.judgments} judgments, $${fmt(cost.judgeUsdPerJudgment, 3)} each) | ${fmt(cost.judgeUsd)} | ${share(cost.judgeUsd)} |`);
+    for (const [id, usd] of Object.entries(cost.otherJudgeSetsUsd)) lines.push(`| Judge \`${id}\` (comparison set) | ${fmt(usd)} | ${share(usd)} |`);
+    lines.push('');
+  }
 
   lines.push('## Policy and skill telemetry', '');
   lines.push('Fired = the agent read the policy file (or, for policies with a command signal, acted on it).', '');
@@ -98,6 +113,23 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture, spen
   lines.push(`Source: ${noise.source}, ${noise.pairs} pair(s). Decisive (non-tie) rate ${pct(noise.decisiveRate)}, mean |overall diff| ${fmt(noise.meanAbsDiff)}, max ${fmt(noise.maxAbsDiff)}, order/repeat split rate ${pct(noise.splitRate)}.`, '');
   lines.push(`A/B comparison: ${comparison.pairs} pair(s), B ${comparison.bWins} · A ${comparison.aWins} · tie ${comparison.ties}; mean overall B−A ${fmtSigned(comparison.meanDiff)}; sign test p=${fmt(comparison.signTestP)}; ${comparison.beyondNoise === null ? 'noise floor unavailable' : comparison.beyondNoise ? 'mean difference beyond the noise floor' : 'mean difference within the noise floor'}. A difference counts only when it is beyond the floor **and** p < 0.1: **${comparison.beyondNoise && comparison.signTestP < 0.1 ? 'significant' : 'not significant'}**.`, '');
 
+  if (summary.judgeComparisons?.length) {
+    lines.push('## Judge comparison', '');
+    lines.push(`Active judge: \`${cost?.judgeSet}\`. Each other judge set below re-judged the same pairs.`, '');
+    for (const comparison of summary.judgeComparisons) {
+      lines.push(`### vs \`${comparison.id}\` (${comparison.pairs} common pairs)`, '');
+      lines.push(`- Same preference: ${pct(comparison.preferenceAgreement)}; decisive flips (one judge prefers A, the other B): ${comparison.decisiveFlips}/${comparison.decisiveBoth}.`);
+      lines.push(`- Mean |overall score difference| per patch: ${fmt(comparison.meanAbsScoreDelta)}; correlation of B−A margins: ${fmt(comparison.marginCorrelation)}.`, '');
+      lines.push(`| | \`${cost?.judgeSet}\` | \`${comparison.id}\` |`, '|---|---|---|');
+      const row = (label, pick, digits = 2) => lines.push(`| ${label} | ${pick(comparison.active)} | ${pick(comparison.other)} |`);
+      row('Cost (these pairs)', (side) => `$${fmt(side.costUsd)}`);
+      row('Cost per judgment', (side) => `$${fmt(side.costPerJudgment, 3)}`);
+      row('Decisive rate', (side) => pct(side.decisiveRate));
+      row('Order/repeat split rate', (side) => pct(side.splitRate));
+      row(`Noise floor: mean abs score diff (${comparison.active.noise.source})`, (side) => `${fmt(side.noise.meanAbsDiff)} over ${side.noise.pairs} pair(s), decisive ${pct(side.noise.decisiveRate)}`);
+      lines.push('');
+    }
+  }
   lines.push('## Notable diffs', '');
   if (!summary.notable.length) lines.push('Nothing stood out.');
   for (const note of summary.notable) {
@@ -110,7 +142,7 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture, spen
   lines.push('## Files', '');
   lines.push('- `config.json`, `arms.json`: resolved configuration and arm metadata');
   lines.push('- `runs/<task>__<arm>__r<n>/`: `transcript.jsonl`, `diff.patch`, `app/` (the worked copy)');
-  lines.push('- `results/runs/*.json`: per-run measurements; `results/judge/*.json`: judgments; `summary.json`: aggregates');
+  lines.push('- `results/runs/*.json`: per-run measurements; `results/judge/<judge-set>/*.json`: judgments; `summary.json`: aggregates');
   lines.push('');
   return lines.join('\n');
 }

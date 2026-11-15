@@ -60,7 +60,9 @@ export function preparePristine(fixture, cacheRoot, log = console.log) {
   if (fs.existsSync(path.join(pristine, '.eval-ready'))) return pristine;
   const staging = `${pristine}.staging-${process.pid}`;
   fs.rmSync(staging, { recursive: true, force: true });
-  fs.cpSync(fixture.templateDir, staging, { recursive: true });
+  // A template may hold a local install from editing it; setup reinstalls from the lockfile.
+  const skip = new Set(['node_modules', 'dist', 'data']);
+  fs.cpSync(fixture.templateDir, staging, { recursive: true, filter: (source) => !skip.has(path.basename(source)) || path.dirname(source) !== fixture.templateDir });
   log(`Preparing fixture ${fixture.name} in ${pristine} ...`);
   const env = { ...process.env, ...TELEMETRY_OFF, npm_config_cache: path.join(cacheRoot, 'npm-cache') };
   for (const command of fixture.setup) sh(command.replaceAll('{fixtureDir}', fixture.dir), staging, env);
@@ -82,8 +84,14 @@ export function copyForRun(fixture, pristine, destination) {
     const source = path.join(pristine, linkPath);
     if (!fs.existsSync(source)) continue;
     fs.mkdirSync(path.dirname(path.join(destination, linkPath)), { recursive: true });
-    const link = spawnSync('cp', ['-al', source, path.join(destination, linkPath)], { encoding: 'utf8' });
-    if (link.status !== 0) throw new Error(`hard-link copy failed: ${link.stderr}`);
+    const target = path.join(destination, linkPath);
+    let link = spawnSync('cp', ['-al', source, target], { encoding: 'utf8' });
+    if (link.status !== 0) {
+      // Hard links can't cross filesystems (e.g. results on another mount than the cache): copy instead.
+      fs.rmSync(target, { recursive: true, force: true });
+      link = spawnSync('cp', ['-a', source, target], { encoding: 'utf8' });
+    }
+    if (link.status !== 0) throw new Error(`copy of ${linkPath} failed: ${link.stderr.slice(0, 500)}`);
   }
 }
 

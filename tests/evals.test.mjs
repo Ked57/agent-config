@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { aggregate, signTest } from '../evals/lib/aggregate.mjs';
 import { compareInventories } from '../evals/lib/arms.mjs';
 import { countFeatures, detectPolicies, evaluateChecks, newDependencies, parseUnifiedDiff } from '../evals/lib/checks.mjs';
-import { globToRegExp, parseArgs, parseToggle, resolveConfig, validateTaskSet } from '../evals/lib/config.mjs';
+import { DEFAULTS, globToRegExp, judgeSetId, parseArgs, parseToggle, resolveConfig, validateTaskSet } from '../evals/lib/config.mjs';
+import { runCommandCheck } from '../evals/lib/measure.mjs';
 import { buildJudgePrompt, combineVerdicts, judgePair, parseJudgeReply } from '../evals/lib/judge.mjs';
 import { budgetAllows, buildRunQueue, planJudgePairs } from '../evals/lib/plan.mjs';
 import { parseTranscript } from '../evals/lib/providers/claude.mjs';
@@ -273,8 +275,17 @@ test('aggregate measures overhead, false triggers, noise floor and recommends', 
   judgments.push(judgment('t-web', 1, 'AA', 3.5, 3.6, 'tie'));
   const config = { taskIds: ['t-web', 't-ctl'], watch: [] };
   const armsInfo = { identical: false, watched: ['modern-web'], A: { policies: ['routing'] }, B: { policies: ['routing', 'modern-web'] } };
-  const summary = aggregate({ config, taskSet: miniTaskSet, armsInfo, runs, judgments });
+  const opusJudgments = judgments.map((j) => ({ ...j, preference: j.kind === 'AB' && j.reps[0] <= 2 ? 'A' : j.preference, scores: { ...j.scores }, costUsd: 0.5 }));
+  const summary = aggregate({ config, taskSet: miniTaskSet, armsInfo, runs, judgments, activeJudgeSet: 'claude-sonnet-5-5', otherJudgeSets: { 'claude-opus-5-5': opusJudgments } });
   assert.ok(Math.abs(summary.overhead.costUsd - 0.5) < 1e-9);
+  assert.equal(summary.cost.runsUsd, 17.5);
+  assert.ok(Math.abs(summary.cost.judgeUsd - 0.7) < 1e-9);
+  assert.ok(Math.abs(summary.cost.otherJudgeSetsUsd['claude-opus-5-5'] - 3.5) < 1e-9);
+  const [comparison] = summary.judgeComparisons;
+  assert.equal(comparison.pairs, 7);
+  assert.equal(comparison.decisiveFlips, 2);
+  assert.ok(Math.abs(comparison.preferenceAgreement - 5 / 7) < 1e-9);
+  assert.equal(comparison.meanAbsScoreDelta, 0);
   assert.equal(summary.telemetry.perPolicy['modern-web'].falseTriggers.B.controlFired, 1);
   assert.equal(summary.telemetry.perPolicy['modern-web'].falseTriggers.A, undefined);
   assert.equal(summary.telemetry.perPolicy['modern-web'].misses.B.missed.length, 0);
@@ -300,7 +311,10 @@ test('aggregate measures overhead, false triggers, noise floor and recommends', 
   for (const heading of ['## Recommendation', '## Setup', '## Per-task results', '## Per-category summary', '## Cost overhead of B', '## Policy and skill telemetry', '## Judge noise floor', '## Notable diffs']) assert.ok(report.includes(heading), heading);
   assert.match(report, /\| t-web \| web \|/);
   assert.match(report, /\| modern-web \| B \| 1\/1 \|/);
-  assert.match(report, /total \$21\.00/);
+  assert.match(report, /total \$21\.70/);
+  assert.match(report, /Judge `claude-sonnet-5-5` \(7 judgments, \$0\.100 each\)/);
+  assert.match(report, /## Judge comparison/);
+  assert.match(report, /decisive flips \(one judge prefers A, the other B\): 2\/6/);
 });
 
 test('signTest matches exact binomial values', () => {
@@ -315,4 +329,56 @@ test('compareInventories ignores routing when naming watched policies', () => {
   const b = { hashes: { '.agents/policy/routing.md': '9', '.agents/policy/react.md': '2', '.agents/policy/modern-web.md': '3', '.claude/skills/new/SKILL.md': '4' } };
   assert.deepEqual(compareInventories(a, b), { identical: false, changedFiles: ['.agents/policy/modern-web.md', '.agents/policy/routing.md', '.claude/skills/new/SKILL.md'], watched: ['modern-web', 'new'] });
   assert.equal(compareInventories(a, a).identical, true);
+});
+
+test('the ts-backend task set and fixture are valid and every hidden test file exists', () => {
+  const taskSet = JSON.parse(fs.readFileSync(path.join(root, 'evals/tasks/ts-backend.json'), 'utf8'));
+  const fixture = JSON.parse(fs.readFileSync(path.join(root, 'evals/fixtures/ts-backend/fixture.json'), 'utf8'));
+  assert.deepEqual(validateTaskSet(taskSet), []);
+  assert.equal(taskSet.fixture, fixture.name);
+  assert.equal(taskSet.tasks.filter((task) => taskSet.categories[task.category].control).length, 2);
+  for (const task of taskSet.tasks) {
+    for (const check of task.checks.filter((c) => c.type === 'command')) {
+      for (const from of Object.keys(check.copy)) assert.ok(fs.existsSync(path.join(root, 'evals/fixtures/ts-backend', from)), `${task.id}: missing ${from}`);
+    }
+  }
+  const readme = taskSet.tasks.find((task) => task.id === 'N2-readme').checks.find((check) => check.id === 'endpoints-documented');
+  assert.ok(new RegExp(readme.pattern, 'm').test('POST /api/auth/token\n...\nPOST /api/webhooks/billing'));
+  assert.ok(!new RegExp(readme.pattern, 'm').test('POST /api/auth/token only'));
+});
+
+test('validateTaskSet checks command checks', () => {
+  const base = { name: 'x', fixture: 'f', categories: { c: {} } };
+  const ok = { ...base, tasks: [{ id: 't', category: 'c', prompt: 'p', checks: [{ id: 'h', type: 'command', run: 'vitest run x', copy: { 'hidden/x.ts': 'src/x.ts' } }] }] };
+  assert.deepEqual(validateTaskSet(ok), []);
+  const bad = { ...base, tasks: [{ id: 't', category: 'c', prompt: 'p', checks: [{ id: 'h', type: 'command', run: '', expect: 'maybe', copy: { '../escape.ts': 'src/x.ts' } }] }] };
+  const errors = validateTaskSet(bad).join('\n');
+  assert.match(errors, /run is required/);
+  assert.match(errors, /expect must be pass or fail/);
+  assert.match(errors, /copy must map/);
+});
+
+test('judgeSetId separates judges by model, effort and command', () => {
+  assert.equal(judgeSetId({ judgeProvider: 'claude', judgeModel: 'claude-sonnet-5-5', judgeEffort: 'medium' }), 'claude-sonnet-5-5');
+  assert.equal(judgeSetId({ judgeProvider: 'claude', judgeModel: 'claude-opus-5-5', judgeEffort: 'high' }), 'claude-opus-5-5-high');
+  const a = judgeSetId({ judgeProvider: 'command', judgeCommand: 'llm -m a' });
+  assert.match(a, /^command-[0-9a-f]{8}$/);
+  assert.notEqual(a, judgeSetId({ judgeProvider: 'command', judgeCommand: 'llm -m b' }));
+  assert.equal(DEFAULTS.judgeModel, 'claude-sonnet-5-5');
+  assert.equal(DEFAULTS.model, 'claude-opus-5-5');
+});
+
+test('runCommandCheck copies hidden files, runs the command and cleans up', () => {
+  const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-fixture-'));
+  const app = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-app-'));
+  fs.mkdirSync(path.join(fixtureDir, 'hidden'));
+  fs.writeFileSync(path.join(fixtureDir, 'hidden', 'probe.txt'), 'secret');
+  const fixture = { dir: fixtureDir };
+  const passing = runCommandCheck({ id: 'p', type: 'command', copy: { 'hidden/probe.txt': 'src/__hidden__/probe.txt' }, run: 'grep -q secret src/__hidden__/probe.txt' }, { fixture, app });
+  assert.deepEqual([passing.pass, passing.level], [true, 'required']);
+  assert.ok(!fs.existsSync(path.join(app, 'src', '__hidden__')), 'hidden files must be removed');
+  const failing = runCommandCheck({ id: 'f', type: 'command', run: 'echo boom; exit 3', level: 'info' }, { fixture, app });
+  assert.deepEqual([failing.pass, failing.level], [false, 'info']);
+  assert.match(failing.detail, /boom/);
+  assert.equal(runCommandCheck({ id: 'x', type: 'command', run: 'exit 1', expect: 'fail' }, { fixture, app }).pass, true);
 });

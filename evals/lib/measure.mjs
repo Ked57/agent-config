@@ -8,16 +8,41 @@ import { TELEMETRY_OFF } from './env.mjs';
 
 const GATE_TIMEOUT_MS = 10 * 60 * 1000;
 
-export function runGate(command, app) {
+export function runGate(command, app, timeoutMs = GATE_TIMEOUT_MS) {
   const result = spawnSync('bash', ['-c', command], {
     cwd: app,
     encoding: 'utf8',
-    timeout: GATE_TIMEOUT_MS,
+    timeout: timeoutMs,
     maxBuffer: 64 * 1024 * 1024,
     env: { ...process.env, ...TELEMETRY_OFF, CI: '1', NO_COLOR: '1', PATH: `${path.join(app, 'node_modules', '.bin')}${path.delimiter}${process.env.PATH}` }
   });
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
   return { ok: result.status === 0, tail: result.status === 0 ? '' : output.split('\n').slice(-30).join('\n') };
+}
+
+/**
+ * Runs a task's `command` check: copies hidden files from the fixture into the app (after the diff
+ * was taken, so neither the agent nor the judge sees them), runs the command, then removes them.
+ */
+export function runCommandCheck(check, { fixture, app }) {
+  const copied = [];
+  for (const [from, to] of Object.entries(check.copy ?? {})) {
+    const target = path.join(app, to);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.cpSync(path.join(fixture.dir, from), target, { recursive: true });
+    copied.push(target);
+  }
+  try {
+    const result = runGate(check.run, app, (check.timeoutSec ?? 600) * 1000);
+    const pass = check.expect === 'fail' ? !result.ok : result.ok;
+    return { id: check.id, label: check.label ?? check.id, level: check.level ?? 'required', pass, detail: pass ? '' : result.tail.slice(-600) };
+  } finally {
+    for (const target of copied) {
+      fs.rmSync(target, { recursive: true, force: true });
+      const parent = path.dirname(target);
+      if (fs.existsSync(parent) && fs.readdirSync(parent).length === 0) fs.rmSync(parent, { recursive: true, force: true });
+    }
+  }
 }
 
 export function diffAgainstPristine(fixture, pristine, app) {
@@ -58,7 +83,10 @@ export function measureRun({ job, fixture, pristine, runDir, app, taskSet, task,
   const diff = parseUnifiedDiff(patch);
   const gates = Object.fromEntries(Object.entries(fixture.gates).map(([name, command]) => [name, runGate(command, app)]));
   const ignored = ['node_modules', 'dist', '.git'];
-  const checks = evaluateChecks(task.checks, diff, finalFiles(app, ignored));
+  const staticResults = evaluateChecks(task.checks, diff, finalFiles(app, ignored));
+  const checks = (task.checks ?? []).map((check) => (check.type === 'command'
+    ? runCommandCheck(check, { fixture, app })
+    : staticResults.find((result) => result.id === check.id)));
   let deps = { added: [] };
   if (fixture.dependencies?.type === 'npm') {
     deps = { added: newDependencies(readJson(path.join(pristine, fixture.dependencies.file)), readJson(path.join(app, fixture.dependencies.file))) };
@@ -92,4 +120,13 @@ export function measureRun({ job, fixture, pristine, runDir, app, taskSet, task,
     telemetry: { ...telemetry, commands: transcript.events.commands.filter((command) => Object.values(taskSet.policySignals ?? {}).some((signal) => new RegExp(signal.commandPattern).test(command))) },
     resultExcerpt: transcript.resultText.slice(-2000)
   };
+}
+
+/** Re-scores a finished run's task checks against the current task definition (no agent, no gates). */
+export function recheckRun({ fixture, app, runDir, task }) {
+  const diff = parseUnifiedDiff(fs.readFileSync(path.join(runDir, 'diff.patch'), 'utf8'));
+  const staticResults = evaluateChecks(task.checks, diff, finalFiles(app, ['node_modules', 'dist', '.git']));
+  return (task.checks ?? []).map((check) => (check.type === 'command'
+    ? runCommandCheck(check, { fixture, app })
+    : staticResults.find((result) => result.id === check.id)));
 }

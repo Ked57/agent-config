@@ -12,18 +12,20 @@ export const DEFAULTS = Object.freeze({
   timeoutMin: 45,
   judge: true,
   judgeProvider: 'claude',
-  judgeModel: 'claude-opus-5-5',
+  // Sonnet judges at a fraction of Opus cost; see evals/README.md for the measured agreement.
+  judgeModel: 'claude-sonnet-5-5',
   judgeEffort: 'medium',
   judgeCommand: null,
   judgeReps: 2,
   judgeControls: 1,
   browser: false,
+  http: false,
   maxUsd: null,
   maxRuns: null
 });
 
 const LIST_FLAGS = new Set(['a-add', 'a-remove', 'b-add', 'b-remove', 'env', 'watch', 'only']);
-const BOOLEAN_FLAGS = new Set(['smoke', 'browser', 'no-judge', 'dry-run', 'report-only', 'help']);
+const BOOLEAN_FLAGS = new Set(['smoke', 'browser', 'http', 'no-judge', 'dry-run', 'report-only', 'rejudge', 'recheck', 'help']);
 const NUMBER_FLAGS = new Set(['reps', 'concurrency', 'timeout-min', 'judge-reps', 'judge-controls', 'max-usd', 'max-runs']);
 const STRING_FLAGS = new Set(['a', 'b', 'tasks', 'provider', 'model', 'effort', 'judge-provider', 'judge-model', 'judge-effort', 'judge-command', 'out', 'resume', 'name']);
 
@@ -116,9 +118,20 @@ export function resolveConfig(raw, taskSet) {
   return config;
 }
 
+/** Directory name for a judge configuration, so verdicts from different judges never mix. */
+export function judgeSetId({ judgeProvider, judgeModel, judgeEffort, judgeCommand }) {
+  if (judgeProvider === 'command') {
+    let hash = 0;
+    for (const char of judgeCommand ?? '') hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
+    return `command-${hash.toString(16).padStart(8, '0')}`;
+  }
+  const base = judgeProvider === 'claude' ? judgeModel : `${judgeProvider}-${judgeModel}`;
+  return slug(judgeEffort && judgeEffort !== 'medium' ? `${base}-${judgeEffort}` : base);
+}
+
 export const slug = (value) => String(value).replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'x';
 
-const CHECK_TYPES = new Set(['pattern', 'changed']);
+const CHECK_TYPES = new Set(['pattern', 'changed', 'command']);
 
 /** Returns a list of human-readable problems with a task set; empty when valid. */
 export function validateTaskSet(taskSet) {
@@ -156,7 +169,7 @@ export function validateTaskSet(taskSet) {
       const cwhere = `${where}.checks[${checkIndex}]`;
       if (typeof check?.id !== 'string' || checkIds.has(check.id)) errors.push(`${cwhere}: id must be a unique string`);
       checkIds.add(check?.id);
-      if (!CHECK_TYPES.has(check?.type)) errors.push(`${cwhere}: type must be pattern or changed`);
+      if (!CHECK_TYPES.has(check?.type)) errors.push(`${cwhere}: type must be pattern, changed or command`);
       if (check?.level !== undefined && !['required', 'info'].includes(check.level)) errors.push(`${cwhere}: level must be required or info`);
       if (check?.type === 'pattern') {
         if (!['added', 'final'].includes(check.in)) errors.push(`${cwhere}: in must be added or final`);
@@ -164,6 +177,13 @@ export function validateTaskSet(taskSet) {
         if (check.in === 'final' && !(Array.isArray(check.files) && check.files.length)) errors.push(`${cwhere}: final checks need files`);
         if (typeof check.pattern !== 'string') errors.push(`${cwhere}: pattern is required`);
         else regexOk(check.pattern, cwhere);
+      }
+      if (check?.type === 'command') {
+        if (typeof check.run !== 'string' || !check.run.trim()) errors.push(`${cwhere}: run is required`);
+        if (check.expect !== undefined && !['pass', 'fail'].includes(check.expect)) errors.push(`${cwhere}: expect must be pass or fail`);
+        if (check.copy !== undefined && !(check.copy && typeof check.copy === 'object' && Object.entries(check.copy).every(([from, to]) => typeof to === 'string' && !from.startsWith('/') && !to.startsWith('/') && !`${from}/${to}`.split('/').includes('..')))) {
+          errors.push(`${cwhere}: copy must map fixture-relative paths to app-relative paths`);
+        }
       }
       if (check?.type === 'changed') {
         if (!(Array.isArray(check.files) && check.files.length)) errors.push(`${cwhere}: files is required`);

@@ -37,7 +37,8 @@ export function parseUnifiedDiff(text) {
  * `readFinal(globs)` returns `[{ path, content }]` for current files matching the globs.
  */
 export function evaluateChecks(checks = [], diff, readFinal) {
-  return checks.map((check) => {
+  // `command` checks execute code and are evaluated by measure.mjs.
+  return checks.filter((check) => check.type !== 'command').map((check) => {
     const level = check.level ?? 'required';
     if (check.type === 'changed') {
       const hits = diff.changedFiles.filter((file) => matchesAny(file, check.files));

@@ -9,11 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { aggregate } from './lib/aggregate.mjs';
 import { buildArm, compareInventories } from './lib/arms.mjs';
 import { browserSmoke } from './lib/browser.mjs';
-import { DEFAULTS, parseArgs, resolveConfig, validateTaskSet } from './lib/config.mjs';
+import { DEFAULTS, judgeSetId, parseArgs, resolveConfig, validateTaskSet } from './lib/config.mjs';
 import { browserToolEnv } from './lib/env.mjs';
+import { httpSmoke } from './lib/http-smoke.mjs';
 import { copyForRun, loadFixture, preparePristine, verifyPristine } from './lib/fixtures.mjs';
 import { buildJudgePrompt, judgePair } from './lib/judge.mjs';
-import { measureRun } from './lib/measure.mjs';
+import { measureRun, recheckRun } from './lib/measure.mjs';
 import { budgetAllows, buildRunQueue, planJudgePairs } from './lib/plan.mjs';
 import { agentProvider, judgeProvider } from './lib/providers/index.mjs';
 import { renderReport } from './lib/report.mjs';
@@ -46,13 +47,18 @@ Judge
   --judge-reps <n>          Verdicts per pair, alternating patch order (default: ${DEFAULTS.judgeReps}).
   --judge-controls <n>      A#1-vs-A#2 noise pairs per task (default: ${DEFAULTS.judgeControls}).
   --judge-command "<cmd>"   Judge with any CLI that reads the prompt on stdin (e.g. another model family).
+  --rejudge                 With --resume: skip agent runs and judge the saved pairs with the current
+                            judge settings into a separate judge set (compared in the report).
 Execution
   --concurrency <n>         Parallel runs/judgments (default: ${DEFAULTS.concurrency}).
   --max-usd <n>             Stop starting new work once spend reaches this.   --max-runs <n>   Cap total runs.
   --browser                 Playwright smoke of the fixture's routes after each run.
+  --http                    Boot the service and hit the fixture's HTTP endpoints after each run.
   --out <dir>               Results dir (default: ~/agent-config-evals/<timestamp>-<name>).
   --resume <dir>            Continue an earlier eval (finished runs and judgments are skipped).
   --report-only             With --resume: re-aggregate and rewrite the report only.
+  --recheck                 With --resume: re-score saved runs against the repo's current task checks
+                            (hidden tests included); no agent runs, gates are not re-run.
   --dry-run                 Build arms and fixture, print the plan, call no models.
   --name <name>             Label for the results dir and report.`;
 
@@ -73,6 +79,23 @@ function loadTaskSet(nameOrPath) {
   return taskSet;
 }
 
+/** Evals from before judge sets kept verdicts directly in results/judge/; move them under their judge's id. */
+function migrateLegacyJudgments(outDir, config) {
+  const root = path.join(outDir, 'results', 'judge');
+  if (!fs.existsSync(root)) return;
+  const legacy = fs.readdirSync(root).filter((file) => file.endsWith('.json'));
+  if (!legacy.length) return;
+  const set = judgeSetId(config);
+  fs.mkdirSync(path.join(root, set), { recursive: true });
+  for (const file of legacy) {
+    const record = readJson(path.join(root, file));
+    record.judge ??= { set, provider: config.judgeProvider, model: config.judgeModel, effort: config.judgeEffort };
+    writeJson(path.join(root, set, file), record);
+    fs.rmSync(path.join(root, file));
+  }
+  log(`Moved ${legacy.length} earlier judgment(s) into results/judge/${set}/`);
+}
+
 async function pool(items, concurrency, worker, shouldStop) {
   const queue = [...items];
   await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
@@ -91,7 +114,10 @@ async function main() {
     outDir = path.resolve(raw.resume);
     config = readJson(path.join(outDir, 'config.json'));
     taskSet = readJson(path.join(outDir, 'taskset.json'));
-    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser']) if (raw[key] !== undefined) config[key] = raw[key];
+    migrateLegacyJudgments(outDir, config);
+    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser', 'http', 'judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand']) if (raw[key] !== undefined) config[key] = raw[key];
+    if (raw.judgeCommand) config.judgeProvider = 'command';
+    else if (raw.judgeModel && config.judgeProvider === 'command') config.judgeProvider = 'claude';
   } else {
     taskSet = loadTaskSet(raw.tasks ?? DEFAULTS.tasks);
     config = resolveConfig(raw, taskSet);
@@ -124,12 +150,17 @@ async function main() {
   const pristine = reportOnly ? null : preparePristine(fixture, CACHE_ROOT, log);
   const provider = agentProvider(config.provider);
   const resultsDir = path.join(outDir, 'results', 'runs');
-  const judgeDir = path.join(outDir, 'results', 'judge');
+  const activeJudgeSet = judgeSetId(config);
+  const judgeRoot = path.join(outDir, 'results', 'judge');
+  const judgeDir = path.join(judgeRoot, activeJudgeSet);
   const runs = readDir(resultsDir);
   const judgments = readDir(judgeDir);
+  const otherJudgeSets = Object.fromEntries((fs.existsSync(judgeRoot) ? fs.readdirSync(judgeRoot, { withFileTypes: true }) : [])
+    .filter((entry) => entry.isDirectory() && entry.name !== activeJudgeSet)
+    .map((entry) => [entry.name, readDir(path.join(judgeRoot, entry.name))]));
   const spend = {
     runsUsd: runs.reduce((sum, run) => sum + (run.cost?.usd ?? 0), 0),
-    judgeUsd: judgments.reduce((sum, judgment) => sum + (judgment.costUsd ?? 0), 0)
+    judgeUsd: [judgments, ...Object.values(otherJudgeSets)].flat().reduce((sum, judgment) => sum + (judgment.costUsd ?? 0), 0)
   };
   const spent = () => spend.runsUsd + spend.judgeUsd;
 
@@ -144,7 +175,22 @@ async function main() {
 
   const queue = buildRunQueue({ taskIds: config.taskIds, reps: config.reps, seed: config.seed });
   const done = new Set(runs.map((run) => run.id));
-  const pending = reportOnly ? [] : queue.filter((job) => !done.has(job.id));
+  if (raw.recheck) {
+    // Pick up edited checks and hidden tests from the repo's copy of this task set.
+    const current = loadTaskSet(taskSet.name);
+    const currentById = Object.fromEntries(current.tasks.map((task) => [task.id, task]));
+    for (const run of runs) {
+      const task = currentById[run.task];
+      const runDir = path.join(outDir, 'runs', run.id);
+      if (!task || !fs.existsSync(path.join(runDir, 'app'))) continue;
+      run.checks = recheckRun({ fixture, app: path.join(runDir, 'app'), runDir, task });
+      writeJson(path.join(resultsDir, `${run.id}.json`), run);
+      log(`rechecked ${run.id}: ${run.checks.filter((c) => c.level === 'required' && c.pass).length}/${run.checks.filter((c) => c.level === 'required').length} required checks pass`);
+    }
+    taskSet = current;
+    writeJson(path.join(outDir, 'taskset.json'), current);
+  }
+  const pending = reportOnly || raw.rejudge || raw.recheck ? [] : queue.filter((job) => !done.has(job.id));
   if (raw.dryRun) {
     console.log(JSON.stringify({ outDir, arms: { A: armsInfo.A.ref, B: armsInfo.B.ref }, identical: armsInfo.identical, changedFiles: armsInfo.changedFiles, watched: armsInfo.watched, tasks: config.taskIds, reps: config.reps, pendingRuns: pending.length, completedRuns: runs.length }, null, 2));
     return;
@@ -183,6 +229,7 @@ async function main() {
       spawnSync('agent-browser', ['close'], { env: { PATH: process.env.PATH, HOME: arm.home, AGENT_BROWSER_SESSION: env.AGENT_BROWSER_SESSION }, timeout: 20000 });
       const record = measureRun({ job, fixture, pristine, runDir, app, taskSet, task, provider, armsInfo, agentResult });
       if (config.browser) record.browser = await browserSmoke({ fixture, app, outDir: path.join(runDir, 'screens'), cacheRoot: CACHE_ROOT }).catch((error) => ({ ok: false, error: String(error), routes: {} }));
+      if (config.http) record.http = await httpSmoke({ fixture, app, outDir: path.join(runDir, 'http') }).catch((error) => ({ ok: false, error: String(error), requests: {} }));
       writeJson(path.join(resultsDir, `${job.id}.json`), record);
       runs.push(record);
       spend.runsUsd += record.cost?.usd ?? 0;
@@ -201,7 +248,7 @@ async function main() {
     fs.mkdirSync(judgeHome, { recursive: true });
     const judged = new Set(judgments.map((judgment) => judgment.id));
     const pairs = planJudgePairs({ runs, controls: config.judgeControls, armsIdentical: armsInfo.identical }).filter((pair) => !judged.has(pair.id));
-    log(`${pairs.length} judgment(s) pending`);
+    log(`${pairs.length} judgment(s) pending with judge ${activeJudgeSet}`);
     const patchOf = (run) => {
       const patch = fs.readFileSync(path.join(outDir, 'runs', run.id, 'diff.patch'), 'utf8');
       return patch.length > MAX_DIFF_CHARS ? `${patch.slice(0, MAX_DIFF_CHARS)}\n[... diff truncated ...]` : patch;
@@ -220,7 +267,7 @@ async function main() {
           ask: (prompt) => judge.ask({ home: judgeHome, prompt, model: config.judgeModel, effort: config.judgeEffort }),
           buildPrompt: (order) => buildJudgePrompt({ context: fixture.judgeContext, task: tasksById[pair.task].prompt, patch1: patchOf(runsBySide[order[0]]), patch2: patchOf(runsBySide[order[1]]) })
         });
-        const record = { id: pair.id, kind: pair.kind, task: pair.task, reps: pair.reps, sides: pair.sides, runs: [pair.left.id, pair.right.id], ...verdict };
+        const record = { id: pair.id, kind: pair.kind, task: pair.task, reps: pair.reps, sides: pair.sides, runs: [pair.left.id, pair.right.id], judge: { set: activeJudgeSet, provider: config.judgeProvider, model: config.judgeProvider === 'command' ? null : config.judgeModel, effort: config.judgeEffort }, ...verdict };
         writeJson(path.join(judgeDir, `${pair.id}.json`), record);
         judgments.push(record);
         spend.judgeUsd += verdict.costUsd;
@@ -237,7 +284,7 @@ async function main() {
   }
   if (stopReason) log(`Stopped early: ${stopReason}. Resume with: npm run eval -- --resume ${outDir}`);
 
-  const summary = aggregate({ config, taskSet, armsInfo, runs, judgments });
+  const summary = aggregate({ config, taskSet, armsInfo, runs, judgments, activeJudgeSet, otherJudgeSets });
   summary.stoppedEarly = stopReason;
   writeJson(path.join(outDir, 'summary.json'), summary);
   fs.writeFileSync(path.join(outDir, 'REPORT.md'), renderReport({ summary, config, armsInfo, taskSet, fixture, spend }));
