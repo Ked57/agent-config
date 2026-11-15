@@ -73,6 +73,12 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture, spen
     for (const name of policyNames) lines.push(`| ${name} | ${pct(overall.A.policiesFired[name])} | ${pct(overall.B.policiesFired[name])} | ${fmt(overall.A.signalHits[name], 1)} | ${fmt(overall.B.signalHits[name], 1)} |`);
     lines.push('');
   }
+  const skillNames = [...new Set([...Object.keys(overall.A.skillsFired ?? {}), ...Object.keys(overall.B.skillsFired ?? {})])].sort();
+  if (skillNames.length) {
+    lines.push('| Skill | Invoked A | Invoked B |', '|---|---|---|');
+    for (const name of skillNames) lines.push(`| ${name} | ${pct(overall.A.skillsFired[name])} | ${pct(overall.B.skillsFired[name])} |`);
+    lines.push('');
+  }
   if (summary.telemetry.watched.length) {
     lines.push('| Watched policy | Arm | False triggers on controls | Fired where not expected | Missed where expected |', '|---|---|---|---|---|');
     for (const [name, entry] of Object.entries(summary.telemetry.perPolicy)) {
@@ -90,7 +96,7 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture, spen
 
   lines.push('## Judge noise floor', '');
   lines.push(`Source: ${noise.source}, ${noise.pairs} pair(s). Decisive (non-tie) rate ${pct(noise.decisiveRate)}, mean |overall diff| ${fmt(noise.meanAbsDiff)}, max ${fmt(noise.maxAbsDiff)}, order/repeat split rate ${pct(noise.splitRate)}.`, '');
-  lines.push(`A/B comparison: ${comparison.pairs} pair(s), B ${comparison.bWins} · A ${comparison.aWins} · tie ${comparison.ties}; mean overall B−A ${fmtSigned(comparison.meanDiff)}; sign test p=${fmt(comparison.signTestP)}; ${comparison.beyondNoise === null ? 'noise floor unavailable' : comparison.beyondNoise ? '**beyond** the noise floor' : 'within the noise floor'}.`, '');
+  lines.push(`A/B comparison: ${comparison.pairs} pair(s), B ${comparison.bWins} · A ${comparison.aWins} · tie ${comparison.ties}; mean overall B−A ${fmtSigned(comparison.meanDiff)}; sign test p=${fmt(comparison.signTestP)}; ${comparison.beyondNoise === null ? 'noise floor unavailable' : comparison.beyondNoise ? 'mean difference beyond the noise floor' : 'mean difference within the noise floor'}. A difference counts only when it is beyond the floor **and** p < 0.1: **${comparison.beyondNoise && comparison.signTestP < 0.1 ? 'significant' : 'not significant'}**.`, '');
 
   lines.push('## Notable diffs', '');
   if (!summary.notable.length) lines.push('Nothing stood out.');

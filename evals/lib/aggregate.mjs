@@ -53,6 +53,8 @@ export function armStats(runs) {
     features,
     policiesFired: Object.fromEntries([...new Set(runs.flatMap((run) => Object.keys(run.telemetry?.policies ?? {})))]
       .map((name) => [name, rate(runs, (run) => run.telemetry.policies[name]?.fired)])),
+    skillsFired: Object.fromEntries([...new Set(runs.flatMap((run) => Object.keys(run.telemetry?.skills ?? {})))]
+      .map((name) => [name, rate(runs, (run) => run.telemetry.skills[name]?.fired)])),
     signalHits: Object.fromEntries([...new Set(runs.flatMap((run) => Object.keys(run.telemetry?.policies ?? {})))]
       .filter((name) => runs.some((run) => run.telemetry.policies[name]?.signalHits !== null && run.telemetry.policies[name]?.signalHits !== undefined))
       .map((name) => [name, mean(runs.map((run) => run.telemetry.policies[name]?.signalHits))]))
