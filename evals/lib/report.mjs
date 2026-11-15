@@ -26,6 +26,12 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture, spen
   for (const reason of recommendation.reasons) lines.push(`- ${reason}`);
   lines.push('');
 
+  if (summary.warnings?.length) {
+    lines.push('## Integrity warnings', '');
+    for (const warning of summary.warnings) lines.push(`- ${warning}`);
+    lines.push('');
+  }
+
   lines.push('## Setup', '');
   lines.push('| Arm | Ref | Toggles | Policies | Skills |', '|---|---|---|---|---|');
   lines.push(armLine('A', armsInfo.A), armLine('B', armsInfo.B), '');
@@ -33,6 +39,11 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture, spen
   lines.push(`- Agent: provider \`${config.provider}\`, model \`${config.model}\`, effort \`${config.effort}\`, ${config.reps} rep(s) per task and arm, concurrency ${config.concurrency}.`);
   lines.push(`- Judge: ${config.judge ? `provider \`${config.judgeProvider}\`${config.judgeProvider === 'command' ? ` (\`${config.judgeCommand}\`)` : `, model \`${config.judgeModel}\``}, ${config.judgeReps} verdict(s) per pair with alternating patch order, ${config.judgeControls} A#1-vs-A#2 control pair(s) per task` : 'disabled'}.`);
   lines.push(`- Isolation: each arm installed with its own ref's \`bin/agent-config.mjs sync --user\` into a temporary HOME; telemetry env vars off.`);
+  const rechecks = (summary.history ?? []).filter((entry) => entry.action === 'recheck-result');
+  if (rechecks.length) {
+    const last = rechecks.at(-1);
+    lines.push(`- **Rechecked ${rechecks.length} time(s)**, last ${last.at} against fixture \`${last.fixtureHash}\`${last.runFixtureHash && last.runFixtureHash !== last.fixtureHash ? ` (runs were made on \`${last.runFixtureHash}\`)` : ''}: ${rechecks.reduce((total, entry) => total + entry.flips.length, 0)} check result(s) changed in total. Gates were not re-run. First results are kept as \`checksOriginal\` in each run record; see \`audit.jsonl\`.`);
+  }
   if (summary.stoppedEarly) lines.push(`- **Stopped early:** ${summary.stoppedEarly}. Results are partial.`);
   const cost = summary.cost;
   if (cost) lines.push(`- Spend: agent runs $${fmt(cost.runsUsd)}, judge (\`${cost.judgeSet ?? 'n/a'}\`) $${fmt(cost.judgeUsd)}${Object.keys(cost.otherJudgeSetsUsd).length ? `, other judge sets $${fmt(Object.values(cost.otherJudgeSetsUsd).reduce((a, b) => a + b, 0))}` : ''}, total $${fmt(cost.totalUsd)}${config.maxUsd ? ` (cap $${config.maxUsd})` : ''}.`);

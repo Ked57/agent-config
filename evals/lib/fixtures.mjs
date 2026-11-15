@@ -57,7 +57,12 @@ const manifest = (pristine, linkPaths) => {
 /** Prepares (or reuses) the pristine copy under `<cacheRoot>/fixtures/<name>-<hash>`. */
 export function preparePristine(fixture, cacheRoot, log = console.log) {
   const pristine = path.join(cacheRoot, 'fixtures', `${fixture.name}-${fixtureHash(fixture)}`);
-  if (fs.existsSync(path.join(pristine, '.eval-ready'))) return pristine;
+  if (fs.existsSync(path.join(pristine, '.eval-ready'))) {
+    // An earlier run may have written through a hard link; a damaged cache is rebuilt, not reused.
+    const changed = verifyPristine(fixture, pristine);
+    if (!changed.length) return pristine;
+    log(`Cached fixture ${pristine} has ${changed.length} changed file(s) (e.g. ${changed[0]}); rebuilding it.`);
+  }
   const staging = `${pristine}.staging-${process.pid}`;
   fs.rmSync(staging, { recursive: true, force: true });
   // A template may hold a local install from editing it; setup reinstalls from the lockfile.

@@ -1,6 +1,7 @@
 // Environment shared by every isolated agent process. Nothing from the caller's env leaks in
 // except PATH and locale, so live config (HOME, CLAUDE_CONFIG_DIR, CODEX_HOME) cannot be reached.
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -39,4 +40,36 @@ export function browserToolEnv(runId, home = os.homedir()) {
     // agent-browser not installed; nothing to point at
   }
   return env;
+}
+
+/**
+ * Claude Code treats `.claude/` (skills, CLAUDE.md, rules, agents, commands), `CLAUDE.md`, `AGENTS.md`
+ * and `.mcp.json` in every ancestor of the working directory as project config, whatever HOME and
+ * CLAUDE_CONFIG_DIR say. Results kept under the real home therefore expose the live `~/.claude` to
+ * both arms. Returns the ancestor paths that exist, nearest first.
+ */
+export function ancestorAgentConfig(directory) {
+  const found = [];
+  let current = path.resolve(directory);
+  for (;;) {
+    const parent = path.dirname(current);
+    if (parent === current) return found;
+    current = parent;
+    for (const name of ['.claude', 'CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', '.mcp.json']) {
+      if (fs.existsSync(path.join(current, name))) found.push(path.join(current, name));
+    }
+  }
+}
+
+/** A TCP port that was free a moment ago: the OS picks it, so smoke servers don't guess into a port an agent's server holds. */
+export function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+  });
 }

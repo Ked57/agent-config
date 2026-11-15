@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { runGate } from './measure.mjs';
-import { TELEMETRY_OFF } from './env.mjs';
+import { TELEMETRY_OFF, freePort } from './env.mjs';
 
 let playwrightPromise = null;
 
@@ -30,7 +30,7 @@ export async function browserSmoke({ fixture, app, outDir, cacheRoot }) {
   const build = runGate(fixture.browser.build, app);
   if (!build.ok) return { ok: false, error: 'build failed', routes: {} };
   fs.mkdirSync(outDir, { recursive: true });
-  const port = 4300 + Math.floor(Math.random() * 1500);
+  const port = await freePort();
   const server = spawn('bash', ['-c', fixture.browser.serve.replaceAll('{port}', String(port))], {
     cwd: app,
     detached: true,

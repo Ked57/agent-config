@@ -7,15 +7,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { aggregate } from './lib/aggregate.mjs';
-import { buildArm, compareInventories } from './lib/arms.mjs';
+import { buildArm, compareInventories, inventory } from './lib/arms.mjs';
 import { browserSmoke } from './lib/browser.mjs';
 import { DEFAULTS, judgeSetId, parseArgs, resolveConfig, validateTaskSet } from './lib/config.mjs';
-import { browserToolEnv } from './lib/env.mjs';
+import { ancestorAgentConfig, browserToolEnv } from './lib/env.mjs';
 import { httpSmoke } from './lib/http-smoke.mjs';
-import { copyForRun, loadFixture, preparePristine, verifyPristine } from './lib/fixtures.mjs';
+import { copyForRun, fixtureHash, loadFixture, preparePristine, verifyPristine } from './lib/fixtures.mjs';
 import { buildJudgePrompt, judgePair } from './lib/judge.mjs';
 import { measureRun, recheckRun } from './lib/measure.mjs';
-import { budgetAllows, buildRunQueue, planJudgePairs } from './lib/plan.mjs';
+import { budgetAllows, buildRunQueue, changedArmFiles, fixedFlagsOnResume, flippedChecks, planJudgePairs } from './lib/plan.mjs';
 import { agentProvider, judgeProvider } from './lib/providers/index.mjs';
 import { renderReport } from './lib/report.mjs';
 
@@ -69,6 +69,10 @@ const writeJson = (file, value) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 };
+const sha256 = (text) => crypto.createHash('sha256').update(text).digest('hex');
+/** Appends one line to the eval's audit trail: every resume, rejudge, recheck and report-only pass leaves a record. */
+const appendAudit = (outDir, entry) => fs.appendFileSync(path.join(outDir, 'audit.jsonl'), `${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`);
+const readAudit = (outDir) => (fs.existsSync(path.join(outDir, 'audit.jsonl')) ? fs.readFileSync(path.join(outDir, 'audit.jsonl'), 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line)) : []);
 const readDir = (directory) => (fs.existsSync(directory) ? fs.readdirSync(directory).filter((file) => file.endsWith('.json')).map((file) => readJson(path.join(directory, file))) : []);
 
 function loadTaskSet(nameOrPath) {
@@ -115,10 +119,21 @@ async function main() {
     outDir = path.resolve(raw.resume);
     config = readJson(path.join(outDir, 'config.json'));
     taskSet = readJson(path.join(outDir, 'taskset.json'));
+    const fixed = fixedFlagsOnResume(raw);
+    if (fixed.length) throw new Error(`--resume keeps the eval's arms, tasks, model and reps: drop ${fixed.join(', ')} or start a new eval`);
     migrateLegacyJudgments(outDir, config);
-    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser', 'http', 'judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand']) if (raw[key] !== undefined) config[key] = raw[key];
+    const overrides = {};
+    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser', 'http', 'judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand']) if (raw[key] !== undefined && raw[key] !== config[key]) {
+      overrides[key] = { from: config[key] ?? null, to: raw[key] };
+      config[key] = raw[key];
+    }
     if (raw.judgeCommand) config.judgeProvider = 'command';
     else if (raw.judgeModel && config.judgeProvider === 'command') config.judgeProvider = 'claude';
+    if (!raw.dryRun) {
+      // Keep config.json in step with the report: a later --report-only must pick the same judge set.
+      if (Object.keys(overrides).length) writeJson(path.join(outDir, 'config.json'), config);
+      appendAudit(outDir, { action: raw.recheck ? 'recheck' : raw.rejudge ? 'rejudge' : raw.reportOnly ? 'report-only' : 'resume', overrides });
+    }
   } else {
     taskSet = loadTaskSet(raw.tasks ?? DEFAULTS.tasks);
     config = resolveConfig(raw, taskSet);
@@ -133,11 +148,32 @@ async function main() {
   log(`Eval ${config.name} → ${outDir}`);
 
   const fixture = loadFixture(taskSet.fixture);
+  const currentFixtureHash = fixtureHash(fixture);
+  const agentRunsWanted = !reportOnly && !raw.rejudge && !raw.recheck;
+  if (!raw.resume) {
+    config.fixtureHash = currentFixtureHash;
+    writeJson(path.join(outDir, 'config.json'), config);
+  } else if (agentRunsWanted && config.fixtureHash && config.fixtureHash !== currentFixtureHash) {
+    throw new Error(`Fixture ${fixture.name} changed since this eval started (${config.fixtureHash} → ${currentFixtureHash}): new runs would not be comparable with the saved ones. Start a new eval, or use --report-only, --rejudge or --recheck.`);
+  }
+  const warnings = [];
+  if (raw.resume && agentRunsWanted && !config.fixtureHash) warnings.push('This eval predates fixture hashes: runs added by --resume may use a different fixture version than the earlier ones.');
+  const ancestors = ancestorAgentConfig(path.join(outDir, 'runs', 'run', 'app'));
+  if (ancestors.length) warnings.push(`Agent working copies sit under ${ancestors.map((file) => `\`${file}\``).join(', ')}: Claude Code loads these as project config in BOTH arms regardless of HOME. Keep results outside your home (AGENT_CONFIG_EVALS_HOME or --out) for a clean isolation.`);
   const tasksById = Object.fromEntries(taskSet.tasks.map((task) => [task.id, task]));
   const armsFile = path.join(outDir, 'arms.json');
   let armsInfo;
-  if (fs.existsSync(armsFile)) armsInfo = readJson(armsFile);
-  else {
+  if (fs.existsSync(armsFile)) {
+    armsInfo = readJson(armsFile);
+    for (const arm of config.singleArm ? ['A'] : ['A', 'B']) {
+      if (!fs.existsSync(armsInfo[arm].home)) continue;
+      const changed = changedArmFiles(armsInfo[arm].hashes, inventory(armsInfo[arm].home).hashes);
+      if (!changed.length) continue;
+      const message = `Arm ${arm}'s installed config changed after it was built (${changed.slice(0, 5).join(', ')})`;
+      if (agentRunsWanted && !raw.dryRun) throw new Error(`${message}; new runs would not match the saved ones. Start a new eval.`);
+      warnings.push(`${message}.`);
+    }
+  } else {
     const built = {};
     for (const arm of config.singleArm ? ['A'] : ['A', 'B']) {
       log(`Building arm ${arm} from ${config.arms[arm].ref}${config.arms[arm].add.length + config.arms[arm].remove.length ? ' with toggles' : ''}`);
@@ -149,17 +185,31 @@ async function main() {
   }
   log(`Arms ${armsInfo.identical ? 'identical (A/A control)' : `differ in ${armsInfo.changedFiles.length} file(s); watching ${armsInfo.watched.join(', ') || 'nothing'}`}`);
 
-  const pristine = reportOnly ? null : preparePristine(fixture, CACHE_ROOT, log);
+  const pristine = agentRunsWanted ? preparePristine(fixture, CACHE_ROOT, log) : null;
   const provider = agentProvider(config.provider);
   const resultsDir = path.join(outDir, 'results', 'runs');
   const activeJudgeSet = judgeSetId(config);
   const judgeRoot = path.join(outDir, 'results', 'judge');
   const judgeDir = path.join(judgeRoot, activeJudgeSet);
   const runs = readDir(resultsDir);
-  const judgments = readDir(judgeDir);
+  // A judgment belongs to the patches it saw: once a run is redone, verdicts on its old patch are dropped.
+  const patchSha = (id) => {
+    const file = path.join(outDir, 'runs', id, 'diff.patch');
+    return fs.existsSync(file) ? sha256(fs.readFileSync(file)) : null;
+  };
+  const patchShaCache = {};
+  const currentPatch = (id) => (patchShaCache[id] ??= patchSha(id));
+  const isCurrent = (judgment) => !judgment.patches || judgment.runs.every((id, index) => currentPatch(id) === null || currentPatch(id) === judgment.patches[index]);
+  const readJudgments = (directory) => {
+    const all = readDir(directory);
+    const current = all.filter(isCurrent);
+    if (current.length < all.length) warnings.push(`${all.length - current.length} judgment(s) in ${path.basename(directory)} were made on patches that have since been replaced and are ignored.`);
+    return current;
+  };
+  const judgments = readJudgments(judgeDir);
   const otherJudgeSets = Object.fromEntries((fs.existsSync(judgeRoot) ? fs.readdirSync(judgeRoot, { withFileTypes: true }) : [])
     .filter((entry) => entry.isDirectory() && entry.name !== activeJudgeSet)
-    .map((entry) => [entry.name, readDir(path.join(judgeRoot, entry.name))]));
+    .map((entry) => [entry.name, readJudgments(path.join(judgeRoot, entry.name))]));
   const spend = {
     runsUsd: runs.reduce((sum, run) => sum + (run.cost?.usd ?? 0), 0),
     judgeUsd: [judgments, ...Object.values(otherJudgeSets)].flat().reduce((sum, judgment) => sum + (judgment.costUsd ?? 0), 0)
@@ -178,21 +228,31 @@ async function main() {
   const queue = buildRunQueue({ taskIds: config.taskIds, reps: config.reps, seed: config.seed, arms: config.singleArm ? ['A'] : ['A', 'B'] });
   const done = new Set(runs.map((run) => run.id));
   if (raw.recheck) {
-    // Pick up edited checks and hidden tests from the repo's copy of this task set.
+    // Pick up edited checks and hidden tests from the repo's copy of this task set. Prompts, categories
+    // and everything else the runs were made under stay as saved; only the checks are replaced.
     const current = loadTaskSet(taskSet.name);
     const currentById = Object.fromEntries(current.tasks.map((task) => [task.id, task]));
+    const at = new Date().toISOString();
+    const flips = [];
     for (const run of runs) {
       const task = currentById[run.task];
       const runDir = path.join(outDir, 'runs', run.id);
       if (!task || !fs.existsSync(path.join(runDir, 'app'))) continue;
+      const before = run.checks ?? [];
+      run.checksOriginal ??= before;
       run.checks = recheckRun({ fixture, app: path.join(runDir, 'app'), runDir, task });
+      const flipped = flippedChecks(before, run.checks);
+      flips.push(...flipped.map((flip) => ({ run: run.id, ...flip })));
+      run.rechecks = [...(run.rechecks ?? []), { at, fixtureHash: currentFixtureHash, flipped }];
       writeJson(path.join(resultsDir, `${run.id}.json`), run);
-      log(`rechecked ${run.id}: ${run.checks.filter((c) => c.level === 'required' && c.pass).length}/${run.checks.filter((c) => c.level === 'required').length} required checks pass`);
+      log(`rechecked ${run.id}: ${run.checks.filter((c) => c.level === 'required' && c.pass).length}/${run.checks.filter((c) => c.level === 'required').length} required checks pass${flipped.length ? ` (${flipped.length} changed)` : ''}`);
     }
-    taskSet = current;
-    writeJson(path.join(outDir, 'taskset.json'), current);
+    const previousTaskSet = sha256(JSON.stringify(taskSet));
+    taskSet = { ...taskSet, tasks: taskSet.tasks.map((task) => (currentById[task.id] ? { ...task, checks: currentById[task.id].checks } : task)) };
+    writeJson(path.join(outDir, 'taskset.json'), taskSet);
+    appendAudit(outDir, { action: 'recheck-result', fixtureHash: currentFixtureHash, runFixtureHash: config.fixtureHash ?? null, tasksetBefore: previousTaskSet, tasksetAfter: sha256(JSON.stringify(taskSet)), flips });
   }
-  const pending = reportOnly || raw.rejudge || raw.recheck ? [] : queue.filter((job) => !done.has(job.id));
+  const pending = agentRunsWanted ? queue.filter((job) => !done.has(job.id)) : [];
   if (raw.dryRun) {
     console.log(JSON.stringify({ outDir, arms: { A: armsInfo.A.ref, B: armsInfo.B.ref }, identical: armsInfo.identical, changedFiles: armsInfo.changedFiles, watched: armsInfo.watched, tasks: config.taskIds, reps: config.reps, pendingRuns: pending.length, completedRuns: runs.length }, null, 2));
     return;
@@ -230,6 +290,13 @@ async function main() {
       spawnSync('pkill', ['-f', '--', app]);
       spawnSync('agent-browser', ['close'], { env: { PATH: process.env.PATH, HOME: arm.home, AGENT_BROWSER_SESSION: env.AGENT_BROWSER_SESSION }, timeout: 20000 });
       const record = measureRun({ job, fixture, pristine, runDir, app, taskSet, task, provider, armsInfo, agentResult });
+      record.fixtureHash = currentFixtureHash;
+      // A run that wrote through a hard link has changed node_modules for every later run: stop there.
+      const cacheChanged = verifyPristine(fixture, pristine);
+      if (cacheChanged.length) {
+        record.fixtureCacheChanged = cacheChanged.slice(0, 20);
+        stopReason ??= `the fixture cache was modified while ${job.id} ran (${cacheChanged.length} file(s), e.g. ${cacheChanged[0]}); resume rebuilds it`;
+      }
       if (config.browser) record.browser = await browserSmoke({ fixture, app, outDir: path.join(runDir, 'screens'), cacheRoot: CACHE_ROOT }).catch((error) => ({ ok: false, error: String(error), routes: {} }));
       if (config.http) record.http = await httpSmoke({ fixture, app, outDir: path.join(runDir, 'http') }).catch((error) => ({ ok: false, error: String(error), requests: {} }));
       writeJson(path.join(resultsDir, `${job.id}.json`), record);
@@ -269,7 +336,7 @@ async function main() {
           ask: (prompt) => judge.ask({ home: judgeHome, prompt, model: config.judgeModel, effort: config.judgeEffort }),
           buildPrompt: (order) => buildJudgePrompt({ context: fixture.judgeContext, task: tasksById[pair.task].prompt, patch1: patchOf(runsBySide[order[0]]), patch2: patchOf(runsBySide[order[1]]) })
         });
-        const record = { id: pair.id, kind: pair.kind, task: pair.task, reps: pair.reps, sides: pair.sides, runs: [pair.left.id, pair.right.id], judge: { set: activeJudgeSet, provider: config.judgeProvider, model: config.judgeProvider === 'command' ? null : config.judgeModel, effort: config.judgeEffort }, ...verdict };
+        const record = { id: pair.id, kind: pair.kind, task: pair.task, reps: pair.reps, sides: pair.sides, runs: [pair.left.id, pair.right.id], patches: [currentPatch(pair.left.id), currentPatch(pair.right.id)], judge: { set: activeJudgeSet, provider: config.judgeProvider, model: config.judgeProvider === 'command' ? null : config.judgeModel, effort: config.judgeEffort }, ...verdict };
         writeJson(path.join(judgeDir, `${pair.id}.json`), record);
         judgments.push(record);
         spend.judgeUsd += verdict.costUsd;
@@ -282,12 +349,19 @@ async function main() {
 
   if (pristine) {
     const changed = verifyPristine(fixture, pristine);
-    if (changed.length) log(`WARNING: ${changed.length} pristine fixture file(s) changed through hard links (e.g. ${changed[0]}); delete ${pristine} to rebuild it.`);
+    if (changed.length) warnings.push(`${changed.length} cached fixture file(s) changed during this eval through hard links (e.g. \`${changed[0]}\`): runs after the first write used a modified node_modules. The cache is rebuilt on the next eval.`);
+    for (const arm of config.singleArm ? ['A'] : ['A', 'B']) {
+      const changedConfig = changedArmFiles(armsInfo[arm].hashes, inventory(armsInfo[arm].home).hashes);
+      if (changedConfig.length) warnings.push(`Arm ${arm}'s installed config was modified during the eval (${changedConfig.slice(0, 5).join(', ')}).`);
+    }
   }
+  for (const warning of warnings) log(`WARNING: ${warning}`);
   if (stopReason) log(`Stopped early: ${stopReason}. Resume with: npm run eval -- --resume ${outDir}`);
 
   const summary = aggregate({ config, taskSet, armsInfo, runs, judgments, activeJudgeSet, otherJudgeSets });
   summary.stoppedEarly = stopReason;
+  summary.warnings = warnings;
+  summary.history = readAudit(outDir);
   writeJson(path.join(outDir, 'summary.json'), summary);
   fs.writeFileSync(path.join(outDir, 'REPORT.md'), renderReport({ summary, config, armsInfo, taskSet, fixture, spend }));
   log(`Verdict: ${summary.recommendation.verdict}. Spend $${spent().toFixed(2)}. Report: ${path.join(outDir, 'REPORT.md')}`);

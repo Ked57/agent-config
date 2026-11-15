@@ -68,18 +68,25 @@ function applyAdd(repoRoot, src, toggle) {
   throw new Error(`Toggle source not found as ref, ref:path or file: ${toggle.source}`);
 }
 
-/** Paths in the user's real home whose state must be identical before and after an arm build. */
+/**
+ * Paths in the user's real home whose state must be identical before and after an arm build.
+ * Directories are walked to the bottom (symlinks not followed): a directory's own mtime does not
+ * move when a file inside it is rewritten in place.
+ */
 export function liveConfigSnapshot(home = os.homedir()) {
-  const watched = ['.claude/CLAUDE.md', '.claude/settings.json', '.claude/skills', '.agents', '.agents/policy', '.agents/skills', '.codex/AGENTS.md', '.agent-config'];
+  const watched = ['.claude/CLAUDE.md', '.claude/settings.json', '.claude/skills', '.agents', '.codex/AGENTS.md', '.agent-config'];
   const snapshot = {};
-  for (const relative of watched) {
-    const file = path.join(home, relative);
-    if (!fs.existsSync(file)) continue;
-    const stat = fs.statSync(file);
-    snapshot[relative] = stat.isDirectory()
-      ? fs.readdirSync(file).sort().map((entry) => `${entry}:${fs.statSync(path.join(file, entry)).mtimeMs}`).join('|')
-      : `${stat.size}:${stat.mtimeMs}`;
-  }
+  const visit = (file, relative) => {
+    const stat = fs.lstatSync(file, { throwIfNoEntry: false });
+    if (!stat) return;
+    if (!stat.isDirectory()) {
+      snapshot[relative] = `${stat.size}:${stat.mtimeMs}`;
+      return;
+    }
+    snapshot[`${relative}/`] = '';
+    for (const entry of fs.readdirSync(file).sort()) visit(path.join(file, entry), `${relative}/${entry}`);
+  };
+  for (const relative of watched) visit(path.join(home, relative), relative);
   return snapshot;
 }
 
@@ -147,6 +154,9 @@ export function buildArm({ repoRoot, spec, armDir }) {
     if (!fs.existsSync(target)) throw new Error(`--remove target does not exist in ${spec.ref}: ${removal}`);
     fs.rmSync(target, { recursive: true, force: true });
   }
+  // The installer never reads evals/, and the agent can reach this directory by relative path from
+  // its working copy: a ref that carries the suite would hand it the hidden tests and the checks.
+  fs.rmSync(path.join(src, 'evals'), { recursive: true, force: true });
   const before = liveConfigSnapshot();
   const install = spawnSync(process.execPath, [path.join(src, 'bin', 'agent-config.mjs'), 'sync', '--user'], {
     cwd: src,

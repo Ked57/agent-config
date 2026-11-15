@@ -60,3 +60,22 @@ export function budgetAllows({ maxUsd, maxRuns }, { spentUsd, runsDone, runsInFl
   if (kind === 'run' && maxRuns !== null && maxRuns !== undefined && runsDone + runsInFlight >= maxRuns) return { ok: false, reason: `run cap ${maxRuns} reached` };
   return { ok: true };
 }
+
+/** Flags that define an eval and are frozen in its config.json: passing one with --resume would be silently ignored. */
+const FIXED_ON_RESUME = { a: '--a', b: '--b', aAdd: '--a-add', aRemove: '--a-remove', bAdd: '--b-add', bRemove: '--b-remove', tasks: '--tasks', only: '--only', smoke: '--smoke', reps: '--reps', provider: '--provider', model: '--model', effort: '--effort', timeoutMin: '--timeout-min', singleArm: '--single-arm', env: '--env', name: '--name', out: '--out' };
+
+export const fixedFlagsOnResume = (raw) => Object.entries(FIXED_ON_RESUME).filter(([key]) => raw[key] !== undefined).map(([, flag]) => flag);
+
+/** Installed files whose content hash differs between an arm's build-time inventory and now. */
+export function changedArmFiles(built = {}, current = {}) {
+  return [...new Set([...Object.keys(built), ...Object.keys(current)])].sort().filter((file) => built[file] !== current[file]);
+}
+
+/** Checks whose pass/fail differs between two result lists (added and removed checks included). */
+export function flippedChecks(before = [], after = []) {
+  const was = Object.fromEntries(before.filter(Boolean).map((check) => [check.id, check.pass]));
+  const now = Object.fromEntries(after.filter(Boolean).map((check) => [check.id, check.pass]));
+  return [...new Set([...Object.keys(was), ...Object.keys(now)])].sort()
+    .filter((id) => was[id] !== now[id])
+    .map((id) => ({ check: id, from: was[id] ?? null, to: now[id] ?? null }));
+}
