@@ -10,6 +10,7 @@ The global paths below also identify the corresponding project-local files.
 - TypeScript (`.ts`, `.tsx`, `.mts`, `.cts`, or Vue SFC scripts) → `~/.agents/policy/typescript.md`.
 - React components/hooks (`.jsx`, `.tsx`, or React imports) → `~/.agents/policy/react.md`.
 - Vue components/composables/forms → `~/.agents/policy/vue-primevue.md`; apply PrimeVue rules only when that dependency exists.
+- Browser front-end work (UI components, HTML, CSS, client-side browser APIs; not tooling, tests, stores, or pure logic) → `~/.agents/policy/modern-web.md`.
 - Established `<domain>.model|interface|service|mock.ts` convention, or an explicit request for it → `~/.agents/policy/domain-module.md`.
 
 ## 2. Skills

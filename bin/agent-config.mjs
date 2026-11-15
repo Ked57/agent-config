@@ -354,6 +354,7 @@ const projectPackDetector = {
   typescript: isTypeScript,
   react: isReact,
   'domain-module': hasDomainConvention,
+  'modern-web': isVue || isReact || hasExtension('.html', '.css'),
   'vue-primevue': isVue
 };
 const projectPackEnabled = Object.fromEntries(policyPacks.map(({ name }) => [

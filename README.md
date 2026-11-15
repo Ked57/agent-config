@@ -10,7 +10,7 @@ Cursor, Claude Code, and Codex.
 - One always-installed pack: `routing.md` (tech and skill routing, then the
   coding/non-coding exit). After implementation, shared policy requires the `manual-qa`
   skill when a runnable UI, API, or CLI surface changed.
-- Conditional TypeScript, React, Vue + PrimeVue, and DDD domain-module policy packs shared across Cursor, Claude Code, and Codex.
+- Conditional TypeScript, React, Vue + PrimeVue, modern web platform, and DDD domain-module policy packs shared across Cursor, Claude Code, and Codex.
 - Portable skills for deterministic full-stack TypeScript quality tooling, hands-on
   verification, and browser automation.
 - A user installer that gives Cursor, Claude Code, and Codex the same personal policy
@@ -34,7 +34,7 @@ This creates or updates:
 ~/.claude/CLAUDE.md                       Claude bridge to ~/.agents/AGENTS.md
 ~/.cursor/plugins/local/agent-config/     Cursor plugin with an always-on bridge rule
 ~/.agents/policy/routing.md               task router, read first for every task
-~/.agents/policy/<tech-pack>.md           typescript, react, vue-primevue, domain-module
+~/.agents/policy/<tech-pack>.md           typescript, react, vue-primevue, modern-web, domain-module
 ~/.agents/skills/<portable-skill>/         includes manual-qa
 ~/.claude/skills/<portable-skill>/
 ~/.agent-config/agent-config.lock.json
@@ -96,6 +96,7 @@ The installer scans actual project source before creating conditional policy pac
 .agents/policy/typescript.md               only when TypeScript source exists
 .agents/policy/react.md                    only when React source exists
 .agents/policy/vue-primevue.md             only when Vue source exists
+.agents/policy/modern-web.md               only when Vue, React, HTML, or CSS source exists
 .agents/policy/domain-module.md            only when the four-file convention exists
 ```
 
@@ -110,6 +111,7 @@ CLAUDE.md                                  thin Claude Code bridge to AGENTS.md
 .agents/policy/react.md                    React work, when detected
 .agents/policy/domain-module.md            domain work, when the convention is detected
 .agents/policy/vue-primevue.md             Vue work, when detected
+.agents/policy/modern-web.md               browser front-end work, when detected
 .agents/skills/<portable-skill>/
 .claude/skills/<portable-skill>/             managed native Claude registrations
 .agents/agent-config.json                  project-owned command/routing map
@@ -226,6 +228,28 @@ Cursor Cloud Agents replace the plugin rule with the account User Rule from
 [cloud-agent-install.md](cloud-agent-install.md); the rest of the chain is unchanged. A
 project-scoped install mirrors the `~/.agents/` files under `.agents/`, and `check` in both
 scopes fails when any hop is missing or stale.
+
+### Modern Web Guidance
+
+`policy/modern-web.md` routes browser front-end work to Google Chrome's
+[`modern-web-guidance`](https://github.com/GoogleChrome/modern-web-guidance) CLI
+(code Apache-2.0, guides CC-BY 4.0, Node >= 22). It is a policy pack, not an installed
+skill, so the upstream "execute first for all HTML/CSS/JS" description never drives
+triggering; only the routing line does. The pack drops the upstream reply disclosure
+section, puts component libraries such as PrimeVue first, defaults to Baseline Widely
+Available, and adds Vue adaptation notes.
+
+The CLI is pinned to npm `modern-web-guidance@1.0.0` (git tag `v1.0.0`, commit
+`4dd9683`) and every invocation sets `DISABLE_TELEMETRY=1`. Without it, a detached
+watchdog process sends each search query, retrieved guide ID, detected agent name, OS,
+CLI version, and latency bucket to `play.googleapis.com` (Clearcut). Search and retrieval
+otherwise run locally from the downloaded package; no allowlist entry for `npx` is added.
+
+To bump the version: read the new release's `skills/modern-web-guidance/SKILL.md` and
+`modern-web.mjs` (via `npm pack modern-web-guidance@<version>`), confirm
+`DISABLE_TELEMETRY` still disables every network call except the npm download, port any
+workflow changes into `policy/modern-web.md`, replace `@1.0.0` everywhere it appears in
+the pack and its test, then run `npm run verify`.
 
 ## Ownership model
 

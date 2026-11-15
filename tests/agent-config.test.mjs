@@ -88,7 +88,7 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   assert.equal(fs.readFileSync(userAgentsMd, 'utf8'), sharedPolicySource);
   assert.match(fs.readFileSync(userAgentsMd, 'utf8'), /~\/\.agents\/AGENTS\.md/);
   assert.ok(!fs.existsSync(path.join(home, '.agents/policy/shared-policy.md')));
-  assert.deepEqual(policyPacks, ['domain-module', 'react', 'routing', 'typescript', 'vue-primevue']);
+  assert.deepEqual(policyPacks, ['domain-module', 'modern-web', 'react', 'routing', 'typescript', 'vue-primevue']);
   for (const pack of policyPacks) {
     const installedPack = path.join(home, '.agents/policy', `${pack}.md`);
     assert.ok(fs.existsSync(installedPack), `missing user pack ${pack}`);
@@ -210,6 +210,7 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   assert.ok(fs.existsSync(path.join(project, '.agents/skills/manual-qa/SKILL.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/typescript.md')));
   assert.ok(fs.existsSync(path.join(project, '.agents/policy/vue-primevue.md')));
+  assert.ok(fs.existsSync(path.join(project, '.agents/policy/modern-web.md')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/react.md')));
   assert.ok(!fs.existsSync(path.join(project, '.agents/policy/domain-module.md')));
   assert.ok(!fs.existsSync(path.join(project, '.cursor/rules/30-agent-config-vue-primevue.mdc')));
@@ -237,6 +238,33 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   assert.throws(() => run(project, 'check'));
   run(project, 'sync');
   run(project, 'check');
+});
+
+test('modern-web policy pins the guidance CLI with telemetry disabled', () => {
+  const policy = fs.readFileSync(path.join(root, 'policy/modern-web.md'), 'utf8');
+  const invocations = [...policy.matchAll(/^.*npx\b.*$/gm)].map(([line]) => line);
+  assert.ok(invocations.length >= 2);
+  for (const line of invocations) {
+    assert.match(line, /^DISABLE_TELEMETRY=1 npx -y modern-web-guidance@1\.0\.0 (search|retrieve) /);
+  }
+  assert.doesNotMatch(policy, /modern-web-guidance@latest/);
+  assert.match(policy, /Do not append a\s+"Modern Web Guidance" disclosure/);
+  assert.match(fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8'), /Browser front-end work .*→ `~\/\.agents\/policy\/modern-web\.md`/);
+});
+
+test('installs the modern-web pack only for browser front-end projects', () => {
+  const tool = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-node-tool-'));
+  fs.writeFileSync(path.join(tool, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
+  fs.mkdirSync(path.join(tool, 'bin'));
+  fs.writeFileSync(path.join(tool, 'bin/cli.mjs'), 'export {};\n');
+  run(tool, 'init');
+  assert.ok(!fs.existsSync(path.join(tool, '.agents/policy/modern-web.md')));
+
+  const site = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-static-site-'));
+  fs.writeFileSync(path.join(site, 'package.json'), JSON.stringify({ scripts: { build: 'vite build' } }));
+  fs.writeFileSync(path.join(site, 'index.html'), '<!doctype html>\n');
+  run(site, 'init');
+  assert.ok(fs.existsSync(path.join(site, '.agents/policy/modern-web.md')));
 });
 
 test('routing and shared policy resolve without role files', () => {
