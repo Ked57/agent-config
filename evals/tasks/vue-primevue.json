@@ -23,7 +23,7 @@
     "startingStyle": "@starting-style|starting:",
     "scrollDriven": "scroll-timeline|animation-timeline|view-timeline|animation-range",
     "detailsName": "<details\\b[^>]*\\bname=",
-    "clipboardApi": "navigator\\.clipboard",
+    "clipboardApi": "navigator\\??\\.clipboard",
     "colorScheme": "color-scheme|light-dark\\(|prefers-color-scheme",
     "fetchpriority": "fetchpriority|fetchPriority",
     "lazyLoading": "loading=\"lazy\"",
@@ -47,7 +47,8 @@
       "expectsPolicies": ["vue-primevue", "modern-web"],
       "checks": [
         { "id": "primevue-confirm", "label": "Uses a PrimeVue confirm/dialog component", "type": "pattern", "in": "added", "pattern": "primevue/(confirmdialog|confirmpopup|dialog)|useConfirm", "expect": "present" },
-        { "id": "no-window-confirm", "label": "No window.confirm", "type": "pattern", "in": "added", "pattern": "window\\.confirm\\(|(^|[^\\w.])confirm\\(\\s*['\"`]", "expect": "absent" },
+        { "id": "confirm-rendered", "label": "The confirm/dialog component is rendered", "type": "pattern", "in": "final", "files": ["src/**/*.vue"], "pattern": "<(ConfirmDialog|ConfirmPopup|Dialog)\\b", "expect": "present" },
+        { "id": "no-window-confirm", "label": "No window.confirm", "type": "pattern", "in": "added", "pattern": "\\b(window|globalThis|self)\\.confirm\\(|(^|[^\\w.])confirm\\(", "expect": "absent" },
         { "id": "no-native-dialog", "label": "No hand-rolled native <dialog>", "type": "pattern", "in": "added", "pattern": "<dialog\\b|showModal\\(", "expect": "absent" }
       ]
     },
@@ -58,6 +59,7 @@
       "expectsPolicies": ["vue-primevue", "modern-web"],
       "checks": [
         { "id": "primevue-tabs", "label": "Uses PrimeVue Tabs", "type": "pattern", "in": "added", "pattern": "primevue/(tabs|tablist|tabview)", "expect": "present" },
+        { "id": "tabs-rendered", "label": "The tabs component is rendered", "type": "pattern", "in": "final", "files": ["src/**/*.vue"], "pattern": "<(Tabs|TabView)\\b", "expect": "present" },
         { "id": "settings-changed", "label": "Settings view changed", "type": "changed", "files": ["src/views/SettingsView.vue"], "expect": "any" }
       ]
     },
@@ -67,7 +69,8 @@
       "prompt": "On the dashboard orders table, let me sort by total and by created date, and filter the rows by status.",
       "expectsPolicies": ["vue-primevue", "modern-web"],
       "checks": [
-        { "id": "datatable-sortable", "label": "DataTable columns made sortable", "type": "pattern", "in": "final", "files": ["src/views/DashboardView.vue"], "pattern": "\\bsortable\\b", "expect": "present" },
+        { "id": "datatable-sortable", "label": "DataTable columns made sortable", "type": "pattern", "in": "final", "files": ["src/**/*.vue"], "pattern": "\\bsortable\\b", "expect": "present" },
+        { "id": "status-filter", "label": "Adds filtering", "type": "pattern", "in": "added", "pattern": "[Ff]ilter", "expect": "present" },
         { "id": "no-native-table", "label": "DataTable not replaced by a native <table>", "type": "pattern", "in": "added", "pattern": "<table\\b", "expect": "absent" }
       ]
     },
@@ -78,6 +81,9 @@
       "expectsPolicies": ["vue-primevue", "modern-web"],
       "checks": [
         { "id": "primevue-toast", "label": "Uses PrimeVue Toast", "type": "pattern", "in": "added", "pattern": "useToast|primevue/toast", "expect": "present" },
+        { "id": "toast-rendered", "label": "<Toast> is mounted", "type": "pattern", "in": "final", "files": ["src/**/*.vue"], "pattern": "<Toast\\b", "expect": "present" },
+        { "id": "toast-service", "label": "ToastService is installed", "type": "pattern", "in": "final", "files": ["src/**/*.ts"], "pattern": "ToastService", "expect": "present" },
+        { "id": "error-toast", "label": "Shows an error toast on failure", "type": "pattern", "in": "added", "pattern": "severity:\\s*['\"`]error['\"`]", "expect": "present" },
         { "id": "no-handrolled-toast", "label": "No hand-rolled popover/dialog toast", "type": "pattern", "in": "added", "pattern": "(?<![\\/\\w-])popover(?=[\\s=>\"'])|<dialog\\b", "expect": "absent" }
       ]
     },
@@ -88,6 +94,8 @@
       "expectsPolicies": ["vue-primevue", "modern-web"],
       "checks": [
         { "id": "users-ui-changed", "label": "Users list or avatar changed", "type": "changed", "files": ["src/views/UsersView.vue", "src/components/**"], "expect": "any" },
+        { "id": "keyboard-trigger", "label": "Opens on focus as well as hover", "type": "pattern", "in": "added", "pattern": "focus|tabindex", "expect": "present" },
+        { "id": "card-fields", "label": "Card shows when the user was last active", "type": "pattern", "in": "added", "pattern": "lastActiveAt", "expect": "present" },
         { "id": "uses-primevue-popover", "label": "Uses PrimeVue Popover (info)", "type": "pattern", "in": "added", "pattern": "primevue/popover", "expect": "present", "level": "info" }
       ]
     },
@@ -97,7 +105,8 @@
       "prompt": "Make the FAQ on the Help page behave like a proper accordion: only one answer can be open at a time, and it should work with the keyboard and screen readers.",
       "expectsPolicies": ["vue-primevue", "modern-web"],
       "checks": [
-        { "id": "accordion-primitive", "label": "Uses PrimeVue Accordion or native <details>", "type": "pattern", "in": "added", "pattern": "primevue/accordion|<details\\b", "expect": "present" }
+        { "id": "accordion-primitive", "label": "Uses PrimeVue Accordion or native <details>", "type": "pattern", "in": "added", "pattern": "primevue/accordion|<details\\b", "expect": "present" },
+        { "id": "single-open", "label": "Only one panel open (Accordion default, <details name>, or a toggle handler)", "type": "pattern", "in": "added", "pattern": "primevue/accordion|(^|[\\s:])name=|@toggle", "expect": "present" }
       ]
     },
     {
@@ -107,6 +116,7 @@
       "expectsPolicies": ["vue-primevue", "modern-web"],
       "checks": [
         { "id": "transition-mechanism", "label": "Adds a Vue or View Transition", "type": "pattern", "in": "added", "pattern": "<Transition\\b|startViewTransition|view-transition", "expect": "present" },
+        { "id": "transition-styles", "label": "Defines the animation itself", "type": "pattern", "in": "added", "pattern": "-(enter|leave)-(active|from|to)|(enter|leave)-(active|from|to)-class|::view-transition|@keyframes|\\b(transition|animation)(-[a-z-]+)?\\s*:", "expect": "present" },
         { "id": "reduced-motion", "label": "Respects reduced motion", "type": "pattern", "in": "added", "pattern": "prefers-reduced-motion|motion-reduce|motion-safe", "expect": "present", "level": "info" }
       ]
     },
@@ -116,7 +126,8 @@
       "prompt": "Make the top header shrink once the user scrolls down (less padding, smaller logo and title), and go back to full size when they scroll back to the top.",
       "expectsPolicies": ["vue-primevue", "modern-web"],
       "checks": [
-        { "id": "header-changed", "label": "Header component changed", "type": "changed", "files": ["src/components/AppHeader.vue"], "expect": "any" }
+        { "id": "header-changed", "label": "Header component changed", "type": "changed", "files": ["src/components/AppHeader.vue"], "expect": "any" },
+        { "id": "scroll-driven", "label": "Reacts to scroll position", "type": "pattern", "in": "added", "pattern": "[sS]croll|IntersectionObserver", "expect": "present" }
       ]
     },
     {
@@ -125,7 +136,8 @@
       "prompt": "On the projects page the cards get squeezed when the filters sidebar is open. Make the card grid adapt to the space it actually has rather than to the window width.",
       "expectsPolicies": ["vue-primevue", "modern-web"],
       "checks": [
-        { "id": "container-sized", "label": "Sizes columns from the container (container queries or an intrinsic auto-fill/auto-fit grid)", "type": "pattern", "in": "added", "pattern": "@container|container-type|(^|[\\s\"'`])@(xs|sm|md|lg|xl|[2-7]xl):|auto-(fill|fit)", "expect": "present" }
+        { "id": "container-sized", "label": "Sizes columns from the container (a container query or an intrinsic auto-fill/auto-fit grid)", "type": "pattern", "in": "added", "pattern": "@container\\b[^\\n{]*\\(|(^|[\\s\"'`])@(min-|max-)?(3xs|2xs|xs|sm|md|lg|xl|[2-7]xl|\\[[^\\]]+\\])(\\/[\\w-]+)?:|auto-(fill|fit)", "expect": "present" },
+        { "id": "no-viewport-columns", "label": "Card grid no longer switches columns on viewport breakpoints", "type": "pattern", "in": "final", "files": ["src/views/ProjectsView.vue"], "pattern": "(?<![@\\w-])(sm|md|lg|xl|2xl):grid-cols-", "expect": "absent" }
       ]
     },
     {
@@ -134,7 +146,9 @@
       "prompt": "Add a copy-to-clipboard button next to the API key on the settings page and next to the email on the user detail page, with some feedback that it was copied.",
       "expectsPolicies": ["vue-primevue", "modern-web"],
       "checks": [
-        { "id": "clipboard-api", "label": "Uses the async Clipboard API", "type": "pattern", "in": "added", "pattern": "navigator\\.clipboard", "expect": "present" },
+        { "id": "clipboard-api", "label": "Uses the async Clipboard API", "type": "pattern", "in": "added", "pattern": "navigator\\??\\.clipboard|\\.writeText\\(", "expect": "present" },
+        { "id": "settings-changed", "label": "Settings page changed (API key)", "type": "changed", "files": ["src/views/SettingsView.vue"], "expect": "any" },
+        { "id": "user-detail-changed", "label": "User detail page changed (email)", "type": "changed", "files": ["src/views/UserDetailView.vue"], "expect": "any" },
         { "id": "no-execcommand", "label": "No document.execCommand", "type": "pattern", "in": "added", "pattern": "execCommand\\(", "expect": "absent" }
       ]
     },
@@ -144,9 +158,11 @@
       "prompt": "Add a dark mode toggle in the header. It should default to the system setting, remember the user's choice, and switch both the PrimeVue components and our own Tailwind styles.",
       "expectsPolicies": ["vue-primevue", "modern-web"],
       "checks": [
-        { "id": "primevue-dark-selector", "label": "Configures PrimeVue darkModeSelector", "type": "pattern", "in": "added", "pattern": "darkModeSelector", "expect": "present" },
-        { "id": "system-preference", "label": "Reads the system preference", "type": "pattern", "in": "added", "pattern": "prefers-color-scheme", "expect": "present" },
-        { "id": "persists-choice", "label": "Persists the choice", "type": "pattern", "in": "added", "pattern": "localStorage", "expect": "present" }
+        { "id": "primevue-dark-selector", "label": "Sets PrimeVue darkModeSelector to something other than false/system", "type": "pattern", "in": "added", "pattern": "darkModeSelector:\\s*(?!false\\b|['\"`]system['\"`])\\S", "expect": "present" },
+        { "id": "header-toggle", "label": "Header changed (toggle)", "type": "changed", "files": ["src/components/AppHeader.vue"], "expect": "any" },
+        { "id": "system-preference", "label": "Reads the system preference", "type": "pattern", "in": "added", "pattern": "prefers-color-scheme|usePreferredDark|usePreferredColorScheme|useDark\\(|useColorMode\\(", "expect": "present" },
+        { "id": "persists-choice", "label": "Persists the choice", "type": "pattern", "in": "added", "pattern": "localStorage|useLocalStorage|useStorage\\(|useDark\\(|useColorMode\\(", "expect": "present" },
+        { "id": "tailwind-dark-variant", "label": "Tailwind dark: variant follows the toggle (info)", "type": "pattern", "in": "added", "pattern": "@custom-variant\\s+dark", "expect": "present", "level": "info" }
       ]
     },
     {
@@ -155,7 +171,8 @@
       "prompt": "Add validation to the settings form: display name is required and must be 2 to 50 characters, and the email must be valid. Show errors inline next to the fields in an accessible way, and don't submit while the form is invalid.",
       "expectsPolicies": ["vue-primevue", "modern-web"],
       "checks": [
-        { "id": "invalid-state", "label": "Marks invalid fields (invalid prop or aria-invalid)", "type": "pattern", "in": "added", "pattern": ":invalid=|aria-invalid", "expect": "present" },
+        { "id": "invalid-state", "label": "Marks invalid fields (invalid prop or aria-invalid)", "type": "pattern", "in": "added", "pattern": "(:|v-bind:)invalid=|aria-invalid|ariaInvalid", "expect": "present" },
+        { "id": "length-rule", "label": "Encodes the 50-character limit", "type": "pattern", "in": "added", "pattern": "\\b50\\b", "expect": "present" },
         { "id": "error-association", "label": "Associates error text with the field", "type": "pattern", "in": "added", "pattern": "aria-describedby|aria-errormessage", "expect": "present" },
         { "id": "primevue-message", "label": "Uses PrimeVue Message for errors (info)", "type": "pattern", "in": "added", "pattern": "primevue/message", "expect": "present", "level": "info" }
       ]
@@ -166,7 +183,9 @@
       "prompt": "The gallery page feels slow to load and the layout jumps around while the images come in. Fix the loading performance and the layout shift.",
       "expectsPolicies": ["vue-primevue", "modern-web"],
       "checks": [
-        { "id": "hero-priority", "label": "Prioritises the LCP image", "type": "pattern", "in": "final", "files": ["src/views/GalleryView.vue"], "pattern": "fetchpriority=\"high\"", "expect": "present" },
+        { "id": "hero-priority", "label": "Prioritises the LCP image", "type": "pattern", "in": "final", "files": ["src/**/*.vue", "index.html"], "pattern": "[fF]etch[pP]riority[^\\n]{0,40}high", "expect": "present" },
+        { "id": "hero-not-lazy", "label": "LCP image is not lazy-loaded", "type": "pattern", "in": "final", "files": ["src/**/*.vue"], "pattern": "<img\\b[^>]*hero[^>]*loading=\"lazy\"|<img\\b[^>]*loading=\"lazy\"[^>]*hero", "expect": "absent" },
+        { "id": "lazy-offscreen", "label": "Below-the-fold images are lazy-loaded", "type": "pattern", "in": "final", "files": ["src/**/*.vue"], "pattern": "loading=\"lazy\"", "expect": "present" },
         { "id": "reserved-space", "label": "Reserves image space (dimensions or aspect-ratio)", "type": "pattern", "in": "added", "pattern": "\\b(width|height)=\"\\d+\"|:width=|:height=|aspect-ratio|aspect-\\[|aspect-(square|video)", "expect": "present" }
       ]
     },
@@ -177,8 +196,10 @@
       "expectsPolicies": ["typescript"],
       "checks": [
         { "id": "utils-changed", "label": "Adds the utility under src/utils", "type": "changed", "files": ["src/utils/**"], "expect": "any" },
+        { "id": "exports-parser", "label": "Exports parseOrderQuery from src/utils", "type": "pattern", "in": "final", "files": ["src/utils/**"], "pattern": "export\\s+(default\\s+)?(function|const)\\s+parseOrderQuery\\b|export\\s*\\{[^}]*\\bparseOrderQuery\\b", "expect": "present" },
+        { "id": "tests-call-parser", "label": "Tests exercise parseOrderQuery", "type": "pattern", "in": "added", "files": ["src/**/*.test.ts"], "pattern": "parseOrderQuery\\(", "expect": "present" },
         { "id": "has-tests", "label": "Adds unit tests", "type": "changed", "files": ["src/**/*.test.ts"], "expect": "any" },
-        { "id": "ui-untouched", "label": "UI left alone", "type": "changed", "files": ["src/views/**", "src/components/**"], "expect": "none" }
+        { "id": "ui-untouched", "label": "UI left alone", "type": "changed", "files": ["src/views/**", "src/components/**", "src/App.vue"], "expect": "none" }
       ]
     },
     {
@@ -189,7 +210,7 @@
       "checks": [
         { "id": "counts-by-role", "label": "Introduces countsByRole", "type": "pattern", "in": "final", "files": ["src/stores/users.ts"], "pattern": "countsByRole", "expect": "present" },
         { "id": "old-getters-gone", "label": "Old per-role getters removed", "type": "pattern", "in": "final", "files": ["src/**/*.ts", "src/**/*.vue"], "pattern": "\\b(adminCount|editorCount|viewerCount)\\b", "expect": "absent" },
-        { "id": "setup-store", "label": "Uses a setup store", "type": "pattern", "in": "final", "files": ["src/stores/users.ts"], "pattern": "defineStore\\(\\s*['\"]users['\"]\\s*,\\s*\\(\\)\\s*=>", "expect": "present" }
+        { "id": "setup-store", "label": "Uses a setup store", "type": "pattern", "in": "final", "files": ["src/stores/users.ts"], "pattern": "defineStore\\(\\s*['\"`]users['\"`]\\s*,\\s*[^{\\s]", "expect": "present" }
       ]
     }
   ]

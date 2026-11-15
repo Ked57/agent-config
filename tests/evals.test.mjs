@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { aggregate, signTest } from '../evals/lib/aggregate.mjs';
 import { compareInventories } from '../evals/lib/arms.mjs';
-import { countFeatures, detectPolicies, evaluateChecks, newDependencies, parseUnifiedDiff } from '../evals/lib/checks.mjs';
+import { countFeatures, detectPolicies, evaluateChecks, newDependencies, parseUnifiedDiff, stripComments } from '../evals/lib/checks.mjs';
 import { DEFAULTS, globToRegExp, judgeSetId, parseArgs, parseToggle, resolveConfig, validateTaskSet } from '../evals/lib/config.mjs';
 import { runCommandCheck } from '../evals/lib/measure.mjs';
 import { buildJudgePrompt, combineVerdicts, judgePair, parseJudgeReply } from '../evals/lib/judge.mjs';
@@ -126,6 +126,46 @@ test('parseUnifiedDiff and evaluateChecks cover added, final and changed checks'
   ], diff, () => finals);
   assert.deepEqual(results.map((r) => [r.id, r.pass, r.level]), [['dialog', false, 'required'], ['cq', true, 'info'], ['final', true, 'required'], ['tests', true, 'required'], ['views', true, 'required']]);
   assert.deepEqual(countFeatures({ dialog: '<dialog', cq: '@container', none: 'zzz' }, diff.added), { dialog: 1, cq: 1 });
+});
+
+test('stripComments blanks comments but keeps URLs, protocol-relative strings and globs', () => {
+  assert.deepEqual(stripComments([
+    'const a = 1 // useConfirm',
+    "const url = 'https://example.test/x' + \"//cdn\"",
+    "include: ['src/**/*.test.ts'],",
+    '<p>a</p> <!-- <dialog> --> <b>b</b>',
+    'x(); /* one',
+    '  two */ y()',
+    ' * jsdoc body',
+    ' */'
+  ]), ['const a = 1 ', "const url = 'https://example.test/x' + \"//cdn\"", "include: ['src/**/*.test.ts'],", '<p>a</p>  <b>b</b>', 'x(); ', ' y()', '', '']);
+});
+
+test('pattern checks ignore comments unless the check opts in', () => {
+  const diff = parseUnifiedDiff([
+    '--- a/src/a.ts\t2026',
+    '+++ b/src/a.ts\t2026',
+    '@@ -1,3 +1,5 @@',
+    ' /**',
+    '+ * mentions window.confirm( in a doc block opened by a context line',
+    ' */',
+    '+// TODO useConfirm',
+    '+run()',
+    '@@ -9,1 +11,2 @@',
+    '+const real = useToast()'
+  ].join('\n'));
+  assert.deepEqual(diff.code, ['', '', 'run()', 'const real = useToast()']);
+  assert.equal(diff.added.length, 4);
+  const finals = [{ path: 'src/a.ts', content: '// adminCount is gone\nexport const countsByRole = 1\n' }];
+  const results = evaluateChecks([
+    { id: 'comment', type: 'pattern', in: 'added', pattern: 'useConfirm', expect: 'present' },
+    { id: 'raw', type: 'pattern', in: 'added', pattern: 'useConfirm', expect: 'present', comments: true },
+    { id: 'absent', type: 'pattern', in: 'added', pattern: 'window\\.confirm\\(', expect: 'absent' },
+    { id: 'code', type: 'pattern', in: 'added', pattern: 'useToast', expect: 'present' },
+    { id: 'final-absent', type: 'pattern', in: 'final', files: ['src/*.ts'], pattern: 'adminCount', expect: 'absent' },
+    { id: 'final-raw', type: 'pattern', in: 'final', files: ['src/*.ts'], pattern: 'adminCount', expect: 'absent', comments: true }
+  ], diff, () => finals);
+  assert.deepEqual(results.map((r) => [r.id, r.pass]), [['comment', false], ['raw', true], ['absent', true], ['code', true], ['final-absent', true], ['final-raw', false]]);
 });
 
 test('detectPolicies finds reads, shell reads, command signals and skills', () => {

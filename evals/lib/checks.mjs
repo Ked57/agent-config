@@ -1,39 +1,90 @@
 // Pure analysis of a run: unified-diff parsing, task checks, feature counts, policy/skill telemetry.
 import { matchesAny } from './config.mjs';
 
+// A comment opener only counts at the start of a line or after whitespace or one of `;{}(),>`, so
+// `https://…`, `"//cdn"` and globs such as `'src/**/*.ts'` stay code.
+const COMMENT_START = /<!--|(?<![^\s;{}(),>])\/[/*]/;
+
+/**
+ * Blanks comment text (`//`, `/* *\/`, `<!-- -->`) in consecutive source lines so a check matches code,
+ * not a remark about it. Heuristic, not a parser: a line starting with `*` is taken as a block-comment
+ * body, which covers a diff hunk that begins inside a JSDoc block.
+ */
+export function stripComments(lines) {
+  let closer = null;
+  return lines.map((line) => {
+    if (!closer && /^\s*\*(\s|\/|$)/.test(line)) return '';
+    let kept = '';
+    let rest = line;
+    for (;;) {
+      if (closer) {
+        const end = rest.indexOf(closer);
+        if (end === -1) return kept;
+        rest = rest.slice(end + closer.length);
+        closer = null;
+      }
+      const start = COMMENT_START.exec(rest);
+      if (!start) return kept + rest;
+      kept += rest.slice(0, start.index);
+      if (start[0] === '//') return kept;
+      closer = start[0] === '<!--' ? '-->' : '*/';
+      rest = rest.slice(start.index + start[0].length);
+    }
+  });
+}
+
 /**
  * Parses `diff -ruN a b` output whose paths were rewritten to `a/...` and `b/...`.
- * Returns changed files (relative paths) with their added lines.
+ * Returns changed files (relative paths) with their added lines; `code` is the added lines with
+ * comments blanked, using each hunk's context lines to know where a comment starts.
  */
 export function parseUnifiedDiff(text) {
   const files = [];
   let current = null;
+  let hunk = [];
+  const flushHunk = () => {
+    if (current) {
+      const stripped = stripComments(hunk.map((entry) => entry.text));
+      current.code.push(...stripped.filter((_, index) => hunk[index].added));
+    }
+    hunk = [];
+  };
   for (const line of text.split('\n')) {
     const header = /^\+\+\+ b\/(\S+)/.exec(line);
     const binary = /^Binary files a\/\S+ and b\/(\S+) differ$/.exec(line);
     if (header) {
-      current = { path: header[1], added: [], removed: 0, binary: false };
+      flushHunk();
+      current = { path: header[1], added: [], code: [], removed: 0, binary: false };
       files.push(current);
     } else if (binary) {
-      files.push({ path: binary[1], added: [], removed: 0, binary: true });
+      flushHunk();
+      files.push({ path: binary[1], added: [], code: [], removed: 0, binary: true });
       current = null;
+    } else if (line.startsWith('@@')) {
+      flushHunk();
     } else if (current && line.startsWith('+')) {
       current.added.push(line.slice(1));
+      hunk.push({ text: line.slice(1), added: true });
+    } else if (current && line.startsWith(' ')) {
+      hunk.push({ text: line.slice(1), added: false });
     } else if (current && line.startsWith('-') && !line.startsWith('---')) {
       current.removed += 1;
     }
   }
+  flushHunk();
   return {
     files,
     changedFiles: files.map((file) => file.path),
     added: files.flatMap((file) => file.added),
+    code: files.flatMap((file) => file.code),
     addedLines: files.reduce((sum, file) => sum + file.added.length, 0),
     removedLines: files.reduce((sum, file) => sum + file.removed, 0)
   };
 }
 
 /**
- * Evaluates a task's checks.
+ * Evaluates a task's checks. Pattern checks match code with comments blanked (see `stripComments`);
+ * `"comments": true` on a check matches the raw text instead.
  * `readFinal(globs)` returns `[{ path, content }]` for current files matching the globs.
  */
 export function evaluateChecks(checks = [], diff, readFinal) {
@@ -49,9 +100,10 @@ export function evaluateChecks(checks = [], diff, readFinal) {
     let hits;
     if (check.in === 'added') {
       const files = check.files ? diff.files.filter((file) => matchesAny(file.path, check.files)) : diff.files;
-      hits = files.flatMap((file) => file.added.filter((line) => pattern.test(line)).map(() => file.path));
+      hits = files.flatMap((file) => (check.comments ? file.added : file.code).filter((line) => pattern.test(line)).map(() => file.path));
     } else {
-      hits = readFinal(check.files).filter((file) => pattern.test(file.content)).map((file) => file.path);
+      const text = (content) => (check.comments ? content : stripComments(content.split('\n')).join('\n'));
+      hits = readFinal(check.files).filter((file) => pattern.test(text(file.content))).map((file) => file.path);
     }
     const pass = check.expect === 'present' ? hits.length > 0 : hits.length === 0;
     return { id: check.id, label: check.label ?? check.id, level, pass, detail: [...new Set(hits)].slice(0, 5).join(', ') };
