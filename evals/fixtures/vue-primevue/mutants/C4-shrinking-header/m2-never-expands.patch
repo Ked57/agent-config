@@ -1,0 +1,93 @@
+diff -ruN a/src/components/AppHeader.vue b/src/components/AppHeader.vue
+--- a/src/components/AppHeader.vue
++++ b/src/components/AppHeader.vue
+@@ -1,4 +1,7 @@
+ <script setup lang="ts">
++import { onMounted, onUnmounted, ref } from 'vue'
++import { isHeaderCompact } from '@/utils/header'
++
+ const links = [
+   { to: '/', label: 'Dashboard', icon: 'pi pi-chart-bar' },
+   { to: '/projects', label: 'Projects', icon: 'pi pi-briefcase' },
+@@ -7,13 +10,38 @@
+   { to: '/settings', label: 'Settings', icon: 'pi pi-cog' },
+   { to: '/help', label: 'Help', icon: 'pi pi-question-circle' },
+ ]
++
++const compact = ref(false)
++
++function onScroll() {
++  compact.value = compact.value || isHeaderCompact(compact.value, window.scrollY)
++}
++
++onMounted(() => {
++  onScroll()
++  window.addEventListener('scroll', onScroll, { passive: true })
++})
++
++onUnmounted(() => {
++  window.removeEventListener('scroll', onScroll)
++})
+ </script>
+ 
+ <template>
+   <header class="sticky top-0 z-10 border-b border-surface-200 bg-surface-0">
+-    <div class="mx-auto flex max-w-6xl items-center gap-6 px-4 py-5">
+-      <RouterLink to="/" class="flex items-center gap-2 text-xl font-semibold text-surface-900">
+-        <span class="inline-block size-8 rounded-md bg-primary"></span>
++    <div
++      class="mx-auto flex max-w-6xl items-center gap-6 px-4 transition-[padding] duration-200 ease-out motion-reduce:transition-none"
++      :class="compact ? 'py-2' : 'py-5'"
++    >
++      <RouterLink
++        to="/"
++        class="flex items-center gap-2 font-semibold text-surface-900 transition-[font-size] duration-200 ease-out motion-reduce:transition-none"
++        :class="compact ? 'text-base' : 'text-xl'"
++      >
++        <span
++          class="inline-block rounded-md bg-primary transition-[width,height] duration-200 ease-out motion-reduce:transition-none"
++          :class="compact ? 'size-6' : 'size-8'"
++        ></span>
+         Acme Console
+       </RouterLink>
+       <nav aria-label="Main" class="flex flex-1 flex-wrap gap-1">
+diff -ruN a/src/utils/header.test.ts b/src/utils/header.test.ts
+--- /dev/null
++++ b/src/utils/header.test.ts
+@@ -0,0 +1,24 @@
++import { describe, expect, it } from 'vitest'
++import { isHeaderCompact } from './header'
++
++describe('isHeaderCompact', () => {
++  it('stays full size at the top of the page', () => {
++    expect(isHeaderCompact(false, 0)).toBe(false)
++  })
++
++  it('compacts once scrolled past the threshold', () => {
++    expect(isHeaderCompact(false, 65)).toBe(true)
++  })
++
++  it('stays full size for small scrolls', () => {
++    expect(isHeaderCompact(false, 40)).toBe(false)
++  })
++
++  it('stays compact while scrolling back up until near the top', () => {
++    expect(isHeaderCompact(true, 40)).toBe(true)
++  })
++
++  it('returns to full size near the top', () => {
++    expect(isHeaderCompact(true, 0)).toBe(false)
++  })
++})
+diff -ruN a/src/utils/header.ts b/src/utils/header.ts
+--- /dev/null
++++ b/src/utils/header.ts
+@@ -0,0 +1,8 @@
++// The sticky header stays in the document flow, so shrinking it shifts content and
++// changes scrollY. Separate thresholds keep it from flickering around a single cut-off.
++const COMPACT_AFTER_PX = 64
++const EXPAND_BELOW_PX = 8
++
++export function isHeaderCompact(wasCompact: boolean, scrollY: number): boolean {
++  return wasCompact ? scrollY >= EXPAND_BELOW_PX : scrollY > COMPACT_AFTER_PX
++}

@@ -1,0 +1,25 @@
+diff -ruN a/src/App.vue b/src/App.vue
+--- a/src/App.vue
++++ b/src/App.vue
+@@ -6,7 +6,12 @@
+   <div class="min-h-screen">
+     <AppHeader />
+     <main class="mx-auto max-w-6xl px-4 py-8">
+-      <RouterView />
++      <RouterView v-slot="{ Component }">
++        <!-- Enter-only: the old page leaves instantly so navigation never waits on an exit animation. -->
++        <Transition name="page" mode="out-in">
++          <component :is="Component" />
++        </Transition>
++      </RouterView>
+     </main>
+   </div>
+ </template>
+diff -ruN a/src/style.css b/src/style.css
+--- a/src/style.css
++++ b/src/style.css
+@@ -7,3 +7,4 @@
+   @apply bg-surface-50 text-surface-900 antialiased;
+   font-family: 'Inter', system-ui, sans-serif;
+ }
++

@@ -36,8 +36,8 @@
       "expect": "killed"
     },
     {
-      "file": "m5-created-sorted-as-text.patch",
-      "wrong": "Created sorts on the formatted date text (\"Nov 11\" before \"Nov 2\")",
+      "file": "m5-created-sorts-wrong-field.patch",
+      "wrong": "the Created header sorts by customer name (wrong sort-field)",
       "violates": "sort by created date",
       "expect": "killed"
     },

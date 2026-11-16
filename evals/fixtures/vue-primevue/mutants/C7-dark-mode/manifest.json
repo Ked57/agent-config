@@ -1,0 +1,51 @@
+{
+  "task": "C7-dark-mode",
+  "references": [
+    {
+      "file": "reference-mwg-A-r1.patch",
+      "source": "mwg-eval C7 A r1 (class on <html>, Pinia store, pre-paint script)"
+    },
+    {
+      "file": "reference-mwg-B-r2.patch",
+      "source": "mwg-eval C7 B r2 (<meta name=\"color-scheme\"> drives PrimeVue and Tailwind)"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-choice-never-read.patch",
+      "wrong": "the choice is written to localStorage but never read back",
+      "violates": "remember the user's choice",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-ignores-system.patch",
+      "wrong": "with no stored choice the app is always light, whatever the system says",
+      "violates": "it should default to the system setting",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-toggle-not-in-header.patch",
+      "wrong": "the toggle is rendered under the page content instead of in the header",
+      "violates": "add a dark mode toggle in the header",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-primevue-not-switched.patch",
+      "wrong": "PrimeVue's darkModeSelector stays false; only the Tailwind dark: styles switch",
+      "violates": "switch both the PrimeVue components and our own Tailwind styles",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-class-mismatch.patch",
+      "wrong": "the toggle sets class 'dark' while PrimeVue and Tailwind listen for '.app-dark'",
+      "violates": "switch both the PrimeVue components and our own Tailwind styles",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-tailwind-not-switched.patch",
+      "wrong": "no Tailwind dark variant: dark: utilities keep following the OS, not the toggle",
+      "violates": "switch ... our own Tailwind styles",
+      "expect": "killed"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+diff -ruN a/src/views/ProjectsView.vue b/src/views/ProjectsView.vue
+--- a/src/views/ProjectsView.vue
++++ b/src/views/ProjectsView.vue
+@@ -37,7 +37,7 @@
+           </li>
+         </ul>
+       </aside>
+-      <div class="grid flex-1 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
++      <div class="grid flex-1 grid-cols-2 gap-4">
+         <ProjectCard v-for="project in visible" :key="project.id" :project="project" />
+       </div>
+     </div>

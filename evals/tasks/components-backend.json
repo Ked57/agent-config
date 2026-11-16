@@ -7,13 +7,13 @@
       "label": "Policy rules (typescript, domain-module)"
     },
     "skill": {
-      "label": "Skills (manual-qa, quality tooling, diagnosis)"
+      "label": "Skills (manual-qa)"
     }
   },
   "smoke": [
     "K1-plan-limits",
-    "K5-token-cli",
-    "K7-done-without-assignee"
+    "K3-task-import",
+    "K5-token-cli"
   ],
   "featurePatterns": {
     "satisfies": "\\bsatisfies\\b",
@@ -21,9 +21,7 @@
     "typeAssertion": "\\bas (?!const\\b)[A-Za-z{(\\[]",
     "nonNullAssertion": "[\\w)\\]]!(\\.|\\[|;|,|\\))",
     "typeboxValidation": "\\bt\\.(Object|String|Integer|Number|Union|Literal|Optional)\\(",
-    "spawnedServerOrCli": "bun run (src/index\\.ts|scripts/)|Bun\\.spawn|spawnSync\\(",
-    "stryker": "@stryker-mutator",
-    "knip": "\\bknip\\b"
+    "spawnedServerOrCli": "bun run (src/index\\.ts|scripts/)|Bun\\.spawn|spawnSync\\("
   },
   "tasks": [
     {

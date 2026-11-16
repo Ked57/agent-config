@@ -1,0 +1,12 @@
+diff -ruN a/src/views/UsersView.vue b/src/views/UsersView.vue
+--- a/src/views/UsersView.vue
++++ b/src/views/UsersView.vue
+@@ -28,7 +28,7 @@
+     <p v-if="loading" class="text-surface-500">Loading…</p>
+     <ul v-else class="divide-y divide-surface-200 rounded-xl border border-surface-200 bg-surface-0">
+       <li v-for="user in filteredUsers" :key="user.id" class="flex items-center gap-4 p-4">
+-        <UserAvatar :user="user" size="large" />
++        <span :title="`${user.name} · ${user.email}`"><UserAvatar :user="user" size="large" /></span>
+         <div class="flex-1">
+           <RouterLink :to="{ name: 'user', params: { id: user.id } }" class="font-medium hover:underline">{{ user.name }}</RouterLink>
+           <p class="text-sm text-surface-500">{{ user.title }}</p>

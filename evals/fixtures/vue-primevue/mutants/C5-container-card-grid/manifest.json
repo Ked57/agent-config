@@ -1,0 +1,52 @@
+{
+  "task": "C5-container-card-grid",
+  "references": [
+    {
+      "file": "reference-aa-A-r1.patch",
+      "source": "validation-aa-smoke C5 A r1 (Tailwind @container variants)"
+    },
+    {
+      "file": "reference-repro-B-r1.patch",
+      "source": "validation-mwg-repro C5 B r1 (auto-fill grid)"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-comment-only.patch",
+      "wrong": "a comment about a container query, grid unchanged",
+      "violates": "adapt to the space it actually has rather than to the window width",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-container-but-viewport-columns.patch",
+      "wrong": "an @container wrapper is added but the columns still switch on md:/lg: viewport breakpoints",
+      "violates": "rather than to the window width",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-unused-container-class.patch",
+      "wrong": "container-type is declared on a CSS class nothing uses",
+      "violates": "adapt to the space it actually has",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-string-mentions-auto-fill.patch",
+      "wrong": "a string constant mentions auto-fill; the viewport grid is unchanged",
+      "violates": "adapt to the space it actually has",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-fixed-two-columns.patch",
+      "wrong": "always two columns, whatever the space",
+      "violates": "make the card grid adapt to the space it actually has",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-container-on-the-card.patch",
+      "wrong": "the @container class sits on each card instead of the grid wrapper, so the grid has no container ancestor and stays one column",
+      "violates": "make the card grid adapt to the space it actually has",
+      "expect": "survives",
+      "why": "Only a browser sees which element is the container; the static checks see @container and @xl: variants and no viewport columns."
+    }
+  ]
+}

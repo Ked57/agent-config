@@ -1,0 +1,48 @@
+diff -ruN a/src/views/FaqView.vue b/src/views/FaqView.vue
+--- a/src/views/FaqView.vue
++++ b/src/views/FaqView.vue
+@@ -1,14 +1,13 @@
+ <script setup lang="ts">
+ import { onMounted, ref } from 'vue'
++import Accordion from 'primevue/accordion'
++import AccordionContent from 'primevue/accordioncontent'
++import AccordionHeader from 'primevue/accordionheader'
++import AccordionPanel from 'primevue/accordionpanel'
+ import { fetchFaq } from '@/services/api'
+ import type { FaqItem } from '@/types'
+ 
+ const items = ref<FaqItem[]>([])
+-const open = ref<Record<string, boolean>>({})
+-
+-function toggle(id: string) {
+-  open.value[id] = !open.value[id]
+-}
+ 
+ onMounted(async () => {
+   items.value = await fetchFaq()
+@@ -18,14 +17,16 @@
+ <template>
+   <section class="flex max-w-3xl flex-col gap-6">
+     <h1 class="text-2xl font-semibold">Help &amp; FAQ</h1>
+-    <div class="flex flex-col gap-3">
+-      <div v-for="item in items" :key="item.id" class="rounded-xl border border-surface-200 bg-surface-0">
+-        <div class="flex cursor-pointer items-center justify-between p-4 font-medium" @click="toggle(item.id)">
+-          {{ item.question }}
+-          <i class="pi" :class="open[item.id] ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
+-        </div>
+-        <div v-if="open[item.id]" class="border-t border-surface-200 p-4 text-surface-600">{{ item.answer }}</div>
+-      </div>
+-    </div>
++    <!-- PrimeVue Accordion is single-open by default and provides the WAI-ARIA accordion
++         pattern: button headers with aria-expanded/aria-controls, region panels, and
++         Enter/Space, Arrow Up/Down, Home/End keyboard support. -->
++    <Accordion multiple>
++      <AccordionPanel v-for="item in items" :key="item.id" :value="item.id">
++        <AccordionHeader>{{ item.question }}</AccordionHeader>
++        <AccordionContent>
++          <p class="text-surface-600">{{ item.answer }}</p>
++        </AccordionContent>
++      </AccordionPanel>
++    </Accordion>
+   </section>
+ </template>

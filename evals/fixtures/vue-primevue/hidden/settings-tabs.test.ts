@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/dom'
 import userEvent from '@testing-library/user-event'
-import { isShown, mountApp, text, unmountApp, waitFor } from './harness'
+import { isShown, mountApp, sleep, text, unmountApp, waitFor } from './harness'
 
 afterEach(unmountApp)
 
@@ -58,7 +58,10 @@ describe('L2 settings split into tabs', () => {
 
     await userEvent.click(tab('Notifications') as HTMLElement)
     const digest = await waitFor(() => shownControl(/weekly digest/i))
+    // A person takes a moment between tabs; anything that resets the form on a tab switch shows up here.
+    await sleep(800)
     await userEvent.click(digest)
+    await sleep(300)
 
     const saveButton = screen.getAllByRole('button', { name: /save/i }).find((button) => isShown(button))
     expect(saveButton, 'a visible Save button on the Notifications tab').toBeTruthy()

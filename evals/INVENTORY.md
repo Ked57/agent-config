@@ -116,25 +116,39 @@ but that copy is the Cursor sparse clone, not the Claude plugin cache.
 ## 6. Component → eval coverage
 
 "Observable effect" is what a hidden test or deterministic check could see if the component works.
-Task sets: `ts-backend` (B1–B11, N1–N2), `ts-backend-hard` (H1–H8, agent E), `poteto-spec` (S1–S6,
-agent G), `vue-primevue` (L/C/F/N, agent D), `components-*` (K1–K…, agent F, this brief).
+Task sets that exist: `ts-backend` (B1–B11, N1–N2), `ts-backend-hard` (H1–H8), `poteto-spec`
+(S1–S5), `vue-primevue` (L1–L4, C1–C7, F1–F2, N1–N2) and `components-backend` (K1–K5). There is no
+`components-vue` set.
 
 | Component | Task shape where it should change the outcome | Covered by |
 |---|---|---|
 | `shared-policy.md` | any coding task: tests added, gates run, QA done | all sets, as whole-arm effect (Comparison 1) |
 | `routing.md` | any task: right owners read | all sets via routing telemetry; no outcome of its own |
-| `typescript.md` | lazy solution uses `any`, `as`, `!`, an unchecked index, non-exhaustive switch, or unvalidated input; a stricter lint/type check sees it | partly B1–B11 (gates only, which already forbid `any`); **components-backend K1–K3** for the specific rules |
+| `typescript.md` | lazy solution leaves a union non-exhaustive, uses `as`/`!`, an unchecked positional or map lookup, or lets malformed input through | **K1-plan-limits** (exhaustive union, add-variant type check), **K2-task-filters** (boundary validation of malformed input), **K3-task-import** (positional and map lookups); K1–K3 also run a stricter typescript-eslint config (no assertions, no `!`, no `any`, exhaustive switches, no floating promises). Elsewhere only via the fixture gates |
 | `react.md` | React component work | **gap**: no React fixture |
-| `vue-primevue.md` | PrimeVue reuse, a11y names, form validation, states | `vue-primevue` L/C/F (agent D); **components-vue** for rules agent D does not cover |
-| `domain-module.md` | "add a domain following the convention" / explicit request; files with the right exports | **components-backend K4** (explicit request) |
-| `manual-qa` | a defect that unit tests and typecheck miss but a real request shows | `--http` smoke is fixture-level, not per task; **components-backend K5** |
-| `agent-browser` | UI defect visible only in the rendered app | via `manual-qa` on `vue-primevue` (telemetry only); outcome **gap** unless agent D's tests catch a render-only defect |
-| `fullstack-typescript-quality` (+3) | "set up quality tooling": gates exist and run with the skill's thresholds | **components-backend K6** |
+| `vue-primevue.md` | PrimeVue reuse, a11y names, form validation, states | `vue-primevue` L/C/F; no extra Vue tasks were written |
+| `domain-module.md` | explicit request for the four-file layout; structure plus behaviour | **K4-labels-domain-module** (explicit-request trigger only; no fixture has the established convention) |
+| `manual-qa` | a defect unit tests miss but running the surface shows | **K5-token-cli** (CLI run for real, without the tests' `LOG_LEVEL=silent`); listed in `expectsComponents` of H1–H3, H5–H8, S1–S5 and the Vue L/C/F tasks, but there it is telemetry, not a targeted outcome |
+| `agent-browser` | UI defect visible only in the rendered app | via `manual-qa` on `vue-primevue` (telemetry only); outcome **gap** |
+| `fullstack-typescript-quality` (+3) | "set up quality tooling": gates exist, have the skill's thresholds, reject a controlled violation and run | **gap (planned K6, not done)**: needs new devDependencies, which the mutation gate's hard-linked `node_modules` cannot provide; see the notes below |
 | `codex-review` | review output | **gap**: Cursor + Codex auth, no code outcome |
 | `taste-skill` | page looks designed | **gap**: visual; needs a screenshot rubric or judge |
-| `emilkowalski-ui` (8) | motion, polish, worst-case data | **gap** for 7 (visual/advisory); `break-ui` could be tested with a long-data render test, not planned. C3/C4 touch motion but test behaviour only |
-| `mattpocock-skills:diagnosing-bugs`, `tdd` | bug with a non-obvious root cause; symptom patch fails a hidden regression test | **components-backend K7** (diagnosis); `tdd` only via "tests added" (telemetry, judge) |
+| `emilkowalski-ui` (8) | motion, polish, worst-case data | `emil-design-eng` and `animate` appear in Vue tasks' `expectsComponents` (telemetry only); outcome **gap** (visual/advisory). `break-ui` could be tested with a long-data render test, not planned |
+| `mattpocock-skills:diagnosing-bugs`, `tdd` | bug with a non-obvious root cause; a symptom patch fails a hidden regression test | **gap (planned K7, not done)**; `tdd` only via "tests added" (telemetry, judge) |
 | other mattpocock D-skills (`research`, `pr`, `wizard`, `grilling`, …) | non-coding outputs | **gap**: no code outcome |
-| `pstack` / `poteto-mode` | spec-sized feature: fewer misses on stated requirements, simpler diff | `poteto-spec` S1–S6 (agent G), Comparison 2 with a prompt prefix |
+| `pstack` / `poteto-mode` | spec-sized feature: fewer misses on stated requirements, simpler diff | `poteto-spec` S1–S5, Comparison 2 with a `/pstack:poteto-mode` prompt prefix |
 | `pstack:poteto-agent`, `comment-sicko` | only inside poteto-mode | with `poteto-spec`, telemetry only |
 | Cursor bridges, Codex block, native agents, adapters | n/a | **cannot be exercised** by a Claude-only suite |
+
+Notes on the two unfinished component tasks:
+
+- **K6 (quality tooling).** `fullstack-typescript-static` requires a `quality-metrics/halstead` rule but
+  names no package; `eslint-plugin-quality-metrics` does not exist on npm (404) and a registry search
+  finds no Halstead plugin, so an agent following the skill cannot satisfy that gate. The skill's
+  100% coverage target also makes the v8-instrumented fixture suite time out at the default 5 s. A
+  future task needs a check that installs the run's devDependencies into a temp copy (never into the
+  hard-linked `node_modules`) before running `verify:fast`/`verify:full`.
+- **K7 (diagnosis).** Planned on a latent fixture bug: `PATCH /api/tasks/:id` with
+  `{"status": "done", "assigneeId": null}` passes the "assign before done" rule because
+  `body.assigneeId ?? task.assigneeId` treats an explicit null as absent, and `{"assigneeId": null}` on a
+  done task unassigns it. The seeded `tsk_1` (done, unassigned) is a red herring.

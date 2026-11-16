@@ -1,0 +1,120 @@
+diff -ruN a/src/utils/settings-validation.ts b/src/utils/settings-validation.ts
+--- /dev/null
++++ b/src/utils/settings-validation.ts
+@@ -0,0 +1,26 @@
++import type { Settings } from '@/types'
++
++export const DISPLAY_NAME_MIN = 2
++export const DISPLAY_NAME_MAX = 50
++
++// Deliberately permissive: one "@", no whitespace, and a dot in the domain. The server stays the authority.
++const EMAIL_PATTERN = /@/
++
++export type SettingsErrors = Partial<Record<'displayName' | 'email', string>>
++
++export function validateSettings(settings: Pick<Settings, 'displayName' | 'email'>): SettingsErrors {
++  const errors: SettingsErrors = {}
++
++  const displayName = settings.displayName.trim()
++  if (!displayName) {
++    errors.displayName = 'Display name is required.'
++  } else if (displayName.length < DISPLAY_NAME_MIN || displayName.length > DISPLAY_NAME_MAX) {
++    errors.displayName = `Display name must be ${DISPLAY_NAME_MIN} to ${DISPLAY_NAME_MAX} characters.`
++  }
++
++  if (!EMAIL_PATTERN.test(settings.email.trim())) {
++    errors.email = 'Enter a valid email address.'
++  }
++
++  return errors
++}
+diff -ruN a/src/views/SettingsView.vue b/src/views/SettingsView.vue
+--- a/src/views/SettingsView.vue
++++ b/src/views/SettingsView.vue
+@@ -1,11 +1,13 @@
+ <script setup lang="ts">
+-import { onMounted, reactive, ref } from 'vue'
++import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+ import Button from 'primevue/button'
+ import InputText from 'primevue/inputtext'
++import Message from 'primevue/message'
+ import Select from 'primevue/select'
+ import ToggleSwitch from 'primevue/toggleswitch'
+ import { fetchSettings, saveSettings } from '@/services/api'
+ import type { Settings } from '@/types'
++import { validateSettings } from '@/utils/settings-validation'
+ 
+ const form = reactive<Settings>({
+   displayName: '',
+@@ -18,6 +20,15 @@
+ })
+ const saving = ref(false)
+ 
++const errors = computed(() => validateSettings(form))
++// Errors stay hidden until the user leaves a field or tries to submit, so they aren't shown while typing for the first time.
++const touched = reactive({ displayName: false, email: false })
++const submitAttempted = ref(false)
++const visibleErrors = computed(() => ({
++  displayName: touched.displayName || submitAttempted.value ? errors.value.displayName : undefined,
++  email: touched.email || submitAttempted.value ? errors.value.email : undefined,
++}))
++
+ const languages = [
+   { label: 'English', value: 'en' },
+   { label: 'Français', value: 'fr' },
+@@ -26,6 +37,14 @@
+ const timezones = ['Europe/London', 'Europe/Paris', 'America/New_York', 'America/Los_Angeles', 'Asia/Tokyo']
+ 
+ async function onSubmit() {
++  submitAttempted.value = true
++  const firstInvalid = (['displayName', 'email'] as const).find((field) => errors.value[field])
++  if (firstInvalid) {
++    await nextTick()
++    document.getElementById(firstInvalid)?.focus()
++    return
++  }
++
+   saving.value = true
+   try {
+     Object.assign(form, await saveSettings({ ...form }))
+@@ -42,16 +61,37 @@
+ <template>
+   <section class="flex max-w-2xl flex-col gap-6">
+     <h1 class="text-2xl font-semibold">Settings</h1>
+-    <form class="flex flex-col gap-8 rounded-xl border border-surface-200 bg-surface-0 p-6" @submit.prevent="onSubmit">
++    <form class="flex flex-col gap-8 rounded-xl border border-surface-200 bg-surface-0 p-6" novalidate @submit.prevent="onSubmit">
+       <fieldset class="flex flex-col gap-4">
+         <legend class="mb-2 text-lg font-semibold">Profile</legend>
+         <div class="flex flex-col gap-2">
+           <label for="displayName" class="text-sm font-medium">Display name</label>
+-          <InputText id="displayName" v-model="form.displayName" />
++          <InputText
++            id="displayName"
++            v-model="form.displayName"
++            :invalid="!!visibleErrors.displayName"
++            :aria-describedby="visibleErrors.displayName ? 'displayName-error' : undefined"
++            autocomplete="name"
++            @blur="touched.displayName = true"
++          />
++          <Message v-if="visibleErrors.displayName" id="displayName-error" severity="error" size="small" variant="simple">
++            {{ visibleErrors.displayName }}
++          </Message>
+         </div>
+         <div class="flex flex-col gap-2">
+           <label for="email" class="text-sm font-medium">Email</label>
+-          <InputText id="email" v-model="form.email" type="email" />
++          <InputText
++            id="email"
++            v-model="form.email"
++            type="email"
++            :invalid="!!visibleErrors.email"
++            :aria-describedby="visibleErrors.email ? 'email-error' : undefined"
++            autocomplete="email"
++            @blur="touched.email = true"
++          />
++          <Message v-if="visibleErrors.email" id="email-error" severity="error" size="small" variant="simple">
++            {{ visibleErrors.email }}
++          </Message>
+         </div>
+       </fieldset>
+ 

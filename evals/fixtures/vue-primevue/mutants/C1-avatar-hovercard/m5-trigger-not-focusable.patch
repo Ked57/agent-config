@@ -1,0 +1,166 @@
+diff -ruN a/src/components/UserHovercard.vue b/src/components/UserHovercard.vue
+--- /dev/null
++++ b/src/components/UserHovercard.vue
+@@ -0,0 +1,82 @@
++<script setup lang="ts">
++import { onBeforeUnmount, ref, useId } from 'vue'
++import UserAvatar from '@/components/UserAvatar.vue'
++import { formatDate, formatRelativeTime } from '@/utils/format'
++import type { User } from '@/types'
++
++defineProps<{ user: User; size?: 'normal' | 'large' | 'xlarge' }>()
++
++// Short delays stop the card flashing as the pointer crosses the list, and give
++// the pointer time to move from the avatar onto the card without it closing.
++const OPEN_DELAY_MS = 200
++const CLOSE_DELAY_MS = 150
++
++const cardId = useId()
++const open = ref(false)
++let timer: ReturnType<typeof setTimeout> | undefined
++
++function schedule(next: boolean, delay: number) {
++  clearTimeout(timer)
++  timer = setTimeout(() => (open.value = next), delay)
++}
++
++function show() {
++  clearTimeout(timer)
++  open.value = true
++}
++
++function hide() {
++  clearTimeout(timer)
++  open.value = false
++}
++
++function onFocusOut(event: FocusEvent) {
++  const wrapper = event.currentTarget as HTMLElement
++  if (!wrapper.contains(event.relatedTarget as Node | null)) hide()
++}
++
++onBeforeUnmount(() => clearTimeout(timer))
++</script>
++
++<template>
++  <div
++    class="relative inline-flex"
++    @mouseenter="schedule(true, OPEN_DELAY_MS)"
++    @mouseleave="schedule(false, CLOSE_DELAY_MS)"
++    @focusin="show"
++    @focusout="onFocusOut"
++    @keydown.esc="hide"
++  >
++    <!-- A button rather than a tabindex span so the trigger has a real accessible
++         name; tapping it focuses it, which also opens the card on touch devices. -->
++    <span
++      :aria-label="`Profile card for ${user.name}`"
++      :aria-describedby="cardId"
++      class="inline-flex cursor-default rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
++    >
++      <UserAvatar :user="user" :size="size" />
++    </span>
++    <!-- v-show keeps the card in the DOM so aria-describedby always resolves. -->
++    <div v-show="open" :id="cardId" role="tooltip" class="absolute top-full left-0 z-20 pt-2">
++      <div class="flex w-72 flex-col gap-3 rounded-xl border border-surface-200 bg-surface-0 p-4 shadow-lg">
++        <div class="flex items-center gap-3">
++          <UserAvatar :user="user" size="large" aria-hidden="true" />
++          <div class="min-w-0">
++            <p class="truncate font-semibold">{{ user.name }}</p>
++            <p class="truncate text-sm text-surface-500">{{ user.title }}</p>
++          </div>
++        </div>
++        <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
++          <dt class="text-surface-500">Location</dt>
++          <dd class="truncate">{{ user.location }}</dd>
++          <dt class="text-surface-500">Email</dt>
++          <dd class="break-all">{{ user.email }}</dd>
++          <dt class="text-surface-500">Last active</dt>
++          <dd>
++            <time :datetime="user.lastActiveAt" :title="formatDate(user.lastActiveAt)">{{ formatRelativeTime(user.lastActiveAt) }}</time>
++          </dd>
++        </dl>
++      </div>
++    </div>
++  </div>
++</template>
+diff -ruN a/src/utils/format.test.ts b/src/utils/format.test.ts
+--- a/src/utils/format.test.ts
++++ b/src/utils/format.test.ts
+@@ -1,5 +1,5 @@
+ import { describe, expect, it } from 'vitest'
+-import { formatCurrency, initials } from './format'
++import { formatCurrency, formatRelativeTime, initials } from './format'
+ 
+ describe('formatCurrency', () => {
+   it('formats USD by default', () => {
+@@ -16,3 +16,21 @@
+     expect(initials('')).toBe('')
+   })
+ })
++
++describe('formatRelativeTime', () => {
++  const now = new Date('2026-11-15T12:00:00Z')
++
++  it('uses the largest whole unit that fits', () => {
++    expect(formatRelativeTime('2026-11-15T09:00:00Z', now)).toBe('3 hours ago')
++    expect(formatRelativeTime('2026-11-10T12:00:00Z', now)).toBe('5 days ago')
++    expect(formatRelativeTime('2026-11-01T12:00:00Z', now)).toBe('2 weeks ago')
++  })
++
++  it('says "yesterday" for one day ago', () => {
++    expect(formatRelativeTime('2026-11-14T12:00:00Z', now)).toBe('yesterday')
++  })
++
++  it('says "now" for anything under a minute', () => {
++    expect(formatRelativeTime('2026-11-15T11:59:30Z', now)).toBe('now')
++  })
++})
+diff -ruN a/src/utils/format.ts b/src/utils/format.ts
+--- a/src/utils/format.ts
++++ b/src/utils/format.ts
+@@ -14,3 +14,23 @@
+     .map((part) => part[0]?.toUpperCase() ?? '')
+     .join('')
+ }
++
++const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
++  ['year', 365 * 24 * 60 * 60],
++  ['month', 30 * 24 * 60 * 60],
++  ['week', 7 * 24 * 60 * 60],
++  ['day', 24 * 60 * 60],
++  ['hour', 60 * 60],
++  ['minute', 60],
++]
++
++export function formatRelativeTime(iso: string, now = new Date(), locale = 'en-US'): string {
++  const seconds = (new Date(iso).getTime() - now.getTime()) / 1000
++  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
++  for (const [unit, unitSeconds] of RELATIVE_UNITS) {
++    if (Math.abs(seconds) >= unitSeconds) {
++      return formatter.format(Math.round(seconds / unitSeconds), unit)
++    }
++  }
++  return formatter.format(0, 'second')
++}
+diff -ruN a/src/views/UsersView.vue b/src/views/UsersView.vue
+--- a/src/views/UsersView.vue
++++ b/src/views/UsersView.vue
+@@ -5,7 +5,7 @@
+ import InputIcon from 'primevue/inputicon'
+ import InputText from 'primevue/inputtext'
+ import Tag from 'primevue/tag'
+-import UserAvatar from '@/components/UserAvatar.vue'
++import UserHovercard from '@/components/UserHovercard.vue'
+ import { useUsersStore } from '@/stores/users'
+ 
+ const usersStore = useUsersStore()
+@@ -28,7 +28,7 @@
+     <p v-if="loading" class="text-surface-500">Loading…</p>
+     <ul v-else class="divide-y divide-surface-200 rounded-xl border border-surface-200 bg-surface-0">
+       <li v-for="user in filteredUsers" :key="user.id" class="flex items-center gap-4 p-4">
+-        <UserAvatar :user="user" size="large" />
++        <UserHovercard :user="user" size="large" />
+         <div class="flex-1">
+           <RouterLink :to="{ name: 'user', params: { id: user.id } }" class="font-medium hover:underline">{{ user.name }}</RouterLink>
+           <p class="text-sm text-surface-500">{{ user.title }}</p>

@@ -1,0 +1,346 @@
+diff -ruN a/index.html b/index.html
+--- a/index.html
++++ b/index.html
+@@ -5,6 +5,14 @@
+     <link rel="icon" href="/favicon.svg" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+     <title>Acme Console</title>
++    <script>
++      // Apply the dark class before first paint to avoid a light flash; src/stores/theme.ts owns it afterwards.
++      ;(function () {
++        var stored = localStorage.getItem('acme-color-scheme')
++        var dark = stored === 'dark' || (stored !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
++        if (dark) document.documentElement.classList.add('app-dark')
++      })()
++    </script>
+   </head>
+   <body>
+     <div id="app"></div>
+diff -ruN a/src/components/AppHeader.vue b/src/components/AppHeader.vue
+--- a/src/components/AppHeader.vue
++++ b/src/components/AppHeader.vue
+@@ -1,4 +1,9 @@
+ <script setup lang="ts">
++import Button from 'primevue/button'
++import { useThemeStore } from '@/stores/theme'
++
++const theme = useThemeStore()
++
+ const links = [
+   { to: '/', label: 'Dashboard', icon: 'pi pi-chart-bar' },
+   { to: '/projects', label: 'Projects', icon: 'pi pi-briefcase' },
+@@ -10,9 +15,9 @@
+ </script>
+ 
+ <template>
+-  <header class="sticky top-0 z-10 border-b border-surface-200 bg-surface-0">
++  <header class="sticky top-0 z-10 border-b border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900">
+     <div class="mx-auto flex max-w-6xl items-center gap-6 px-4 py-5">
+-      <RouterLink to="/" class="flex items-center gap-2 text-xl font-semibold text-surface-900">
++      <RouterLink to="/" class="flex items-center gap-2 text-xl font-semibold text-surface-900 dark:text-surface-0">
+         <span class="inline-block size-8 rounded-md bg-primary"></span>
+         Acme Console
+       </RouterLink>
+@@ -21,13 +26,22 @@
+           v-for="link in links"
+           :key="link.to"
+           :to="link.to"
+-          class="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-surface-600 hover:bg-surface-100"
+-          active-class="bg-surface-100 text-surface-900 font-medium"
++          class="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-surface-600 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-800"
++          active-class="bg-surface-100 dark:bg-surface-800 text-surface-900 dark:text-surface-0 font-medium"
+         >
+           <i :class="link.icon" aria-hidden="true"></i>
+           {{ link.label }}
+         </RouterLink>
+       </nav>
++      <Button
++        :icon="theme.isDark ? 'pi pi-sun' : 'pi pi-moon'"
++        aria-label="Dark mode"
++        :aria-pressed="theme.isDark"
++        severity="secondary"
++        text
++        rounded
++        @click="theme.toggle()"
++      />
+     </div>
+   </header>
+ </template>
+diff -ruN a/src/components/ProjectCard.vue b/src/components/ProjectCard.vue
+--- a/src/components/ProjectCard.vue
++++ b/src/components/ProjectCard.vue
+@@ -7,9 +7,9 @@
+ </script>
+ 
+ <template>
+-  <article class="flex flex-col gap-3 rounded-xl border border-surface-200 bg-surface-0 p-5">
++  <article class="flex flex-col gap-3 rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 p-5">
+     <h3 class="text-lg font-semibold">{{ project.name }}</h3>
+-    <p class="text-sm text-surface-600">{{ project.description }}</p>
++    <p class="text-sm text-surface-600 dark:text-surface-300">{{ project.description }}</p>
+     <div class="flex flex-wrap gap-2">
+       <Tag v-for="tag in project.tags" :key="tag" :value="tag" severity="secondary" />
+     </div>
+diff -ruN a/src/components/StatCard.vue b/src/components/StatCard.vue
+--- a/src/components/StatCard.vue
++++ b/src/components/StatCard.vue
+@@ -3,8 +3,8 @@
+ </script>
+ 
+ <template>
+-  <div class="rounded-xl border border-surface-200 bg-surface-0 p-5">
+-    <div class="flex items-center justify-between text-sm text-surface-500">
++  <div class="rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 p-5">
++    <div class="flex items-center justify-between text-sm text-surface-500 dark:text-surface-400">
+       <span>{{ label }}</span>
+       <i :class="icon" aria-hidden="true"></i>
+     </div>
+diff -ruN a/src/main.ts b/src/main.ts
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -15,7 +15,7 @@
+   theme: {
+     preset: Aura,
+     options: {
+-      darkModeSelector: false,
++      darkModeSelector: '.app-dark',
+       cssLayer: {
+         name: 'primevue',
+         order: 'theme, base, primevue',
+diff -ruN a/src/stores/theme.ts b/src/stores/theme.ts
+--- /dev/null
++++ b/src/stores/theme.ts
+@@ -0,0 +1,35 @@
++import { defineStore } from 'pinia'
++import { computed, ref, watchEffect } from 'vue'
++import {
++  COLOR_SCHEME_STORAGE_KEY,
++  DARK_MODE_CLASS,
++  parseColorScheme,
++  resolveColorScheme,
++  type ColorScheme,
++} from '@/utils/theme'
++
++export const useThemeStore = defineStore('theme', () => {
++  const systemQuery = window.matchMedia('(prefers-color-scheme: dark)')
++  const systemPrefersDark = ref(systemQuery.matches)
++  // null means no explicit choice yet, so the system setting keeps applying live.
++  const stored = ref<ColorScheme | null>(parseColorScheme(localStorage.getItem(COLOR_SCHEME_STORAGE_KEY)))
++
++  // The store lives for the whole app, so this listener is never removed.
++  systemQuery.addEventListener('change', (event) => {
++    systemPrefersDark.value = event.matches
++  })
++
++  const colorScheme = computed(() => resolveColorScheme(stored.value, systemPrefersDark.value))
++  const isDark = computed(() => colorScheme.value === 'dark')
++
++  watchEffect(() => {
++    document.documentElement.classList.toggle(DARK_MODE_CLASS, isDark.value)
++  })
++
++  function toggle() {
++    stored.value = isDark.value ? 'light' : 'dark'
++    localStorage.setItem(COLOR_SCHEME_STORAGE_KEY, stored.value)
++  }
++
++  return { colorScheme, isDark, toggle }
++})
+diff -ruN a/src/style.css b/src/style.css
+--- a/src/style.css
++++ b/src/style.css
+@@ -3,7 +3,14 @@
+ @import 'tailwindcss';
+ @import 'tailwindcss-primeui';
+ 
++/* Same class PrimeVue uses as its darkModeSelector (see main.ts). */
++@custom-variant dark (&:where(.app-dark, .app-dark *));
++
++html.app-dark {
++  color-scheme: dark;
++}
++
+ body {
+-  @apply bg-surface-50 text-surface-900 antialiased;
++  @apply bg-surface-50 text-surface-900 antialiased dark:bg-surface-950 dark:text-surface-0;
+   font-family: 'Inter', system-ui, sans-serif;
+ }
+diff -ruN a/src/utils/theme.test.ts b/src/utils/theme.test.ts
+--- /dev/null
++++ b/src/utils/theme.test.ts
+@@ -0,0 +1,28 @@
++import { describe, expect, it } from 'vitest'
++import { parseColorScheme, resolveColorScheme } from './theme'
++
++describe('parseColorScheme', () => {
++  it('accepts the supported schemes', () => {
++    expect(parseColorScheme('light')).toBe('light')
++    expect(parseColorScheme('dark')).toBe('dark')
++  })
++
++  it('rejects missing or unsupported values', () => {
++    expect(parseColorScheme(null)).toBeNull()
++    expect(parseColorScheme('')).toBeNull()
++    expect(parseColorScheme('DARK')).toBeNull()
++    expect(parseColorScheme('system')).toBeNull()
++  })
++})
++
++describe('resolveColorScheme', () => {
++  it('follows the system setting when the user has not chosen', () => {
++    expect(resolveColorScheme(null, true)).toBe('dark')
++    expect(resolveColorScheme(null, false)).toBe('light')
++  })
++
++  it('prefers the stored choice over the system setting', () => {
++    expect(resolveColorScheme('light', true)).toBe('light')
++    expect(resolveColorScheme('dark', false)).toBe('dark')
++  })
++})
+diff -ruN a/src/utils/theme.ts b/src/utils/theme.ts
+--- /dev/null
++++ b/src/utils/theme.ts
+@@ -0,0 +1,13 @@
++export type ColorScheme = 'light' | 'dark'
++
++// Also read by the inline script in index.html, which applies the class before first paint.
++export const COLOR_SCHEME_STORAGE_KEY = 'acme-color-scheme'
++export const DARK_MODE_CLASS = 'dark'
++
++export function parseColorScheme(value: string | null): ColorScheme | null {
++  return value === 'light' || value === 'dark' ? value : null
++}
++
++export function resolveColorScheme(stored: ColorScheme | null, systemPrefersDark: boolean): ColorScheme {
++  return stored ?? (systemPrefersDark ? 'dark' : 'light')
++}
+diff -ruN a/src/views/DashboardView.vue b/src/views/DashboardView.vue
+--- a/src/views/DashboardView.vue
++++ b/src/views/DashboardView.vue
+@@ -38,7 +38,7 @@
+       <StatCard label="Pending" :value="String(pendingCount)" icon="pi pi-clock" />
+     </div>
+ 
+-    <div class="rounded-xl border border-surface-200 bg-surface-0 p-4">
++    <div class="rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 p-4">
+       <h2 class="mb-3 text-lg font-semibold">Recent orders</h2>
+       <DataTable :value="orders" :loading="loading" data-key="id" striped-rows>
+         <Column field="id" header="Order" />
+diff -ruN a/src/views/FaqView.vue b/src/views/FaqView.vue
+--- a/src/views/FaqView.vue
++++ b/src/views/FaqView.vue
+@@ -19,12 +19,12 @@
+   <section class="flex max-w-3xl flex-col gap-6">
+     <h1 class="text-2xl font-semibold">Help &amp; FAQ</h1>
+     <div class="flex flex-col gap-3">
+-      <div v-for="item in items" :key="item.id" class="rounded-xl border border-surface-200 bg-surface-0">
++      <div v-for="item in items" :key="item.id" class="rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900">
+         <div class="flex cursor-pointer items-center justify-between p-4 font-medium" @click="toggle(item.id)">
+           {{ item.question }}
+           <i class="pi" :class="open[item.id] ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
+         </div>
+-        <div v-if="open[item.id]" class="border-t border-surface-200 p-4 text-surface-600">{{ item.answer }}</div>
++        <div v-if="open[item.id]" class="border-t border-surface-200 dark:border-surface-700 p-4 text-surface-600 dark:text-surface-300">{{ item.answer }}</div>
+       </div>
+     </div>
+   </section>
+diff -ruN a/src/views/GalleryView.vue b/src/views/GalleryView.vue
+--- a/src/views/GalleryView.vue
++++ b/src/views/GalleryView.vue
+@@ -20,11 +20,11 @@
+       </div>
+     </div>
+     <div class="grid grid-cols-2 gap-4 md:grid-cols-3">
+-      <figure v-for="photo in photos" :key="photo.id" class="overflow-hidden rounded-lg bg-surface-0">
++      <figure v-for="photo in photos" :key="photo.id" class="overflow-hidden rounded-lg bg-surface-0 dark:bg-surface-900">
+         <img :src="photo.src" :alt="photo.title" />
+         <figcaption class="p-3 text-sm">
+           <span class="font-medium">{{ photo.title }}</span>
+-          <span class="text-surface-500"> · {{ photo.author }}</span>
++          <span class="text-surface-500 dark:text-surface-400"> · {{ photo.author }}</span>
+         </figcaption>
+       </figure>
+     </div>
+diff -ruN a/src/views/ProjectsView.vue b/src/views/ProjectsView.vue
+--- a/src/views/ProjectsView.vue
++++ b/src/views/ProjectsView.vue
+@@ -26,14 +26,14 @@
+       <Button :label="showFilters ? 'Hide filters' : 'Show filters'" severity="secondary" outlined @click="showFilters = !showFilters" />
+     </div>
+     <div class="flex gap-6">
+-      <aside v-if="showFilters" class="w-64 shrink-0 rounded-xl border border-surface-200 bg-surface-0 p-4">
++      <aside v-if="showFilters" class="w-64 shrink-0 rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 p-4">
+         <h2 class="mb-3 font-semibold">Tags</h2>
+         <ul class="flex flex-col gap-1">
+           <li>
+-            <button type="button" class="w-full rounded px-2 py-1 text-left hover:bg-surface-100" :class="{ 'font-semibold': !activeTag }" @click="activeTag = null">All</button>
++            <button type="button" class="w-full rounded px-2 py-1 text-left hover:bg-surface-100 dark:hover:bg-surface-800" :class="{ 'font-semibold': !activeTag }" @click="activeTag = null">All</button>
+           </li>
+           <li v-for="tag in tags" :key="tag">
+-            <button type="button" class="w-full rounded px-2 py-1 text-left hover:bg-surface-100" :class="{ 'font-semibold': activeTag === tag }" @click="activeTag = tag">{{ tag }}</button>
++            <button type="button" class="w-full rounded px-2 py-1 text-left hover:bg-surface-100 dark:hover:bg-surface-800" :class="{ 'font-semibold': activeTag === tag }" @click="activeTag = tag">{{ tag }}</button>
+           </li>
+         </ul>
+       </aside>
+diff -ruN a/src/views/SettingsView.vue b/src/views/SettingsView.vue
+--- a/src/views/SettingsView.vue
++++ b/src/views/SettingsView.vue
+@@ -42,7 +42,7 @@
+ <template>
+   <section class="flex max-w-2xl flex-col gap-6">
+     <h1 class="text-2xl font-semibold">Settings</h1>
+-    <form class="flex flex-col gap-8 rounded-xl border border-surface-200 bg-surface-0 p-6" @submit.prevent="onSubmit">
++    <form class="flex flex-col gap-8 rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 p-6" @submit.prevent="onSubmit">
+       <fieldset class="flex flex-col gap-4">
+         <legend class="mb-2 text-lg font-semibold">Profile</legend>
+         <div class="flex flex-col gap-2">
+diff -ruN a/src/views/UserDetailView.vue b/src/views/UserDetailView.vue
+--- a/src/views/UserDetailView.vue
++++ b/src/views/UserDetailView.vue
+@@ -20,19 +20,19 @@
+       <UserAvatar :user="user" size="xlarge" />
+       <div>
+         <h1 class="text-2xl font-semibold">{{ user.name }}</h1>
+-        <p class="text-surface-500">{{ user.title }} · {{ user.location }}</p>
++        <p class="text-surface-500 dark:text-surface-400">{{ user.title }} · {{ user.location }}</p>
+       </div>
+     </div>
+-    <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3 rounded-xl border border-surface-200 bg-surface-0 p-6">
+-      <dt class="text-surface-500">Email</dt>
++    <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3 rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 p-6">
++      <dt class="text-surface-500 dark:text-surface-400">Email</dt>
+       <dd>{{ user.email }}</dd>
+-      <dt class="text-surface-500">Role</dt>
++      <dt class="text-surface-500 dark:text-surface-400">Role</dt>
+       <dd class="capitalize">{{ user.role }}</dd>
+-      <dt class="text-surface-500">Last active</dt>
++      <dt class="text-surface-500 dark:text-surface-400">Last active</dt>
+       <dd>{{ formatDate(user.lastActiveAt) }}</dd>
+-      <dt class="text-surface-500">Bio</dt>
++      <dt class="text-surface-500 dark:text-surface-400">Bio</dt>
+       <dd>{{ user.bio }}</dd>
+     </dl>
+   </section>
+-  <p v-else class="text-surface-500">Loading…</p>
++  <p v-else class="text-surface-500 dark:text-surface-400">Loading…</p>
+ </template>
+diff -ruN a/src/views/UsersView.vue b/src/views/UsersView.vue
+--- a/src/views/UsersView.vue
++++ b/src/views/UsersView.vue
+@@ -25,13 +25,13 @@
+         <InputText v-model="search" placeholder="Search users" aria-label="Search users" />
+       </IconField>
+     </div>
+-    <p v-if="loading" class="text-surface-500">Loading…</p>
+-    <ul v-else class="divide-y divide-surface-200 rounded-xl border border-surface-200 bg-surface-0">
++    <p v-if="loading" class="text-surface-500 dark:text-surface-400">Loading…</p>
++    <ul v-else class="divide-y divide-surface-200 dark:divide-surface-700 rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900">
+       <li v-for="user in filteredUsers" :key="user.id" class="flex items-center gap-4 p-4">
+         <UserAvatar :user="user" size="large" />
+         <div class="flex-1">
+           <RouterLink :to="{ name: 'user', params: { id: user.id } }" class="font-medium hover:underline">{{ user.name }}</RouterLink>
+-          <p class="text-sm text-surface-500">{{ user.title }}</p>
++          <p class="text-sm text-surface-500 dark:text-surface-400">{{ user.title }}</p>
+         </div>
+         <Tag :value="user.role" severity="secondary" />
+       </li>

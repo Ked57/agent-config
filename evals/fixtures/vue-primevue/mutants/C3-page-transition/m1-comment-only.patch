@@ -1,0 +1,11 @@
+diff -ruN a/src/App.vue b/src/App.vue
+--- a/src/App.vue
++++ b/src/App.vue
+@@ -6,6 +6,7 @@
+   <div class="min-h-screen">
+     <AppHeader />
+     <main class="mx-auto max-w-6xl px-4 py-8">
++      <!-- wrap in <Transition> later -->
+       <RouterView />
+     </main>
+   </div>

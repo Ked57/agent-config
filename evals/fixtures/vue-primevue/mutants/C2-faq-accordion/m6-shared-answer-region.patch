@@ -1,0 +1,32 @@
+diff -ruN a/src/views/FaqView.vue b/src/views/FaqView.vue
+--- a/src/views/FaqView.vue
++++ b/src/views/FaqView.vue
+@@ -7,7 +7,7 @@
+ const open = ref<Record<string, boolean>>({})
+ 
+ function toggle(id: string) {
+-  open.value[id] = !open.value[id]
++  open.value = open.value[id] ? {} : { [id]: true }
+ }
+ 
+ onMounted(async () => {
+@@ -20,12 +20,14 @@
+     <h1 class="text-2xl font-semibold">Help &amp; FAQ</h1>
+     <div class="flex flex-col gap-3">
+       <div v-for="item in items" :key="item.id" class="rounded-xl border border-surface-200 bg-surface-0">
+-        <div class="flex cursor-pointer items-center justify-between p-4 font-medium" @click="toggle(item.id)">
+-          {{ item.question }}
+-          <i class="pi" :class="open[item.id] ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
+-        </div>
+-        <div v-if="open[item.id]" class="border-t border-surface-200 p-4 text-surface-600">{{ item.answer }}</div>
++        <h2>
++          <button type="button" class="flex w-full items-center justify-between p-4 text-left font-medium" :aria-expanded="Boolean(open[item.id])" @click="toggle(item.id)">
++            {{ item.question }}
++            <i class="pi" :class="open[item.id] ? 'pi-chevron-up' : 'pi-chevron-down'" aria-hidden="true"></i>
++          </button>
++        </h2>
+       </div>
+     </div>
++    <div v-for="item in items.filter((entry) => open[entry.id])" :key="item.id" class="p-4 text-surface-600">{{ item.answer }}</div>
+   </section>
+ </template>

@@ -195,6 +195,13 @@ function installDialogAndPopover() {
     },
     true,
   )
+  // A <summary> activates on Enter (keydown) and Space (keyup) in browsers; jsdom and user-event skip it.
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.defaultPrevented && (event.target as Element | null)?.tagName === 'SUMMARY') (event.target as HTMLElement).click()
+  })
+  document.addEventListener('keyup', (event) => {
+    if (event.key === ' ' && !event.defaultPrevented && (event.target as Element | null)?.tagName === 'SUMMARY') (event.target as HTMLElement).click()
+  })
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || event.defaultPrevented) return
     const modal = [...document.querySelectorAll<HTMLDialogElement & { __modal?: boolean }>('dialog[open]')].findLast((dialog) => dialog.__modal)

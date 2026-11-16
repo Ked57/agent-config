@@ -1,0 +1,29 @@
+diff -ruN a/src/components/ProjectCard.vue b/src/components/ProjectCard.vue
+--- a/src/components/ProjectCard.vue
++++ b/src/components/ProjectCard.vue
+@@ -7,7 +7,7 @@
+ </script>
+ 
+ <template>
+-  <article class="flex flex-col gap-3 rounded-xl border border-surface-200 bg-surface-0 p-5">
++  <article class="@container flex flex-col gap-3 rounded-xl border border-surface-200 bg-surface-0 p-5">
+     <h3 class="text-lg font-semibold">{{ project.name }}</h3>
+     <p class="text-sm text-surface-600">{{ project.description }}</p>
+     <div class="flex flex-wrap gap-2">
+diff -ruN a/src/views/ProjectsView.vue b/src/views/ProjectsView.vue
+--- a/src/views/ProjectsView.vue
++++ b/src/views/ProjectsView.vue
+@@ -37,8 +37,11 @@
+           </li>
+         </ul>
+       </aside>
+-      <div class="grid flex-1 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+-        <ProjectCard v-for="project in visible" :key="project.id" :project="project" />
++      <!-- Size the columns from the space left beside the filters, not the viewport. -->
++      <div class="min-w-0 flex-1">
++        <div class="grid grid-cols-1 gap-4 @xl:grid-cols-2 @4xl:grid-cols-3">
++          <ProjectCard v-for="project in visible" :key="project.id" :project="project" />
++        </div>
+       </div>
+     </div>
+   </section>

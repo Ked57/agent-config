@@ -1,0 +1,57 @@
+{
+  "task": "C1-avatar-hovercard",
+  "references": [
+    {
+      "file": "reference-mwg-A-r1.patch",
+      "source": "mwg-eval C1 A r1 (button trigger, v-show card)"
+    },
+    {
+      "file": "reference-mwg-B-r1.patch",
+      "source": "mwg-eval C1 B r1 (native popover=\"manual\")"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-hover-only.patch",
+      "wrong": "the card opens on hover only; keyboard focus on the avatar does nothing",
+      "violates": "hovering or focusing ... should also work for keyboard users",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-no-email-or-location.patch",
+      "wrong": "the card shows name, title and last active but not location or email",
+      "violates": "a small card with their name, title, location, email and when they were last active",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-no-last-active.patch",
+      "wrong": "the card leaves out when the user was last active",
+      "violates": "and when they were last active",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-escape-does-not-close.patch",
+      "wrong": "Escape does not dismiss the card",
+      "violates": "it should also work for keyboard users",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-trigger-not-focusable.patch",
+      "wrong": "the trigger is a plain span, so Tab never reaches the avatar",
+      "violates": "focusing a user's avatar should show the card; work for keyboard users",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-never-closes-on-leave.patch",
+      "wrong": "the card stays open after the pointer leaves",
+      "violates": "hovering ... should show a small card (a hovercard, not a sticky panel)",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-title-tooltip-only.patch",
+      "wrong": "a native title tooltip with name and email, no card",
+      "violates": "a small card with their name, title, location, email and when they were last active",
+      "expect": "killed"
+    }
+  ]
+}
