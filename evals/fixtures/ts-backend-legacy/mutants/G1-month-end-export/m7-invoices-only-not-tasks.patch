@@ -1,0 +1,44 @@
+diff -ruN a/src/services/invoices.ts b/src/services/invoices.ts
+--- a/src/services/invoices.ts
++++ b/src/services/invoices.ts
+@@ -15,7 +15,21 @@
+ import { HttpError } from "../lib/errors";
+ import { isEnabled } from "../lib/flags";
+ import { newId } from "../lib/ids";
+-import { addDays, addMonths, dayKey } from "../lib/legacy/dates";
++import { addDays, dayKey } from "../lib/legacy/dates";
++
++function addMonthClamped(day: string, months: number): string {
++  const [year, month, date] = day.split("-").map(Number) as [
++    number,
++    number,
++    number,
++  ];
++  const target = new Date(Date.UTC(year, month - 1 + months, 1));
++  const last = new Date(
++    Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0),
++  ).getUTCDate();
++  target.setUTCDate(Math.min(date, last));
++  return dayKey(target);
++}
+ import { amountForMinutes, fromCents, toCents } from "../lib/legacy/money";
+ import type { AuthUser } from "../plugins/auth";
+ import { recordAudit } from "./audit";
+@@ -23,7 +37,7 @@
+ 
+ export function dueDateFor(issueDate: string, terms: PaymentTerms): string {
+   return terms === "next_month"
+-    ? addMonths(issueDate, 1)
++    ? addMonthClamped(issueDate, 1)
+     : addDays(issueDate, 30);
+ }
+ 
+@@ -312,7 +326,7 @@
+       {
+         clientId: issued.clientId,
+         clientName: issued.clientName,
+-        issueDate: addMonths(issued.issueDate, 1),
++        issueDate: addMonthClamped(issued.issueDate, 1),
+         terms: issued.terms,
+         repeat: "monthly",
+         currency: issued.currency,

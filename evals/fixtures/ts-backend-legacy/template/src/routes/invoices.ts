@@ -100,7 +100,8 @@ export const invoiceRoutes = (db: Db) =>
         if (user.role !== "admin")
           return status(403, apiError("forbidden", "admins only"));
         const invoice = await voidInvoice(db, user, params.id);
-        if (!invoice) return status(404, apiError("not_found", "invoice not found"));
+        if (!invoice)
+          return status(404, apiError("not_found", "invoice not found"));
         return toInvoiceSummary(invoice);
       },
       { requireAuth: true },

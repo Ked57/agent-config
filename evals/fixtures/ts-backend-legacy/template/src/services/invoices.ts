@@ -22,7 +22,9 @@ import { recordAudit } from "./audit";
 import { paidCents } from "./ledger";
 
 export function dueDateFor(issueDate: string, terms: PaymentTerms): string {
-  return terms === "next_month" ? addMonths(issueDate, 1) : addDays(issueDate, 30);
+  return terms === "next_month"
+    ? addMonths(issueDate, 1)
+    : addDays(issueDate, 30);
 }
 
 interface LineInput {
@@ -173,7 +175,11 @@ export async function createInvoice(db: Db, user: AuthUser, input: NewInvoice) {
   }
   const clientName = client?.name ?? input.clientName;
   if (!clientName)
-    throw new HttpError(400, "invalid_client", "clientId or clientName is required");
+    throw new HttpError(
+      400,
+      "invalid_client",
+      "clientId or clientName is required",
+    );
 
   const lines: LineInput[] = (input.lines ?? []).map((line) => ({
     description: line.description,
@@ -187,7 +193,11 @@ export async function createInvoice(db: Db, user: AuthUser, input: NewInvoice) {
       ...(await linesFromTimeEntries(db, user.orgId, input.timeEntryIds)),
     );
   if (lines.length === 0)
-    throw new HttpError(400, "empty_invoice", "an invoice needs at least one line");
+    throw new HttpError(
+      400,
+      "empty_invoice",
+      "an invoice needs at least one line",
+    );
 
   const invoice = await insertInvoice(
     db,

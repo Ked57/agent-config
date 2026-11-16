@@ -26,13 +26,11 @@ const eventList = t.Array(
 export const webhookSubscriptionRoutes = (db: Db) =>
   new Elysia({ prefix: "/api/webhook-subscriptions" })
     .use(authGuard(db))
-    .onBeforeHandle(({ user, status }) => {
-      if (user && user.role !== "admin")
-        return status(403, apiError("forbidden", "admins only"));
-    })
     .get(
       "/",
-      async ({ user }) => {
+      async ({ user, status }) => {
+        if (user.role !== "admin")
+          return status(403, apiError("forbidden", "admins only"));
         const rows = await db
           .select()
           .from(webhookSubscriptions)
@@ -45,6 +43,8 @@ export const webhookSubscriptionRoutes = (db: Db) =>
     .post(
       "/",
       async ({ body, user, status }) => {
+        if (user.role !== "admin")
+          return status(403, apiError("forbidden", "admins only"));
         const secret = generateToken();
         const [row] = await db
           .insert(webhookSubscriptions)
@@ -79,6 +79,8 @@ export const webhookSubscriptionRoutes = (db: Db) =>
     .patch(
       "/:id",
       async ({ params, body, user, status }) => {
+        if (user.role !== "admin")
+          return status(403, apiError("forbidden", "admins only"));
         const changes: Partial<typeof webhookSubscriptions.$inferInsert> = {};
         if (body.url !== undefined) changes.url = body.url;
         if (body.events !== undefined)
@@ -113,6 +115,8 @@ export const webhookSubscriptionRoutes = (db: Db) =>
     .delete(
       "/:id",
       async ({ params, user, status }) => {
+        if (user.role !== "admin")
+          return status(403, apiError("forbidden", "admins only"));
         const deleted = await db
           .delete(webhookSubscriptions)
           .where(

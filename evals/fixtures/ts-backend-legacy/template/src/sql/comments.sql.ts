@@ -28,7 +28,13 @@ export async function findTaskInOrg(db: Db, orgId: string, taskId: string) {
 
 export async function insertComment(
   db: Db,
-  row: { id: string; orgId: string; taskId: string; authorId: string; body: string },
+  row: {
+    id: string;
+    orgId: string;
+    taskId: string;
+    authorId: string;
+    body: string;
+  },
 ) {
   await db.run(sql`
     INSERT INTO comments (id, org_id, task_id, author_id, body, created_at)

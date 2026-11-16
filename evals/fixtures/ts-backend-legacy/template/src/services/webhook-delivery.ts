@@ -62,7 +62,11 @@ registerJob("webhook.deliver", async (db, payload) => {
     .where(eq(webhookSubscriptions.id, subscriptionId))
     .get();
   if (!subscription?.active) return;
-  const body = JSON.stringify({ event, data, sentAt: new Date().toISOString() });
+  const body = JSON.stringify({
+    event,
+    data,
+    sentAt: new Date().toISOString(),
+  });
   const signature = createHmac("sha256", subscription.secret)
     .update(body)
     .digest("hex");

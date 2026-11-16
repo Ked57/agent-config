@@ -35,9 +35,7 @@ export async function findEntries(db: Db, filter: EntryFilter) {
   else conditions.push(sql`org_id = ${filter.orgId}`);
   if (filter.projectId) conditions.push(sql`project_id = ${filter.projectId}`);
   if (filter.date)
-    conditions.push(
-      sql`date(started_at / 1000, 'unixepoch') = ${filter.date}`,
-    );
+    conditions.push(sql`date(started_at / 1000, 'unixepoch') = ${filter.date}`);
   const where = sql.join(conditions, sql` AND `);
   return db.all<TimeEntryRow>(
     sql`SELECT ${columns} FROM time_entries WHERE ${where} ORDER BY started_at DESC, id LIMIT ${filter.limit ?? 500}`,

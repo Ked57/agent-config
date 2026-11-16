@@ -16,7 +16,7 @@ export const flagDefaults = {
 export type Flag = keyof typeof flagDefaults;
 
 export function parseFlags(raw: string | null | undefined) {
-  let stored: Record<string, unknown> = {};
+  let stored: Record<string, unknown>;
   try {
     stored = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
   } catch {

@@ -4,10 +4,7 @@ import { Elysia } from "elysia";
 import type { Db } from "../db/client";
 import { invoices, payments } from "../db/schema";
 import { newId } from "../lib/ids";
-import {
-  findStoredResponse,
-  storeResponse,
-} from "../lib/legacy/idempotency";
+import { findStoredResponse, storeResponse } from "../lib/legacy/idempotency";
 import { toCents } from "../lib/legacy/money";
 import { asBody, optionalString, requireNumber } from "../lib/legacy/validate";
 import { authGuard } from "../plugins/auth";
@@ -30,7 +27,9 @@ export const paymentsController = (db: Db) =>
         const invoice = await db
           .select()
           .from(invoices)
-          .where(and(eq(invoices.id, params.id), eq(invoices.orgId, user.orgId)))
+          .where(
+            and(eq(invoices.id, params.id), eq(invoices.orgId, user.orgId)),
+          )
           .get();
         if (!invoice) return status(404, { error: "invoice not found" });
         const rows = await db
@@ -56,7 +55,12 @@ export const paymentsController = (db: Db) =>
         if (user.role !== "admin") return status(403, { error: "forbidden" });
         const key = headers["idempotency-key"];
         if (key) {
-          const stored = await findStoredResponse(db, user.orgId, "payment", key);
+          const stored = await findStoredResponse(
+            db,
+            user.orgId,
+            "payment",
+            key,
+          );
           if (stored) return status(stored.statusCode, stored.body);
         }
 
@@ -74,7 +78,9 @@ export const paymentsController = (db: Db) =>
         const invoice = await db
           .select()
           .from(invoices)
-          .where(and(eq(invoices.id, params.id), eq(invoices.orgId, user.orgId)))
+          .where(
+            and(eq(invoices.id, params.id), eq(invoices.orgId, user.orgId)),
+          )
           .get();
         if (!invoice) return status(404, { error: "invoice not found" });
         if (invoice.status !== "issued")

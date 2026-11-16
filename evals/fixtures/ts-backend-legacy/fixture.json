@@ -1,0 +1,134 @@
+{
+  "name": "ts-backend-legacy",
+  "description": "Legacy time-tracking and invoicing API (about 4x ts-backend): same stack (Bun + Elysia + Drizzle on SQLite/libSQL + Vitest + ESLint + Prettier), two generations of code side by side (controllers with raw SQL and hand-rolled validation next to routes + services + Drizzle), legacy date and money helpers, a deprecated v1 reports module still mounted, feature flags, dead code, partly stale docs and a partial OpenAPI document.",
+  "setup": [
+    "bun install --frozen-lockfile"
+  ],
+  "linkPaths": [
+    "node_modules"
+  ],
+  "diffExclude": [
+    "node_modules",
+    "dist",
+    "data",
+    "*.db",
+    "*.db-journal",
+    "*.db-wal",
+    "*.db-shm",
+    "bun.lock",
+    "*.log",
+    "*_snapshot.json"
+  ],
+  "gates": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --check .",
+    "test": "vitest run --testTimeout=30000",
+    "build": "bun build src/index.ts --target bun --outdir dist"
+  },
+  "dependencies": {
+    "type": "npm",
+    "file": "package.json"
+  },
+  "http": {
+    "env": {
+      "PORT": "{port}",
+      "DATABASE_URL": "file:{tmp}/smoke.db",
+      "WEBHOOK_SECRET": "smoke-webhook-secret",
+      "TOKEN_TTL_HOURS": "24",
+      "LOG_LEVEL": "warn",
+      "WORKER": "off"
+    },
+    "prepare": [
+      "bun run scripts/migrate.ts",
+      "bun run scripts/seed.ts"
+    ],
+    "start": "bun run src/index.ts",
+    "readyPath": "/api/health",
+    "requests": [
+      {
+        "name": "health",
+        "method": "GET",
+        "path": "/api/health",
+        "expectStatus": 200
+      },
+      {
+        "name": "unauthenticated",
+        "method": "GET",
+        "path": "/api/projects",
+        "expectStatus": 401
+      },
+      {
+        "name": "list projects",
+        "method": "GET",
+        "path": "/api/projects",
+        "token": "dev-acme-admin-token",
+        "expectStatus": 200
+      },
+      {
+        "name": "time entries",
+        "method": "GET",
+        "path": "/api/time-entries",
+        "token": "dev-acme-admin-token",
+        "expectStatus": 200
+      },
+      {
+        "name": "invoices",
+        "method": "GET",
+        "path": "/api/invoices",
+        "token": "dev-acme-admin-token",
+        "expectStatus": 200
+      },
+      {
+        "name": "timesheet",
+        "method": "GET",
+        "path": "/api/reports/timesheet?week=2026-11-09",
+        "token": "dev-acme-admin-token",
+        "expectStatus": 200
+      },
+      {
+        "name": "v1 timesheet",
+        "method": "GET",
+        "path": "/api/v1/reports/timesheet?week=2026-11-09",
+        "token": "dev-acme-admin-token",
+        "expectStatus": 200
+      },
+      {
+        "name": "login",
+        "method": "POST",
+        "path": "/api/auth/token",
+        "body": {
+          "email": "ada@acme.test",
+          "password": "password123"
+        },
+        "expectStatus": 200
+      },
+      {
+        "name": "webhook",
+        "method": "POST",
+        "path": "/api/webhooks/billing",
+        "headers": {
+          "x-webhook-secret": "smoke-webhook-secret"
+        },
+        "body": {
+          "id": "evt_smoke",
+          "type": "payment.succeeded",
+          "data": {
+            "orgId": "org_acme",
+            "invoiceId": "inv_acme_1",
+            "amount": 1
+          }
+        },
+        "expectStatus": 200
+      }
+    ]
+  },
+  "judgeDimensions": [
+    "correctness",
+    "tests",
+    "fit",
+    "scope",
+    "maintainability"
+  ],
+  "judgeContext": "The codebase is a legacy multi-tenant time-tracking and invoicing API on Bun + Elysia (TypeBox `t` validation, a `requireAuth` macro), Drizzle ORM over SQLite/libSQL with drizzle-kit SQL migrations, Vitest tests against a real temp database, ESLint and Prettier. It mixes old controllers (raw SQL helpers in src/sql, hand-rolled validation, `{ error }` bodies) with newer routes and services (`HttpError`, `{ code, message }`); docs/architecture.md says new work goes into routes and services. Reward fixes at the root cause (shared helpers, every affected caller), correct tenant scoping, integer-cents money handling, real migrations, tests that cover the change, and following the local pattern of the module touched; penalise symptom patches, unnecessary rewrites of unrelated legacy code, new dependencies and scope creep."
+}

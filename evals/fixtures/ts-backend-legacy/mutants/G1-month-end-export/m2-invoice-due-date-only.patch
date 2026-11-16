@@ -1,0 +1,20 @@
+diff -ruN a/src/services/invoices.ts b/src/services/invoices.ts
+--- a/src/services/invoices.ts
++++ b/src/services/invoices.ts
+@@ -22,9 +22,13 @@
+ import { paidCents } from "./ledger";
+ 
+ export function dueDateFor(issueDate: string, terms: PaymentTerms): string {
+-  return terms === "next_month"
+-    ? addMonths(issueDate, 1)
+-    : addDays(issueDate, 30);
++  if (terms !== "next_month") return addDays(issueDate, 30);
++  const [year, month] = addMonths(issueDate.slice(0, 8) + "01", 1)
++    .split("-")
++    .map(Number) as [number, number];
++  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
++  const day = Math.min(Number(issueDate.slice(8)), last);
++  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+ }
+ 
+ interface LineInput {

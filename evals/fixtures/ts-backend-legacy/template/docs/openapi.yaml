@@ -1,0 +1,269 @@
+openapi: 3.0.3
+info:
+  title: Billable API
+  version: "2.3"
+  description: |
+    Partial description of the HTTP API. Covers authentication, clients and invoice payments.
+    All endpoints except `POST /api/auth/token` need `Authorization: Bearer <token>`.
+    Timestamps are RFC 3339 strings in UTC; days are `YYYY-MM-DD`.
+servers:
+  - url: http://localhost:4000
+security:
+  - bearer: []
+paths:
+  /api/auth/token:
+    post:
+      summary: Exchange email and password for an API token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: A new token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, expiresAt]
+                properties:
+                  token: { type: string }
+                  expiresAt: { type: string, format: date-time }
+        "401":
+          description: Wrong email or password
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/clients:
+    get:
+      summary: List the organization's clients, ordered by name
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, archived] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: One page of clients
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClientPage" }
+        "400":
+          description: Invalid query parameter
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      summary: Create a client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClientCreate" }
+      responses:
+        "201":
+          description: The new client
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Client" }
+        "400":
+          description: Invalid body
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/clients/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      summary: One client
+      responses:
+        "200":
+          description: The client
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Client" }
+        "404":
+          description: No such client in the organization
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    patch:
+      summary: Change a client
+      description: |
+        Only the given fields change. Setting `status` to `archived` sets `archivedAt` to the
+        current time; setting it back to `active` clears `archivedAt`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClientUpdate" }
+      responses:
+        "200":
+          description: The updated client
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Client" }
+        "400":
+          description: Invalid body
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such client in the organization
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      summary: Delete a client
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: No such client in the organization
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: The client still has invoices or projects
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/invoices/{id}/payments:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      summary: Record a payment against an issued invoice
+      description: |
+        `amount` is a decimal in the invoice currency (v1 contract). Retries with the same
+        `Idempotency-Key` header get the first response back and are recorded once.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount: { type: number, exclusiveMinimum: true, minimum: 0 }
+                method:
+                  { type: string, enum: [card, bank, cash], default: bank }
+                reference: { type: string }
+      responses:
+        "201":
+          description: The recorded payment
+        "400":
+          description: Invalid body
+        "409":
+          description: The invoice is not issued
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          {
+            type: string,
+            description: "Machine-readable, e.g. not_found, validation_failed",
+          }
+        message: { type: string }
+    Client:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          name,
+          email,
+          currency,
+          paymentTerms,
+          status,
+          notes,
+          createdAt,
+          archivedAt,
+        ]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email, nullable: true }
+        currency: { $ref: "#/components/schemas/Currency" }
+        paymentTerms: { $ref: "#/components/schemas/PaymentTerms" }
+        status: { type: string, enum: [active, archived] }
+        notes: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        archivedAt: { type: string, format: date-time, nullable: true }
+    ClientCreate:
+      type: object
+      additionalProperties: false
+      required: [name, currency]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: string, format: email, nullable: true }
+        currency: { $ref: "#/components/schemas/Currency" }
+        paymentTerms: { $ref: "#/components/schemas/PaymentTerms" }
+        notes: { type: string, maxLength: 2000, nullable: true }
+    ClientUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: string, format: email, nullable: true }
+        currency: { $ref: "#/components/schemas/Currency" }
+        paymentTerms: { $ref: "#/components/schemas/PaymentTerms" }
+        status: { type: string, enum: [active, archived] }
+        notes: { type: string, maxLength: 2000, nullable: true }
+    ClientPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Client" }
+        page:
+          type: object
+          additionalProperties: false
+          required: [limit, offset, total]
+          properties:
+            limit: { type: integer }
+            offset: { type: integer }
+            total:
+              {
+                type: integer,
+                description: "Number of clients matching the filter",
+              }
+    Currency:
+      type: string
+      enum: [EUR, USD, GBP]
+    PaymentTerms:
+      type: string
+      enum: [net_30, next_month]
+      default: net_30

@@ -95,7 +95,8 @@ export async function createTask(
     .where(and(eq(projects.id, projectId), eq(projects.orgId, user.orgId)))
     .get();
   if (!project) throw new HttpError(404, "not_found", "project not found");
-  if (input.assigneeId) await assertAssignable(db, user.orgId, input.assigneeId);
+  if (input.assigneeId)
+    await assertAssignable(db, user.orgId, input.assigneeId);
   if (input.repeat && input.repeat !== "none" && !input.dueDate) {
     throw new HttpError(
       400,

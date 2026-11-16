@@ -1,0 +1,14 @@
+{
+  "task": "G3-refunds",
+  "references": [{ "file": "reference.patch", "source": "hand-written: one conditional INSERT ... SELECT ... WHERE paid - refunded >= amount ON CONFLICT (org, key) DO NOTHING; toCents rounds" }],
+  "mutants": [
+    { "file": "m1-read-then-insert.patch", "wrong": "Reads paid and refunded totals, decides in JS, then inserts", "violates": "a refund can never take back more than was actually paid (refunds arriving together)", "expect": "killed" },
+    { "file": "m2-legacy-check-then-store-key.patch", "wrong": "Reuses the payments endpoint's check-then-store idempotency helper", "violates": "the finance tool calls this the same way it calls payments, retries included (a burst of the same retry refunds more than once)", "expect": "killed" },
+    { "file": "m3-to-cents-still-floors.patch", "wrong": "Leaves the legacy toCents flooring, so a 19.99 payment is booked as 1998 cents", "violates": "a refund can take back what was actually paid; the ledger must always balance", "expect": "killed" },
+    { "file": "m4-earlier-refunds-ignored.patch", "wrong": "Caps each refund at what was paid, ignoring earlier refunds", "violates": "never more than was actually paid on that invoice (all its refunds together)", "expect": "killed" },
+    { "file": "m5-positive-refund-entries.patch", "wrong": "Books refunds as positive ledger entries", "violates": "every refund shows up in GET /api/ledger as a negative refund entry", "expect": "killed" },
+    { "file": "m6-no-idempotency.patch", "wrong": "Ignores the Idempotency-Key header", "violates": "called the same way as payments, retries included", "expect": "killed" },
+    { "file": "m7-capped-by-invoice-total.patch", "wrong": "Caps refunds at the invoice total instead of what was paid", "violates": "never more than was actually paid on that invoice", "expect": "killed" },
+    { "file": "m8-interactive-transaction.patch", "wrong": "Checks and inserts inside an interactive transaction, which fails under concurrent requests on SQLite", "violates": "refunds arriving at the same time must still be decided correctly", "expect": "killed" }
+  ]
+}

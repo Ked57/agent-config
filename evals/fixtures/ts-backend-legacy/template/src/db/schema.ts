@@ -147,7 +147,9 @@ export const labels = sqliteTable(
     color: text("color").notNull().default("#999999"),
     createdAt: createdAt(),
   },
-  (table) => [uniqueIndex("labels_org_name_unique").on(table.orgId, table.name)],
+  (table) => [
+    uniqueIndex("labels_org_name_unique").on(table.orgId, table.name),
+  ],
 );
 
 export const taskLabels = sqliteTable(
@@ -265,7 +267,12 @@ export const payments = sqliteTable("payments", {
   receivedAt: integer("received_at", { mode: "timestamp_ms" }).notNull(),
 });
 
-export const ledgerKinds = ["payment", "refund", "credit", "adjustment"] as const;
+export const ledgerKinds = [
+  "payment",
+  "refund",
+  "credit",
+  "adjustment",
+] as const;
 
 export const ledgerEntries = sqliteTable(
   "ledger_entries",
@@ -294,9 +301,7 @@ export const idempotencyKeys = sqliteTable(
     response: text("response").notNull(),
     createdAt: createdAt(),
   },
-  (table) => [
-    primaryKey({ columns: [table.orgId, table.scope, table.key] }),
-  ],
+  (table) => [primaryKey({ columns: [table.orgId, table.scope, table.key] })],
 );
 
 export const webhookSubscriptions = sqliteTable("webhook_subscriptions", {

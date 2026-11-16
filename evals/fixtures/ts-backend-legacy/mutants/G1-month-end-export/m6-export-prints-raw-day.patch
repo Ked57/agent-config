@@ -1,0 +1,23 @@
+diff -ruN a/src/routes/exports.ts b/src/routes/exports.ts
+--- a/src/routes/exports.ts
++++ b/src/routes/exports.ts
+@@ -4,7 +4,7 @@
+ import { buildTimesheetV1 } from "../controllers/reports-v1.controller";
+ import type { Db } from "../db/client";
+ import { invoices, projects, tasks, timeEntries, users } from "../db/schema";
+-import { dayKey, dayStart, formatDay } from "../lib/legacy/dates";
++import { dayKey, dayStart, formatDay, isValidDay } from "../lib/legacy/dates";
+ import { formatHours, fromCents } from "../lib/legacy/money";
+ import { authGuard } from "../plugins/auth";
+ 
+@@ -58,7 +58,9 @@
+               invoice.number,
+               invoice.clientName,
+               formatDay(invoice.issueDate),
+-              formatDay(invoice.dueDate),
++              isValidDay(invoice.dueDate)
++                ? formatDay(invoice.dueDate)
++                : invoice.dueDate,
+               invoice.status,
+               invoice.currency,
+               fromCents(invoice.totalCents).toFixed(2),

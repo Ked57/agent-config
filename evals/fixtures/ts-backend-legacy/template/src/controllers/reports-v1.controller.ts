@@ -47,7 +47,10 @@ export async function buildTimesheetV1(
     dayStart(start),
     dayStart(addDays(start, 7)),
   );
-  const grouped = new Map<string, TimesheetV1["rows"][number] & { m: number; b: number }>();
+  const grouped = new Map<
+    string,
+    TimesheetV1["rows"][number] & { m: number; b: number }
+  >();
   let total = 0;
   for (const row of rows) {
     const key = `${row.user_id}|${dayKey(row.started_at)}`;

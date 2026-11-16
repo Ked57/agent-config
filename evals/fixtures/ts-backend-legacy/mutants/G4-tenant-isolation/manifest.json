@@ -1,0 +1,14 @@
+{
+  "task": "G4-tenant-isolation",
+  "references": [{ "file": "reference.patch", "source": "hand-written: org filter in all 8 holes; raw-SQL lookups return undefined instead of throwing (db.get throws on no row, which made not-found a 500)" }],
+  "mutants": [
+    { "file": "m1-five-of-eight.patch", "wrong": "Closes the five obvious holes; the export, the webhook subscription update and the v1 summary stay open", "violates": "Find and fix every place where one org can read or change another org's data", "expect": "killed" },
+    { "file": "m2-raw-sql-not-found-is-500.patch", "wrong": "Adds every org filter, but the raw-SQL lookups still use db.get, which throws when nothing matches, so foreign ids get a 500", "violates": "404 for anything addressed by id", "expect": "killed" },
+    { "file": "m3-v1-left-alone.patch", "wrong": "Leaves the deprecated v1 project summary unscoped (the architecture doc says v1 was removed)", "violates": "every place where one org can read another org's data", "expect": "killed" },
+    { "file": "m4-user-filter-left-open.patch", "wrong": "The time-entry list still drops the org filter when ?userId is given", "violates": "nothing of it in lists, filters or exports", "expect": "killed" },
+    { "file": "m5-webhook-patch-left-open.patch", "wrong": "Webhook subscriptions can still be updated by id across orgs", "violates": "read or change another org's data", "expect": "killed" },
+    { "file": "m6-attachment-left-open.patch", "wrong": "Attachment metadata (and its signed download link) is still served by id across orgs", "violates": "404 for anything addressed by id", "expect": "killed" },
+    { "file": "m7-forbidden-instead-of-not-found.patch", "wrong": "Answers 403 for another org's task and user, confirming they exist", "violates": "Another org's data has to behave as if it doesn't exist: 404", "expect": "killed" },
+    { "file": "m8-export-left-open.patch", "wrong": "The time-entry CSV export still filters by project only", "violates": "nothing of it in lists, filters or exports", "expect": "killed" }
+  ]
+}

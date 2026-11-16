@@ -1,0 +1,91 @@
+diff -ruN a/src/lib/legacy/dates.ts b/src/lib/legacy/dates.ts
+--- a/src/lib/legacy/dates.ts
++++ b/src/lib/legacy/dates.ts
+@@ -5,15 +5,32 @@
+  * New code should prefer src/lib/time.ts, but most modules still use these.
+  */
+ 
+-const DAY_MS = 24 * 60 * 60 * 1000;
++import { zonedDay } from "../time";
++
++const HOUR_MS = 60 * 60 * 1000;
++const DAY_MS = 24 * HOUR_MS;
+ 
+ const pad = (value: number) => String(value).padStart(2, "0");
+ 
+-/** Calendar day of a timestamp. */
+-// TODO(2021): timezones? All customers are in Europe for now, UTC is close enough.
+-export function dayKey(at: number | Date): string {
++/**
++ * Calendar day of a timestamp in a time zone. Time belongs to the day it was
++ * logged on for the person who logged it, so pass their time zone.
++ */
++export function dayKey(at: number | Date, timeZone = "UTC"): string {
+   const ms = typeof at === "number" ? at : at.getTime();
+-  return new Date(ms).toISOString().slice(0, 10);
++  if (timeZone === "UTC") return new Date(ms).toISOString().slice(0, 10);
++  return zonedDay(ms, timeZone);
++}
++
++/**
++ * A UTC window that contains every instant that is on `day` somewhere on
++ * earth (UTC-12 to UTC+14). Filter the rows by dayKey afterwards.
++ */
++export function dayWindow(firstDay: string, lastDay = firstDay) {
++  return {
++    from: dayStart(firstDay) - 14 * HOUR_MS,
++    to: dayStart(lastDay) + DAY_MS + 12 * HOUR_MS,
++  };
+ }
+ 
+ /** Midnight UTC of a day, as epoch ms. */
+diff -ruN a/src/services/reports.ts b/src/services/reports.ts
+--- a/src/services/reports.ts
++++ b/src/services/reports.ts
+@@ -9,7 +9,7 @@
+   timeEntries,
+   users,
+ } from "../db/schema";
+-import { addDays, dayKey, dayStart, weekStart } from "../lib/legacy/dates";
++import { addDays, dayKey, dayWindow, weekStart } from "../lib/legacy/dates";
+ import { amountForMinutes } from "../lib/legacy/money";
+ 
+ const byName = (a: string, b: string) => a.localeCompare(b);
+@@ -25,22 +25,24 @@
+ /** Minutes per person per day for the Monday-to-Sunday week containing `day`. */
+ export async function weeklyTimesheet(db: Db, orgId: string, day: string) {
+   const start = weekStart(day);
+-  const end = addDays(start, 7);
+   const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
++  const window = dayWindow(start, days[6]);
+   const rows = await db
+-    .select({ entry: timeEntries, name: users.name })
++    .select({ entry: timeEntries, name: users.name, timezone: users.timezone })
+     .from(timeEntries)
+     .innerJoin(users, eq(users.id, timeEntries.userId))
+     .where(
+       and(
+         eq(timeEntries.orgId, orgId),
+-        gte(timeEntries.startedAt, new Date(dayStart(start))),
+-        lt(timeEntries.startedAt, new Date(dayStart(end))),
++        gte(timeEntries.startedAt, new Date(window.from)),
++        lt(timeEntries.startedAt, new Date(window.to)),
+       ),
+     )
+     .orderBy(asc(timeEntries.startedAt));
+   const people = new Map<string, TimesheetUser>();
+-  for (const { entry, name } of rows) {
++  for (const { entry, name, timezone } of rows) {
++    const key = dayKey(entry.startedAt, timezone);
++    if (!days.includes(key)) continue;
+     let person = people.get(entry.userId);
+     if (!person) {
+       person = {
+@@ -52,7 +54,6 @@
+       };
+       people.set(entry.userId, person);
+     }
+-    const key = dayKey(entry.startedAt);
+     person.days[key] = (person.days[key] ?? 0) + entry.minutes;
+     person.totalMinutes += entry.minutes;
+     if (entry.billable) person.billableMinutes += entry.minutes;
