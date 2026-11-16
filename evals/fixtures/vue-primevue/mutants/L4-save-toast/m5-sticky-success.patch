@@ -1,0 +1,64 @@
+diff -ruN a/src/App.vue b/src/App.vue
+--- a/src/App.vue
++++ b/src/App.vue
+@@ -1,4 +1,5 @@
+ <script setup lang="ts">
++import Toast from 'primevue/toast'
+ import AppHeader from '@/components/AppHeader.vue'
+ </script>
+ 
+@@ -8,5 +9,6 @@
+     <main class="mx-auto max-w-6xl px-4 py-8">
+       <RouterView />
+     </main>
++    <Toast />
+   </div>
+ </template>
+diff -ruN a/src/main.ts b/src/main.ts
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -1,6 +1,7 @@
+ import { createApp } from 'vue'
+ import { createPinia } from 'pinia'
+ import PrimeVue from 'primevue/config'
++import ToastService from 'primevue/toastservice'
+ import Aura from '@primeuix/themes/aura'
+ import 'primeicons/primeicons.css'
+ import './style.css'
+@@ -23,5 +24,6 @@
+     },
+   },
+ })
++app.use(ToastService)
+ 
+ app.mount('#app')
+diff -ruN a/src/views/SettingsView.vue b/src/views/SettingsView.vue
+--- a/src/views/SettingsView.vue
++++ b/src/views/SettingsView.vue
+@@ -4,6 +4,7 @@
+ import InputText from 'primevue/inputtext'
+ import Select from 'primevue/select'
+ import ToggleSwitch from 'primevue/toggleswitch'
++import { useToast } from 'primevue/usetoast'
+ import { fetchSettings, saveSettings } from '@/services/api'
+ import type { Settings } from '@/types'
+ 
+@@ -17,6 +18,7 @@
+   apiKey: '',
+ })
+ const saving = ref(false)
++const toast = useToast()
+ 
+ const languages = [
+   { label: 'English', value: 'en' },
+@@ -29,6 +31,10 @@
+   saving.value = true
+   try {
+     Object.assign(form, await saveSettings({ ...form }))
++    toast.add({ severity: 'success', summary: 'Settings saved' })
++  } catch {
++    // Errors stay sticky so the user doesn't miss that their changes weren't saved.
++    toast.add({ severity: 'error', summary: 'Could not save settings', detail: 'Please try again.' })
+   } finally {
+     saving.value = false
+   }

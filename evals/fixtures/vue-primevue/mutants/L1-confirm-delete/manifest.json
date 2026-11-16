@@ -1,0 +1,51 @@
+{
+  "task": "L1-confirm-delete",
+  "references": [
+    {
+      "file": "reference-aa-A-r1.patch",
+      "source": "validation-aa-smoke L1 A r1"
+    },
+    {
+      "file": "reference-mwg-B-r3.patch",
+      "source": "mwg-eval L1 B r3"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-deletes-before-asking.patch",
+      "wrong": "opens the confirmation but deletes the order straight away",
+      "violates": "make people confirm before an order is deleted",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-cancel-deletes.patch",
+      "wrong": "accept and reject are swapped: Cancel deletes, Delete does nothing",
+      "violates": "make people confirm before an order is deleted",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-dialog-never-mounted.patch",
+      "wrong": "useConfirm().require() is called but <ConfirmDialog> is never rendered, so nothing appears and nothing can be deleted",
+      "violates": "make people confirm before an order is deleted",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-global-confirm.patch",
+      "wrong": "uses globalThis.confirm()",
+      "violates": "PrimeVue fits; a native confirm is not a confirmation UI in the app",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-dialog-never-opened.patch",
+      "wrong": "a PrimeVue <Dialog> is rendered but never opened; delete is still immediate",
+      "violates": "make people confirm before an order is deleted",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-deletes-first-order.patch",
+      "wrong": "confirming deletes the first order in the list instead of the one clicked",
+      "violates": "confirming removes the order the user chose",
+      "expect": "killed"
+    }
+  ]
+}

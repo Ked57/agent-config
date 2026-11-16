@@ -1,0 +1,133 @@
+diff -ruN a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -15,7 +15,8 @@
+     "test": "vitest run",
+     "db:generate": "drizzle-kit generate",
+     "db:migrate": "bun run scripts/migrate.ts",
+-    "db:seed": "bun run scripts/seed.ts"
++    "db:seed": "bun run scripts/seed.ts",
++    "token:create": "bun run scripts/create-token.ts"
+   },
+   "dependencies": {
+     "@libsql/client": "^0.18.0",
+diff -ruN a/scripts/create-token.ts b/scripts/create-token.ts
+--- /dev/null
++++ b/scripts/create-token.ts
+@@ -0,0 +1,27 @@
++import {
++  createTokenForEmail,
++  parseCreateTokenArgs,
++} from "../src/cli/create-token";
++import { createDb } from "../src/db/client";
++import { logger } from "../src/lib/logger";
++
++// Prints only the token on stdout so `TOKEN=$(bun run token:create <email>)` works.
++const args = parseCreateTokenArgs(
++  process.argv.slice(2),
++  process.env.TOKEN_TTL_HOURS,
++);
++if (!args.ok) {
++  console.error(args.error);
++  process.exit(1);
++}
++const db = createDb(process.env.DATABASE_URL ?? "file:data/dev.db");
++const created = await createTokenForEmail(db, args.email, args.ttlHours);
++if (!created) {
++  console.error(`no user with email ${args.email}`);
++  process.exit(1);
++}
++logger.info("token.created", {
++  email: args.email,
++  expiresAt: created.expiresAt.toISOString(),
++});
++process.stdout.write(`${created.token}\n`);
+diff -ruN a/src/cli/create-token.test.ts b/src/cli/create-token.test.ts
+--- /dev/null
++++ b/src/cli/create-token.test.ts
+@@ -0,0 +1,31 @@
++import { describe, expect, it } from "vitest";
++
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++import { createTokenForEmail, parseCreateTokenArgs } from "./create-token";
++
++describe("token:create", () => {
++  it("parses the email and ttl", () => {
++    expect(parseCreateTokenArgs(["a@b.test"], undefined)).toEqual({
++      ok: true,
++      email: "a@b.test",
++      ttlHours: 24,
++    });
++    expect(
++      parseCreateTokenArgs(["a@b.test", "--ttl-hours", "2"], "24"),
++    ).toMatchObject({ ttlHours: 2 });
++    expect(
++      parseCreateTokenArgs(["a@b.test", "--ttl-hours", "0"], "24").ok,
++    ).toBe(false);
++    expect(parseCreateTokenArgs([], "24").ok).toBe(false);
++  });
++
++  it("issues a working token for a known email", async () => {
++    const { db, request } = await createTestContext();
++    expect(await createTokenForEmail(db, "nobody@acme.test", 1)).toBeNull();
++    const created = await createTokenForEmail(db, "ADA@acme.test", 1);
++    const me = await request("GET", "/api/me", {
++      token: created?.token ?? SEED_TOKENS.acmeAdmin,
++    });
++    expect(await me.json()).toMatchObject({ id: "usr_ada" });
++  });
++});
+diff -ruN a/src/cli/create-token.ts b/src/cli/create-token.ts
+--- /dev/null
++++ b/src/cli/create-token.ts
+@@ -0,0 +1,50 @@
++import { eq } from "drizzle-orm";
++
++import type { Db } from "../db/client";
++import { apiTokens, users } from "../db/schema";
++import { newId } from "../lib/ids";
++import { generateToken, hashToken } from "../lib/tokens";
++
++export type CreateTokenArgs =
++  { ok: true; email: string; ttlHours: number } | { ok: false; error: string };
++
++const usage = "usage: bun run token:create <email> [--ttl-hours <n>]";
++
++export function parseCreateTokenArgs(
++  argv: readonly string[],
++  defaultTtl: string | undefined,
++): CreateTokenArgs {
++  const [email, flag, value, ...rest] = argv;
++  if (!email || email.startsWith("--")) return { ok: false, error: usage };
++  if (rest.length > 0 || (flag !== undefined && flag !== "--ttl-hours")) {
++    return { ok: false, error: usage };
++  }
++  const raw = flag === undefined ? (defaultTtl ?? "24") : value;
++  if (raw === undefined || !/^[1-9][0-9]*$/.test(raw)) {
++    return { ok: false, error: `--ttl-hours must be a positive integer` };
++  }
++  return { ok: true, email, ttlHours: Number(raw) };
++}
++
++/** Issues a token for the user with this email (case-insensitive); null when there is none. */
++export async function createTokenForEmail(
++  db: Db,
++  email: string,
++  ttlHours: number,
++): Promise<{ token: string; expiresAt: Date } | null> {
++  const user = await db
++    .select({ id: users.id })
++    .from(users)
++    .where(eq(users.email, email.toLowerCase()))
++    .get();
++  if (!user) return null;
++  const token = generateToken();
++  const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
++  await db.insert(apiTokens).values({
++    id: newId("tok"),
++    userId: user.id,
++    tokenHash: hashToken(token),
++    expiresAt,
++  });
++  return { token, expiresAt };
++}

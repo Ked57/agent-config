@@ -1,0 +1,516 @@
+diff --git a/drizzle/0001_task_dependencies.sql b/drizzle/0001_task_dependencies.sql
+new file mode 100644
+index 0000000..86cac16
+--- /dev/null
++++ b/drizzle/0001_task_dependencies.sql
+@@ -0,0 +1,11 @@
++CREATE TABLE `task_dependencies` (
++	`task_id` text NOT NULL,
++	`depends_on_id` text NOT NULL,
++	`created_by` text NOT NULL,
++	`created_at` integer NOT NULL,
++	PRIMARY KEY(`task_id`, `depends_on_id`),
++	FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON UPDATE no action ON DELETE cascade,
++	FOREIGN KEY (`depends_on_id`) REFERENCES `tasks`(`id`) ON UPDATE no action ON DELETE cascade
++);
++--> statement-breakpoint
++CREATE INDEX `task_dependencies_depends_on_idx` ON `task_dependencies` (`depends_on_id`);
+\ No newline at end of file
+diff --git a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+index 711e2b9..eeed638 100644
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794774883005,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794788344835,
++      "tag": "0001_task_dependencies",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff --git a/src/app.ts b/src/app.ts
+index 80209e4..44946cc 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -4,6 +4,7 @@ import type { Db } from "./db/client";
+ import { logger } from "./lib/logger";
+ import { requestLogger } from "./plugins/request-logger";
+ import { authRoutes } from "./routes/auth";
++import { dependencyRoutes } from "./routes/dependencies";
+ import { healthRoutes } from "./routes/health";
+ import { projectRoutes } from "./routes/projects";
+ import { taskRoutes } from "./routes/tasks";
+@@ -26,6 +27,7 @@ export function createApp({ db }: { db: Db }) {
+     .use(authRoutes(db))
+     .use(projectRoutes(db))
+     .use(taskRoutes(db))
++    .use(dependencyRoutes(db))
+     .use(webhookRoutes(db));
+ }
+ 
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 6a14aa4..7281c71 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -1,4 +1,10 @@
+-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
++import {
++  index,
++  integer,
++  primaryKey,
++  sqliteTable,
++  text,
++} from "drizzle-orm/sqlite-core";
+ 
+ const createdAt = () =>
+   integer("created_at", { mode: "timestamp_ms" })
+@@ -91,5 +97,23 @@ export const tasks = sqliteTable(
+   ],
+ );
+ 
++export const taskDependencies = sqliteTable(
++  "task_dependencies",
++  {
++    taskId: text("task_id")
++      .notNull()
++      .references(() => tasks.id, { onDelete: "cascade" }),
++    dependsOnId: text("depends_on_id")
++      .notNull()
++      .references(() => tasks.id, { onDelete: "cascade" }),
++    createdBy: text("created_by").notNull(),
++    createdAt: createdAt(),
++  },
++  (table) => [
++    primaryKey({ columns: [table.taskId, table.dependsOnId] }),
++    index("task_dependencies_depends_on_idx").on(table.dependsOnId),
++  ],
++);
++
+ export type Task = typeof tasks.$inferSelect;
+ export type User = typeof users.$inferSelect;
+diff --git a/src/routes/dependencies.test.ts b/src/routes/dependencies.test.ts
+new file mode 100644
+index 0000000..6a25690
+--- /dev/null
++++ b/src/routes/dependencies.test.ts
+@@ -0,0 +1,71 @@
++import { describe, expect, it } from "vitest";
++
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++
++const member = { token: SEED_TOKENS.acmeMember };
++
++describe("task dependencies", () => {
++  it("blocks a task until its blocker is done", async () => {
++    const { request } = await createTestContext();
++    const linked = await request("POST", "/api/tasks/tsk_3/dependencies", {
++      ...member,
++      body: { dependsOnId: "tsk_2" },
++    });
++    expect(linked.status).toBe(201);
++    expect(
++      await (await request("GET", "/api/tasks/tsk_3", member)).json(),
++    ).toMatchObject({ blocked: true });
++    const start = await request("PATCH", "/api/tasks/tsk_3", {
++      ...member,
++      body: { status: "in_progress" },
++    });
++    expect(start.status).toBe(409);
++    expect(await start.json()).toMatchObject({
++      code: "task_blocked",
++      blockedBy: ["tsk_2"],
++    });
++    await request("PATCH", "/api/tasks/tsk_2", {
++      ...member,
++      body: { status: "done" },
++    });
++    const retry = await request("PATCH", "/api/tasks/tsk_3", {
++      ...member,
++      body: { status: "in_progress" },
++    });
++    expect(retry.status).toBe(200);
++  });
++
++  it("refuses cycles and reports them", async () => {
++    const { request } = await createTestContext();
++    await request("POST", "/api/tasks/tsk_3/dependencies", {
++      ...member,
++      body: { dependsOnId: "tsk_2" },
++    });
++    const cycle = await request("POST", "/api/tasks/tsk_2/dependencies", {
++      ...member,
++      body: { dependsOnId: "tsk_3" },
++    });
++    expect(cycle.status).toBe(409);
++    expect(await cycle.json()).toMatchObject({
++      code: "dependency_cycle",
++      cycle: ["tsk_2", "tsk_3", "tsk_2"],
++    });
++  });
++
++  it("refuses self, cross-project and duplicate links", async () => {
++    const { request } = await createTestContext();
++    const post = (dependsOnId: string) =>
++      request("POST", "/api/tasks/tsk_3/dependencies", {
++        ...member,
++        body: { dependsOnId },
++      });
++    expect(await (await post("tsk_3")).json()).toMatchObject({
++      code: "self_dependency",
++    });
++    expect(await (await post("tsk_4")).json()).toMatchObject({
++      code: "cross_project_dependency",
++    });
++    expect((await post("tsk_1")).status).toBe(201);
++    expect((await post("tsk_1")).status).toBe(409);
++  });
++});
+diff --git a/src/routes/dependencies.ts b/src/routes/dependencies.ts
+new file mode 100644
+index 0000000..035f871
+--- /dev/null
++++ b/src/routes/dependencies.ts
+@@ -0,0 +1,141 @@
++import { and, asc, count, eq, inArray } from "drizzle-orm";
++import { Elysia, t } from "elysia";
++
++import type { Db } from "../db/client";
++import { taskDependencies, tasks } from "../db/schema";
++import { authGuard } from "../plugins/auth";
++import { findPath, MAX_BLOCKERS } from "../services/dependencies";
++
++const taskNotFound = { code: "task_not_found", message: "task not found" };
++const dependencyNotFound = {
++  code: "dependency_not_found",
++  message: "dependency not found",
++};
++
++export const dependencyRoutes = (db: Db) => {
++  const findTask = (id: string, orgId: string) =>
++    db
++      .select()
++      .from(tasks)
++      .where(and(eq(tasks.id, id), eq(tasks.orgId, orgId)))
++      .get();
++
++  const summaries = async (ids: string[]) =>
++    ids.length === 0
++      ? []
++      : db
++          .select({ id: tasks.id, title: tasks.title, status: tasks.status })
++          .from(tasks)
++          .where(inArray(tasks.id, ids))
++          .orderBy(asc(tasks.createdAt), asc(tasks.id));
++
++  return new Elysia({ prefix: "/api/tasks" })
++    .use(authGuard(db))
++    .post(
++      "/:id/dependencies",
++      async ({ params, body, user, status }) => {
++        const task = await findTask(params.id, user.orgId);
++        if (!task) return status(404, taskNotFound);
++        const blocker = await findTask(body.dependsOnId, user.orgId);
++        if (!blocker) return status(404, dependencyNotFound);
++        if (blocker.id === task.id)
++          return status(422, {
++            code: "self_dependency",
++            message: "a task cannot depend on itself",
++          });
++        if (blocker.projectId !== task.projectId)
++          return status(422, {
++            code: "cross_project_dependency",
++            message: "both tasks must be in the same project",
++          });
++        const existing = await db
++          .select()
++          .from(taskDependencies)
++          .where(
++            and(
++              eq(taskDependencies.taskId, task.id),
++              eq(taskDependencies.dependsOnId, blocker.id),
++            ),
++          )
++          .get();
++        if (existing)
++          return status(409, {
++            code: "dependency_exists",
++            message: "the dependency already exists",
++          });
++        const path = await findPath(db, blocker.id, task.id);
++        if (path)
++          return status(409, {
++            code: "dependency_cycle",
++            message: `${blocker.id} already depends on ${task.id}`,
++            cycle: [task.id, ...path],
++          });
++        const [blockers] = await db
++          .select({ total: count() })
++          .from(taskDependencies)
++          .where(eq(taskDependencies.taskId, task.id));
++        if ((blockers?.total ?? 0) >= MAX_BLOCKERS)
++          return status(409, {
++            code: "too_many_dependencies",
++            message: `a task can depend on at most ${MAX_BLOCKERS} tasks`,
++          });
++        const [link] = await db
++          .insert(taskDependencies)
++          .values({
++            taskId: task.id,
++            dependsOnId: blocker.id,
++            createdBy: user.id,
++          })
++          .returning();
++        if (!link) throw new Error("insert returned no row");
++        return status(201, {
++          taskId: link.taskId,
++          dependsOnId: link.dependsOnId,
++          createdAt: link.createdAt.toISOString(),
++        });
++      },
++      {
++        requireAuth: true,
++        body: t.Object({ dependsOnId: t.String() }),
++      },
++    )
++    .delete(
++      "/:id/dependencies/:dependsOnId",
++      async ({ params, user, status }) => {
++        const task = await findTask(params.id, user.orgId);
++        if (!task) return status(404, taskNotFound);
++        const deleted = await db
++          .delete(taskDependencies)
++          .where(
++            and(
++              eq(taskDependencies.taskId, task.id),
++              eq(taskDependencies.dependsOnId, params.dependsOnId),
++            ),
++          )
++          .returning();
++        if (deleted.length === 0) return status(404, dependencyNotFound);
++        return new Response(null, { status: 204 });
++      },
++      { requireAuth: true },
++    )
++    .get(
++      "/:id/dependencies",
++      async ({ params, user, status }) => {
++        const task = await findTask(params.id, user.orgId);
++        if (!task) return status(404, taskNotFound);
++        const links = await db
++          .select()
++          .from(taskDependencies)
++          .where(and(eq(taskDependencies.taskId, task.id)));
++        const dependents = await db
++          .select()
++          .from(taskDependencies)
++          .where(eq(taskDependencies.dependsOnId, task.id));
++        return {
++          blockedBy: await summaries(links.map((link) => link.dependsOnId)),
++          blocking: await summaries(dependents.map((link) => link.taskId)),
++        };
++      },
++      { requireAuth: true },
++    );
++};
+diff --git a/src/routes/projects.ts b/src/routes/projects.ts
+index 3143433..dcaa300 100644
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -5,6 +5,7 @@ import type { Db } from "../db/client";
+ import { projects, tasks, users } from "../db/schema";
+ import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
++import { openBlockers } from "../services/dependencies";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+ 
+@@ -93,7 +94,13 @@ export const projectRoutes = (db: Db) =>
+           .from(tasks)
+           .where(eq(tasks.projectId, project.id))
+           .orderBy(asc(tasks.createdAt));
+-        return { items: rows.map(toTaskResponse) };
++        const open = await openBlockers(
++          db,
++          rows.map((task) => task.id),
++        );
++        return {
++          items: rows.map((task) => toTaskResponse(task, open.has(task.id))),
++        };
+       },
+       { requireAuth: true },
+     )
+@@ -137,7 +144,7 @@ export const projectRoutes = (db: Db) =>
+         if (!task) throw new Error("insert returned no row");
+         if (task.assigneeId)
+           await notifyTaskAssigned(db, task, task.assigneeId);
+-        return status(201, toTaskResponse(task));
++        return status(201, toTaskResponse(task, false));
+       },
+       {
+         requireAuth: true,
+diff --git a/src/routes/serializers.ts b/src/routes/serializers.ts
+index f62bf85..a0582f8 100644
+--- a/src/routes/serializers.ts
++++ b/src/routes/serializers.ts
+@@ -1,6 +1,6 @@
+ import type { Task } from "../db/schema";
+ 
+-export function toTaskResponse(task: Task) {
++export function toTaskResponse(task: Task, blocked: boolean) {
+   return {
+     id: task.id,
+     projectId: task.projectId,
+@@ -12,5 +12,6 @@ export function toTaskResponse(task: Task) {
+     dueDate: task.dueDate,
+     createdAt: task.createdAt.toISOString(),
+     updatedAt: task.updatedAt.toISOString(),
++    blocked,
+   };
+ }
+diff --git a/src/routes/tasks.ts b/src/routes/tasks.ts
+index c62bf5d..debdc51 100644
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -4,6 +4,7 @@ import { Elysia, t } from "elysia";
+ import type { Db } from "../db/client";
+ import { tasks, users, type TaskStatus } from "../db/schema";
+ import { authGuard } from "../plugins/auth";
++import { isBlocked, openBlockers } from "../services/dependencies";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+ 
+@@ -19,7 +20,7 @@ export const taskRoutes = (db: Db) =>
+           .where(eq(tasks.id, params.id))
+           .get();
+         if (!task) return status(404, { error: "task not found" });
+-        return toTaskResponse(task);
++        return toTaskResponse(task, await isBlocked(db, task.id));
+       },
+       { requireAuth: true },
+     )
+@@ -66,6 +67,15 @@ export const taskRoutes = (db: Db) =>
+               error: "assign the task before marking it done",
+             });
+           }
++          if (body.status !== "todo") {
++            const blockedBy = (await openBlockers(db, [task.id])).get(task.id);
++            if (blockedBy)
++              return status(409, {
++                code: "task_blocked",
++                message: "finish the tasks this one depends on first",
++                blockedBy,
++              });
++          }
+           changes.status = body.status;
+         }
+ 
+@@ -100,7 +110,8 @@ export const taskRoutes = (db: Db) =>
+           changes.dueDate = body.dueDate;
+         }
+ 
+-        if (Object.keys(changes).length === 0) return toTaskResponse(task);
++        if (Object.keys(changes).length === 0)
++          return toTaskResponse(task, await isBlocked(db, task.id));
+         changes.updatedAt = new Date();
+ 
+         const [updated] = await db
+@@ -110,7 +121,7 @@ export const taskRoutes = (db: Db) =>
+           .returning();
+         if (!updated) throw new Error("update returned no row");
+         if (newAssignee) await notifyTaskAssigned(db, updated, newAssignee);
+-        return toTaskResponse(updated);
++        return toTaskResponse(updated, await isBlocked(db, updated.id));
+       },
+       {
+         requireAuth: true,
+diff --git a/src/services/dependencies.ts b/src/services/dependencies.ts
+new file mode 100644
+index 0000000..ac312e4
+--- /dev/null
++++ b/src/services/dependencies.ts
+@@ -0,0 +1,78 @@
++import { and, asc, eq, inArray, ne } from "drizzle-orm";
++import { alias } from "drizzle-orm/sqlite-core";
++
++import type { Db } from "../db/client";
++import { taskDependencies, tasks } from "../db/schema";
++
++export const MAX_BLOCKERS = 5;
++
++const blocker = alias(tasks, "blocker");
++
++/** Blockers that are not done yet, by dependent task id, in the blockers' creation order. */
++export async function openBlockers(
++  db: Db,
++  taskIds: string[],
++): Promise<Map<string, string[]>> {
++  const open = new Map<string, string[]>();
++  if (taskIds.length === 0) return open;
++  const rows = await db
++    .select({ taskId: taskDependencies.taskId, blockerId: blocker.id })
++    .from(taskDependencies)
++    .innerJoin(blocker, eq(blocker.id, taskDependencies.dependsOnId))
++    .where(
++      and(
++        inArray(taskDependencies.taskId, taskIds),
++        ne(blocker.status, "done"),
++      ),
++    )
++    .orderBy(asc(blocker.createdAt), asc(blocker.id));
++  for (const row of rows) {
++    open.set(row.taskId, [...(open.get(row.taskId) ?? []), row.blockerId]);
++  }
++  return open;
++}
++
++export async function isBlocked(db: Db, taskId: string): Promise<boolean> {
++  return (await openBlockers(db, [taskId])).has(taskId);
++}
++
++/**
++ * The path `from` → … → `to` along existing "depends on" links, or null. Adding `to` depends on
++ * `from` would close a cycle exactly when such a path exists.
++ */
++export async function findPath(
++  db: Db,
++  from: string,
++  to: string,
++): Promise<string[] | null> {
++  const previous = new Map<string, string>();
++  let frontier = [from];
++  const seen = new Set(frontier);
++  while (frontier.length > 0) {
++    const edges = await db
++      .select({
++        taskId: taskDependencies.taskId,
++        dependsOnId: taskDependencies.dependsOnId,
++      })
++      .from(taskDependencies)
++      .where(inArray(taskDependencies.taskId, frontier));
++    const next: string[] = [];
++    for (const edge of edges) {
++      if (seen.has(edge.dependsOnId)) continue;
++      seen.add(edge.dependsOnId);
++      previous.set(edge.dependsOnId, edge.taskId);
++      if (edge.dependsOnId === to) {
++        const path = [to];
++        let node = to;
++        while (node !== from) {
++          node = previous.get(node) as string;
++          path.unshift(node);
++        }
++        return path;
++      }
++      next.push(edge.dependsOnId);
++    }
++    frontier = next;
++  }
++  return null;
++}

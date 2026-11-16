@@ -1,0 +1,77 @@
+{
+  "task": "S1-project-archiving",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written by agent-g (repo-evals), passes all five fixture gates"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-members-can-archive.patch",
+      "wrong": "archive has no admin check",
+      "violates": "R2",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-rearchive-overwrites.patch",
+      "wrong": "archiving an archived project succeeds again and overwrites archivedAt",
+      "violates": "R4",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-no-active-task-check.patch",
+      "wrong": "projects with in-progress tasks can be archived",
+      "violates": "R5",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-task-ids-by-id.patch",
+      "wrong": "taskIds sorted by id instead of creation order",
+      "violates": "R5",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-default-list-includes-archived.patch",
+      "wrong": "archived projects stay in the default list; only ?archived=true filters",
+      "violates": "R7",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-patch-not-read-only.patch",
+      "wrong": "PATCH ignores the archive (only create and delete are blocked)",
+      "violates": "R9",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-delete-not-read-only.patch",
+      "wrong": "DELETE ignores the archive",
+      "violates": "R9",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-archive-check-after-rules.patch",
+      "wrong": "the archive check runs only once there are changes to write, after the status rules",
+      "violates": "R10",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-archive-not-tenant-scoped.patch",
+      "wrong": "archive looks the project up by id only",
+      "violates": "R3",
+      "expect": "killed"
+    },
+    {
+      "file": "m10-restore-active-is-ok.patch",
+      "wrong": "restoring an active project returns 200",
+      "violates": "R6",
+      "expect": "killed"
+    },
+    {
+      "file": "m11-create-not-read-only.patch",
+      "wrong": "creating tasks in an archived project still works",
+      "violates": "R9",
+      "expect": "killed"
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "task": "S5-api-keys",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written by agent-g (repo-evals), passes all five fixture gates"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-write-does-not-imply-read.patch",
+      "wrong": "a write scope does not include the read scope",
+      "violates": "R7",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-revoked-keys-work.patch",
+      "wrong": "revocation is recorded but not enforced",
+      "violates": "R5",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-expiry-ignored.patch",
+      "wrong": "expiresAt is stored but never enforced",
+      "violates": "R6",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-keys-manage-keys.patch",
+      "wrong": "an admin's key can manage keys",
+      "violates": "R8",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-last-used-never-set.patch",
+      "wrong": "lastUsedAt is never updated",
+      "violates": "R10",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-raw-key-stored.patch",
+      "wrong": "the raw key is stored in key_hash",
+      "violates": "R2",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-keys-always-admin.patch",
+      "wrong": "a key keeps admin rights after its creator is demoted",
+      "violates": "R11",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-delete-without-scope.patch",
+      "wrong": "DELETE /api/tasks/:id has no scope check",
+      "violates": "R7",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-list-exposes-hash.patch",
+      "wrong": "the list returns the stored key hash",
+      "violates": "R3",
+      "expect": "killed"
+    },
+    {
+      "file": "m10-project-detail-unscoped.patch",
+      "wrong": "GET /api/projects/:id has no scope check",
+      "violates": "R7",
+      "expect": "killed"
+    },
+    {
+      "file": "m11-members-manage-keys.patch",
+      "wrong": "members can manage keys",
+      "violates": "R4",
+      "expect": "killed"
+    },
+    {
+      "file": "m12-me-without-api-key.patch",
+      "wrong": "/api/me does not report the key",
+      "violates": "R9",
+      "expect": "killed"
+    },
+    {
+      "file": "m13-short-prefix.patch",
+      "wrong": "prefix is the first 8 characters",
+      "violates": "R1",
+      "expect": "killed"
+    }
+  ]
+}

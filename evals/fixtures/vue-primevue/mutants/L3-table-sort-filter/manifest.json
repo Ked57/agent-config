@@ -1,0 +1,51 @@
+{
+  "task": "L3-table-sort-filter",
+  "references": [
+    {
+      "file": "reference-mwg-A-r1.patch",
+      "source": "mwg-eval L3 A r1"
+    },
+    {
+      "file": "reference-mwg-B-r1.patch",
+      "source": "mwg-eval L3 B r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-created-not-sortable.patch",
+      "wrong": "only Total is sortable; Created is not",
+      "violates": "sort by total and by created date",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-sort-only.patch",
+      "wrong": "sorting works but there is no status filter (the audit's sort-only mutant)",
+      "violates": "filter the rows by status",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-filter-excludes-status.patch",
+      "wrong": "the filter hides the chosen status instead of keeping it",
+      "violates": "filter the rows by status",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-total-sorted-as-text.patch",
+      "wrong": "Total sorts on the formatted currency string, so $89.99 sorts after $15,000.00",
+      "violates": "sort by total",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-created-sorted-as-text.patch",
+      "wrong": "Created sorts on the formatted date text (\"Nov 11\" before \"Nov 2\")",
+      "violates": "sort by created date",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-filter-not-applied-to-table.patch",
+      "wrong": "the status Select is shown but the table still lists every order",
+      "violates": "filter the rows by status",
+      "expect": "killed"
+    }
+  ]
+}

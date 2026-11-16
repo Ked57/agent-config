@@ -1,0 +1,77 @@
+{
+  "task": "S2-task-dependencies",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written by agent-g (repo-evals), passes all five fixture gates"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-direct-cycles-only.patch",
+      "wrong": "only checks whether the blocker depends directly on the task",
+      "violates": "R6",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-no-cycle-check.patch",
+      "wrong": "no cycle detection",
+      "violates": "R6",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-list-without-blocked.patch",
+      "wrong": "the project task list always reports blocked: false",
+      "violates": "R10",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-done-blockers-still-block.patch",
+      "wrong": "any blocker blocks, finished or not",
+      "violates": "Decision 2",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-only-start-is-blocked.patch",
+      "wrong": "only todo -> in_progress is checked; a blocked task can still be finished",
+      "violates": "R11",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-cross-project-allowed.patch",
+      "wrong": "links across projects are accepted",
+      "violates": "R4",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-six-blockers-allowed.patch",
+      "wrong": "off-by-one: the sixth blocker is accepted",
+      "violates": "R7",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-no-cascade.patch",
+      "wrong": "foreign key without ON DELETE CASCADE, so deleting a linked task fails",
+      "violates": "R13",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-blocker-not-tenant-scoped.patch",
+      "wrong": "dependsOnId is looked up across organizations",
+      "violates": "R2",
+      "expect": "killed"
+    },
+    {
+      "file": "m10-duplicate-is-500.patch",
+      "wrong": "no duplicate check; the primary key violation surfaces as a 500",
+      "violates": "R5",
+      "expect": "killed"
+    },
+    {
+      "file": "m11-self-link-allowed.patch",
+      "wrong": "no self-dependency check",
+      "violates": "R3",
+      "expect": "killed"
+    }
+  ]
+}

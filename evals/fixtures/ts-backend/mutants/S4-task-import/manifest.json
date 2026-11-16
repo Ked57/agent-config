@@ -1,0 +1,96 @@
+{
+  "task": "S4-task-import",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written by agent-g (repo-evals), passes all five fixture gates"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-duplicates-within-import-allowed.patch",
+      "wrong": "duplicate titles are checked against existing tasks only, not earlier rows",
+      "violates": "R4",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-duplicates-case-sensitive.patch",
+      "wrong": "duplicate detection is case-sensitive",
+      "violates": "R4",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-date-format-only.patch",
+      "wrong": "dueDate is checked with a regex only, so 2026-02-30 passes",
+      "violates": "R4",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-first-error-only.patch",
+      "wrong": "only the first problem of a row is reported",
+      "violates": "R4",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-assignee-email-case-sensitive.patch",
+      "wrong": "assigneeEmail is matched case-sensitively",
+      "violates": "R4",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-atomic-ignored.patch",
+      "wrong": "atomic mode behaves like partial mode",
+      "violates": "R6",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-one-email-per-task.patch",
+      "wrong": "one email per created task instead of one per assignee",
+      "violates": "R9",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-limit-off-by-one.patch",
+      "wrong": "200 rows are already refused",
+      "violates": "R3",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-naive-csv-split.patch",
+      "wrong": "CSV is split on line breaks and commas, ignoring quotes",
+      "violates": "R8",
+      "expect": "killed"
+    },
+    {
+      "file": "m10-blank-lines-are-rows.patch",
+      "wrong": "blank CSV lines become empty rows",
+      "violates": "R8",
+      "expect": "killed"
+    },
+    {
+      "file": "m11-same-created-at.patch",
+      "wrong": "all imported tasks share one createdAt, so their order in the list is not guaranteed",
+      "violates": "R7",
+      "expect": "survives",
+      "why": "SQLite returns rows tied on created_at in insertion order in practice, so the order is not observable through the API"
+    },
+    {
+      "file": "m12-rows-wins-over-csv.patch",
+      "wrong": "rows and csv together are accepted (rows wins)",
+      "violates": "R2",
+      "expect": "killed"
+    },
+    {
+      "file": "m13-done-without-assignee.patch",
+      "wrong": "a done row without an assignee is accepted",
+      "violates": "R4",
+      "expect": "killed"
+    },
+    {
+      "file": "m14-import-not-tenant-scoped.patch",
+      "wrong": "the import looks the project up by id only",
+      "violates": "R1",
+      "expect": "killed"
+    }
+  ]
+}

@@ -30,9 +30,6 @@
       "id": "K1-plan-limits",
       "category": "policy",
       "prompt": "Free organizations are getting a project limit: the free plan allows 2 projects and the pro plan 50. When an organization is already at its limit, POST /api/projects should return 403 with {\"code\": \"plan_limit\", \"message\": \"...\"} and create nothing. Also add GET /api/organization (any signed-in user), returning the caller's organization as {\"plan\": ..., \"projectLimit\": ..., \"projectCount\": ...}. We're adding an enterprise plan soon, so set the limits up in a way that whoever adds a new plan can't forget to give it a limit. Add tests.",
-      "expectsPolicies": [
-        "typescript"
-      ],
       "checks": [
         {
           "id": "acceptance",
@@ -81,15 +78,15 @@
           "expect": "any",
           "level": "info"
         }
+      ],
+      "expectsComponents": [
+        "typescript"
       ]
     },
     {
       "id": "K2-task-filters",
       "category": "policy",
       "prompt": "GET /api/projects/:id/tasks needs filters in the query string: status (todo, in_progress or done; repeat it to match several, as in ?status=todo&status=done), assignee (a user id, or none for unassigned tasks), dueBefore (a date as YYYY-MM-DD; only tasks due strictly before it) and urgent (true or false). Filters combine with AND, and without filters the endpoint returns every task as it does today. Reject any invalid filter value or unknown query parameter with 400 and {\"code\": \"invalid_query\", \"message\": \"...\"} instead of ignoring it. Add tests.",
-      "expectsPolicies": [
-        "typescript"
-      ],
       "checks": [
         {
           "id": "acceptance",
@@ -126,15 +123,15 @@
           "expect": "any",
           "level": "info"
         }
+      ],
+      "expectsComponents": [
+        "typescript"
       ]
     },
     {
       "id": "K3-task-import",
       "category": "policy",
       "prompt": "Add a bulk task import: POST /api/projects/:id/tasks/import with a JSON body {\"csv\": \"...\"}. The first line must be the header title,assignee_email,due_date and every following line is one task (assignee_email and due_date may be empty; titles never contain commas, so no quoting). Import the valid rows and skip the invalid ones, answering 200 with {\"created\": <count>, \"errors\": [{\"line\": <line number in the csv, the header is line 1>, \"message\": \"...\"}]}. A row is invalid when it doesn't have exactly 3 columns, has an empty title, names an assignee who isn't a member of the organization, or has a due date that isn't a YYYY-MM-DD date. Blank lines are ignored. A missing or wrong header is a 400 with {\"code\": \"invalid_csv\", \"message\": \"...\"}. Add tests.",
-      "expectsPolicies": [
-        "typescript"
-      ],
       "checks": [
         {
           "id": "acceptance",
@@ -171,16 +168,15 @@
           "expect": "any",
           "level": "info"
         }
+      ],
+      "expectsComponents": [
+        "typescript"
       ]
     },
     {
       "id": "K4-labels-domain-module",
       "category": "policy",
       "prompt": "Add labels for tasks. Admins create labels for their organization with POST /api/labels {\"name\": \"...\", \"color\": \"#rrggbb\"} (201 with {\"id\", \"name\", \"color\"}; other members get 403; a name that already exists in the organization, ignoring case, is a 409 with {\"code\": \"label_exists\", \"message\": \"...\"}). Any member can list them with GET /api/labels ({\"items\": [...]}, sorted by name) and attach or detach one with PUT and DELETE /api/tasks/:id/labels/:labelId (204 either way, also when nothing changes; 404 when the task or label isn't in the caller's organization). GET /api/tasks/:id should include the task's \"labels\". Put the labels code in a domain module, src/labels/ with labels.model.ts, labels.interface.ts, labels.service.ts and labels.mock.ts, and keep the routes thin. Add tests.",
-      "expectsPolicies": [
-        "typescript",
-        "domain-module"
-      ],
       "checks": [
         {
           "id": "acceptance",
@@ -249,6 +245,45 @@
           "type": "changed",
           "files": [
             "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ],
+      "expectsComponents": [
+        "typescript",
+        "domain-module"
+      ]
+    },
+    {
+      "id": "K5-token-cli",
+      "category": "skill",
+      "prompt": "Support keeps asking me for API tokens for test accounts. Add a command `bun run token:create <email> [--ttl-hours <n>]` that creates a token for that user in the database given by DATABASE_URL (default file:data/dev.db, like the other scripts) and prints only the token followed by a newline on stdout, so `TOKEN=$(bun run token:create ada@acme.test)` works. --ttl-hours defaults to TOKEN_TTL_HOURS, or 24 when that isn't set. Match the email ignoring case, like login does. For an unknown or missing email, or a --ttl-hours that isn't a positive whole number, print an error on stderr, print nothing on stdout, create no token and exit with status 1. Add tests.",
+      "expectsComponents": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden tests run the real token:create command",
+          "type": "command",
+          "copy": {
+            "hidden/components/token-cli.test.ts": "src/__hidden__/token-cli.test.ts"
+          },
+          "run": "vitest run src/__hidden__/token-cli.test.ts",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 240
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or changes a test",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts",
+            "scripts/**/*.test.ts"
           ],
           "expect": "any",
           "level": "info"

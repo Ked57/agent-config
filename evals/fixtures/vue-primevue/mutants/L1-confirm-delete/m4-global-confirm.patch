@@ -1,0 +1,12 @@
+diff -ruN a/src/views/DashboardView.vue b/src/views/DashboardView.vue
+--- a/src/views/DashboardView.vue
++++ b/src/views/DashboardView.vue
+@@ -21,7 +21,7 @@
+ }
+ 
+ function removeOrder(order: Order) {
+-  void ordersStore.remove(order.id)
++  if (globalThis.confirm(`Delete ${order.id}?`)) void ordersStore.remove(order.id)
+ }
+ 
+ onMounted(() => {
