@@ -121,3 +121,11 @@ and the run is excluded and reported.
   concurrency.
 - 05:32 UTC: agents C and D done; verify passes (177). E reported the hard set at ceiling (85 of 85) and was sent back to rewrite prompts as invariants and recalibrate. Agent A resumed for `--combine` (one report across both fixtures for comparison 1), a deletion-safety audit (three agents saw `/var/tmp/repo-evals-work` wiped at about 05:00) and `--testTimeout=30000` on the fixture test gates.
 - Calibration spend so far (outside the Phase 3 budget, reported separately): A $0.06, E $6.63, G $1.05.
+- 05:45 UTC: agent A delivered `--combine`, deletion guards and `--testTimeout=30000` on the fixture test
+  gates (verify 183 pass). Root cause of the 04:47–05:00 restart and wipe: the host has 7 GB RAM; a
+  global OOM killed `paseo.service`, which runs with `PrivateTmp=yes` and `KillMode=control-group`. So
+  `/var/tmp` (the sandbox and all agents' scratch) is recreated empty on every service restart and
+  every child process dies. No other writable location exists outside the home tree. Consequences:
+  results in `~/agent-config-evals` survive, the sandbox does not; `--resume` must rebuild arms (A is
+  adding that plus a free-memory guard); Phase 3 runs at concurrency 2 with no other heavy work.
+  A lead restart is expected to kill running subagents: re-send them a continue message.
