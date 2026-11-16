@@ -29,6 +29,9 @@ npm run eval -- --tasks ts-backend --single-arm --only B1-task-comments --reps 1
 
 # Continue after a stop (budget, Ctrl-C, crash); finished runs and judgments are skipped
 npm run eval -- --resume ~/agent-config-evals/<dir> [--max-usd 30]
+
+# One report over evals of different task sets (and fixtures) with the same arms
+npm run eval -- --combine ~/agent-config-evals/<backend-dir> ~/agent-config-evals/<vue-dir> --name full-vs-bare
 ```
 
 `npm run eval -- --help` lists every option. Results go to `~/agent-config-evals/<timestamp>-<name>/`
@@ -154,7 +157,15 @@ copied to `<results>/runs/<id>/session/`, and the run's home and tmp are deleted
   `~/.agent-browser` (read-only use) with a per-run session and `--no-sandbox`. Override with
   `--env AGENT_BROWSER_ARGS=`.
 - Gates, hidden-test checks, `--http` and `--browser` are harness processes: they run with your
-  environment in the run's working copy, with temp names from `mkdtemp` or random ids.
+  environment in the run's working copy, with `TMPDIR` set to `<sandbox>/.tmp` (local disk, no eval
+  name in the path) and temp names from `mkdtemp` or random ids.
+- **Deletions and kills are fenced.** Every recursive delete goes through `removeTree(target, root)`,
+  which refuses a target that is not strictly inside `root` and a `root` that is shallower than three
+  path segments (`/var/tmp` is refused) or is your home or one of its ancestors. Run cleanup deletes
+  only inside `<sandbox>/<eval>-<hash>/` (and the run's own dir in the results). Stray-process kills
+  match whole environment entries (`HOME=<run home>`, `TMPDIR=<run tmp>`, both of which must lie in
+  the run dir) or a cwd inside the run dir by whole path segments, never a path prefix, and skip the
+  suite itself and its parent.
 - Auth: `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` from your env if set. Otherwise the
   short-lived access token from your Claude login is read (read-only) at each spawn. The refresh
   token is never copied, so isolated runs can't rotate your login. Very long evals can outlive the
@@ -429,7 +440,10 @@ original judge's id the first time they are resumed.
 
 ## Budget, resume and parallelism
 
-- `--concurrency` (default 3) applies to runs and to judgments.
+- `--concurrency` (default 3) applies to runs and to judgments. Gates and hidden tests run in the
+  harness next to the running agents, so at most 2 runs measure (gates, checks, `--http`,
+  `--browser`) at once, and the fixtures' `test` gates use `vitest run --testTimeout=30000` because
+  Vitest's 5 s default trips under that load. A hidden-test check sets its own timeouts in the task set.
 - `--max-usd` stops starting new runs or judgments once spend (agent plus judge) reaches the cap.
   In-flight work finishes, so the overshoot is at most about `concurrency` runs. A run killed at
   `--timeout-min` has no result event; its spend is taken from the session log's last running total
@@ -447,6 +461,26 @@ original judge's id the first time they are resumed.
 - `--strict-isolation` (the default) or `--no-strict-isolation` may be changed on resume; the arms,
   `--plugins`, prefixes, tasks, model and reps may not.
 - `--rejudge --resume <dir>` re-runs only the judging, with the judge flags you pass.
+
+### Combining evals across fixtures
+
+A task set has one fixture, but a comparison may need tasks from several (full agent-config against
+bare Claude Code on the backend and the Vue tasks). `npm run eval -- --combine <dir> <dir> ... --name
+<name>` writes a new results dir (`<AGENT_CONFIG_EVALS_HOME>/<timestamp>-<name>/`, or `--out`) whose run
+records and judgments are the union of the inputs', and reports it like any eval: the task-level
+paired statistics run over every task together. It calls no model and only reads the inputs.
+
+- It refuses unless every input has the same provider, model, effort and single-arm setting, and per
+  arm the same ref and commit, toggles, prefix, plugin mode, plugin versions and commits, and installed
+  files (a digest of the arm inventory). Each task set may appear once.
+- A task id used by more than one task set becomes `<task set>.<id>`. Every task, run and judgment
+  keeps `sourceSet`, `sourceTask` and `fixture`; runs also keep `sourceRun`. Diffs, transcripts and
+  session logs are copied; worked copies stay in the source dirs.
+- `config.json` lists the inputs under `combined.inputs` (dir, task set, fixture, fixture hash, run
+  count), and `audit.jsonl` records the combine. The report ends with a **Per fixture (descriptive)**
+  table: paired tasks, runs and mean scores per fixture. The verdict is the pooled one.
+- A combined dir can't be resumed, rechecked or rejudged: do that on the source dirs, then combine
+  again.
 
 ## Output
 

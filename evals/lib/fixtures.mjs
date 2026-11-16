@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TELEMETRY_OFF } from './env.mjs';
+import { removeTree, TELEMETRY_OFF } from './env.mjs';
 
 export const FIXTURES_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures');
 
@@ -64,7 +64,7 @@ export function preparePristine(fixture, cacheRoot, log = console.log) {
     log(`Cached fixture ${pristine} has ${changed.length} changed file(s) (e.g. ${changed[0]}); rebuilding it.`);
   }
   const staging = `${pristine}.staging-${process.pid}`;
-  fs.rmSync(staging, { recursive: true, force: true });
+  removeTree(staging, path.dirname(pristine));
   // A template may hold a local install from editing it; setup reinstalls from the lockfile.
   const skip = new Set(['node_modules', 'dist', 'data']);
   fs.cpSync(fixture.templateDir, staging, { recursive: true, filter: (source) => !skip.has(path.basename(source)) || path.dirname(source) !== fixture.templateDir });
@@ -73,14 +73,14 @@ export function preparePristine(fixture, cacheRoot, log = console.log) {
   for (const command of fixture.setup) sh(command.replaceAll('{fixtureDir}', fixture.dir), staging, env);
   fs.writeFileSync(path.join(staging, '.eval-manifest.json'), JSON.stringify(manifest(staging, fixture.linkPaths)));
   fs.writeFileSync(path.join(staging, '.eval-ready'), new Date().toISOString());
-  fs.rmSync(pristine, { recursive: true, force: true });
+  removeTree(pristine, path.dirname(pristine));
   fs.renameSync(staging, pristine);
   return pristine;
 }
 
 /** Copies the pristine project to `destination`; `linkPaths` are hard-linked, not copied. */
 export function copyForRun(fixture, pristine, destination) {
-  fs.rmSync(destination, { recursive: true, force: true });
+  removeTree(destination, path.dirname(destination));
   fs.mkdirSync(destination, { recursive: true });
   const excludes = ['.eval-ready', '.eval-manifest.json', ...fixture.linkPaths].flatMap((item) => ['--exclude', `./${item}`]);
   const result = spawnSync('bash', ['-c', `tar ${excludes.map((e) => `'${e}'`).join(' ')} -cf - . | tar -xf - -C '${destination}'`], { cwd: pristine, encoding: 'utf8' });
@@ -93,7 +93,7 @@ export function copyForRun(fixture, pristine, destination) {
     let link = spawnSync('cp', ['-al', source, target], { encoding: 'utf8' });
     if (link.status !== 0) {
       // Hard links can't cross filesystems (e.g. results on another mount than the cache): copy instead.
-      fs.rmSync(target, { recursive: true, force: true });
+      removeTree(target, destination);
       link = spawnSync('cp', ['-a', source, target], { encoding: 'utf8' });
     }
     if (link.status !== 0) throw new Error(`copy of ${linkPath} failed: ${link.stderr.slice(0, 500)}`);
@@ -109,7 +109,7 @@ export function verifyPristine(fixture, pristine) {
 
 /** Moves a directory tree; across filesystems (EXDEV) it copies with `cp -a` and removes the source. */
 export function moveTree(from, to) {
-  fs.rmSync(to, { recursive: true, force: true });
+  removeTree(to, path.dirname(to));
   fs.mkdirSync(path.dirname(to), { recursive: true });
   try {
     fs.renameSync(from, to);
@@ -117,7 +117,7 @@ export function moveTree(from, to) {
     if (error.code !== 'EXDEV') throw error;
     const copy = spawnSync('cp', ['-a', from, to], { encoding: 'utf8' });
     if (copy.status !== 0) throw new Error(`copy of ${from} failed: ${copy.stderr.slice(0, 500)}`);
-    fs.rmSync(from, { recursive: true, force: true });
+    removeTree(from, path.dirname(from));
   }
 }
 

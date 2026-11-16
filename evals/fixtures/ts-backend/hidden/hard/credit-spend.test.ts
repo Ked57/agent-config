@@ -19,6 +19,7 @@ const topUp = (request: Context["request"], id: string, orgId: string, credits: 
 
 // org_acme is seeded with 100 credits, org_globex with 0.
 describe("hidden: spending credits", { timeout: 30_000 }, () => {
+  // Prompt: "spend credits ... answer 200 with {credits: <remaining balance>}"
   it("deducts the amount and answers 200 with the remaining balance", async () => {
     const { request, db } = await createTestContext();
     const ok = await spend(request, SEED_TOKENS.acmeMember, 30);
@@ -27,6 +28,8 @@ describe("hidden: spending credits", { timeout: 30_000 }, () => {
     expect(await balance(db, "org_acme")).toBe(70);
   });
 
+  // Prompt: "402 when the balance is too low" + "the balance must never go negative"
+
   it("refuses to overdraw with 402 and leaves the balance alone", async () => {
     const { request, db } = await createTestContext();
     expect((await spend(request, SEED_TOKENS.acmeAdmin, 101)).status).toBe(402);
@@ -34,6 +37,8 @@ describe("hidden: spending credits", { timeout: 30_000 }, () => {
     expect((await spend(request, SEED_TOKENS.globexAdmin, 1)).status).toBe(402);
     expect(await balance(db, "org_globex")).toBe(0);
   });
+
+  // Prompt: "402 when the balance is too low": a balance equal to the amount is not too low
 
   it("lets an organization spend its balance down to exactly zero", async () => {
     const { request, db } = await createTestContext();
@@ -44,6 +49,8 @@ describe("hidden: spending credits", { timeout: 30_000 }, () => {
     expect((await spend(request, SEED_TOKENS.acmeAdmin, 1)).status).toBe(402);
     expect(await balance(db, "org_acme")).toBe(0);
   });
+
+  // Prompt: "{amount: <positive whole number>}" for "members of an organization" (401 is the API's existing convention)
 
   it("requires authentication and a positive whole amount", async () => {
     const { request, db } = await createTestContext();
@@ -56,6 +63,8 @@ describe("hidden: spending credits", { timeout: 30_000 }, () => {
     expect(await balance(db, "org_acme")).toBe(100);
   });
 
+  // Prompt: "a retry must get the original response back and never be charged twice"
+
   it("replays the first answer for a repeated Idempotency-Key without spending again", async () => {
     const { request, db } = await createTestContext();
     const first = await spend(request, SEED_TOKENS.acmeAdmin, 10, "key-1");
@@ -63,8 +72,8 @@ describe("hidden: spending credits", { timeout: 30_000 }, () => {
     const firstBody = await first.json();
     expect(firstBody).toMatchObject({ credits: 90 });
     expect((await spend(request, SEED_TOKENS.acmeAdmin, 5)).status).toBe(200);
-    // Same key again, from another user of the same organization: no new deduction, original answer.
-    const replay = await spend(request, SEED_TOKENS.acmeMember, 10, "key-1");
+    // Same key again from the same client: no new deduction, original answer.
+    const replay = await spend(request, SEED_TOKENS.acmeAdmin, 10, "key-1");
     expect(replay.status).toBe(200);
     expect(await replay.json()).toEqual(firstBody);
     expect(await balance(db, "org_acme")).toBe(85);
@@ -72,6 +81,8 @@ describe("hidden: spending credits", { timeout: 30_000 }, () => {
     expect((await spend(request, SEED_TOKENS.acmeAdmin, 10, "key-2")).status).toBe(200);
     expect(await balance(db, "org_acme")).toBe(75);
   });
+
+  // Prompt: "a retry must get the original response back": the original response was the refusal
 
   it("replays a refusal too, even after the balance was topped up", async () => {
     const { request, db } = await createTestContext();
@@ -85,6 +96,8 @@ describe("hidden: spending credits", { timeout: 30_000 }, () => {
     expect(await balance(db, "org_acme")).toBe(1100);
   });
 
+  // Prompt: "members of an organization spend its credits": another organization's key cannot answer for or block this one
+
   it("scopes idempotency keys to the organization", async () => {
     const { request, db } = await createTestContext();
     expect((await topUp(request, "evt_globex", "org_globex", 50)).status).toBe(200);
@@ -96,6 +109,8 @@ describe("hidden: spending credits", { timeout: 30_000 }, () => {
     expect(await balance(db, "org_globex")).toBe(30);
   });
 
+  // Prompt: "never negative, even when requests arrive at the same time; each still gets a 200 or 402"
+
   it("never overdraws, loses a spend or errors when spends arrive together", async () => {
     const { request, db } = await createTestContext();
     // 100 credits, 30 simultaneous spends of 7: exactly 14 fit (98), 16 must be refused.
@@ -106,6 +121,8 @@ describe("hidden: spending credits", { timeout: 30_000 }, () => {
     expect(statuses.filter((status) => status === 402)).toHaveLength(16);
     expect(await balance(db, "org_acme")).toBe(2);
   });
+
+  // Prompt: "retries ... original response ... never charged twice" + "each still gets a 200 or 402"
 
   it("charges once and answers every request when the same key arrives many times at once", async () => {
     const { request, db } = await createTestContext();

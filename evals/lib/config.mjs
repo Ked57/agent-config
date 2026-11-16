@@ -49,7 +49,13 @@ export function parseArgs(argv) {
       index += 1;
       return value;
     };
-    if (BOOLEAN_FLAGS.has(flag)) {
+    if (flag === 'combine') {
+      // `--combine <dir> <dir> ...`: every following argument up to the next flag.
+      const dirs = inlineValue !== undefined ? [inlineValue] : [];
+      while (argv[index + 1] !== undefined && !argv[index + 1].startsWith('--')) dirs.push(argv[(index += 1)]);
+      if (!dirs.length) throw new Error('Missing value for --combine');
+      options.combine = [...(options.combine ?? []), ...dirs];
+    } else if (BOOLEAN_FLAGS.has(flag)) {
       if (flag === 'no-judge') options.judge = false;
       else if (flag === 'no-strict-isolation') options.strictIsolation = false;
       else options[camel(flag)] = true;

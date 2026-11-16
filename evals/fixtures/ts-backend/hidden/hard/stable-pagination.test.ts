@@ -63,6 +63,7 @@ const expect4xx = (response: Response) => {
 };
 
 describe("hidden: stable cursor pagination", { timeout: 30_000 }, () => {
+  // Prompt: "newest first (by createdAt) with ?limit (default 20 ...)"
   it("returns the newest tasks first, 20 per page by default", async () => {
     const { request } = await setup();
     const first = await fetchPage(request, null, null);
@@ -71,6 +72,8 @@ describe("hidden: stable cursor pagination", { timeout: 30_000 }, () => {
     expect(typeof first.nextCursor).toBe("string");
   });
 
+  // Prompt: "nextCursor null when there is nothing more"
+
   it("returns everything with nextCursor null when it fits in one page", async () => {
     const { request } = await setup();
     const all = await fetchPage(request, 100, null);
@@ -78,6 +81,8 @@ describe("hidden: stable cursor pagination", { timeout: 30_000 }, () => {
     expect(all.nextCursor).toBeNull();
     expect(all.items.at(-1)?.id).toBe("tsk_4");
   });
+
+  // Prompt: "nextCursor null when there is nothing more": after an exactly full last page there is nothing more
 
   it("answers nextCursor null on a last page that is exactly full", async () => {
     const { request } = await setup();
@@ -91,19 +96,23 @@ describe("hidden: stable cursor pagination", { timeout: 30_000 }, () => {
     expect(second.nextCursor).toBeNull();
   });
 
-  it("rejects a limit outside 1 to 100 with a 4xx", async () => {
-    const { request } = await setup();
-    for (const limit of ["0", "101", "-1", "abc"]) expect4xx(await get(request, `?limit=${limit}`));
-    expect((await get(request, "?limit=100")).status).toBe(200);
-    expect((await get(request, "?limit=1")).status).toBe(200);
-  });
+  // Prompt: "?limit (default 20, max 100)"
 
-  it("rejects a garbled cursor with a 4xx", async () => {
-    const { request } = await setup();
-    for (const cursor of ["not-a-cursor", "eyJmb28iOjF9", "%00%01"]) expect4xx(await get(request, `?cursor=${cursor}`));
+  it("never returns more than 100 tasks per page", async () => {
+    const { request, db } = await setup();
+    await db.insert(tasks).values(Array.from({ length: 70 }, (_, index) => ({ id: `tsk_more_${index}`, orgId: "org_acme", projectId: "prj_app", title: "more", createdAt: new Date(IMPORTED_AT - 1000), updatedAt: new Date(IMPORTED_AT - 1000) })));
+    // Rejecting an out-of-range limit or clamping it are both fine; returning more than 100 is not.
+    for (const limit of ["101", "500"]) {
+      const response = await get(request, `?limit=${limit}`);
+      if (response.status === 200) expect(((await response.json()) as Page).items.length).toBeLessThanOrEqual(100);
+      else expect4xx(response);
+    }
+    const max = await fetchPage(request, 100, null);
+    expect(max.items).toHaveLength(100);
   });
 
   for (const limit of [1, 7]) {
+    // Prompt: "every task exactly once, in order, even though imports create many tasks with the same createdAt"
     it(`walks every task exactly once with limit=${limit} although 30 tasks share a createdAt`, async () => {
       const { request, initial } = await setup();
       const seen = await walk(request, limit);
@@ -113,6 +122,8 @@ describe("hidden: stable cursor pagination", { timeout: 30_000 }, () => {
       expect(seen.at(-1)?.id).toBe("tsk_4");
     });
   }
+
+  // Prompt: "... even though tasks get created or deleted while someone is paging"
 
   it("neither repeats nor skips tasks when tasks are created and deleted between pages", async () => {
     const { request, db, initial } = await setup();
@@ -145,6 +156,8 @@ describe("hidden: stable cursor pagination", { timeout: 30_000 }, () => {
     expectNewestFirst(seen);
   });
 
+  // Prompt: "... tasks get deleted while someone is paging": that includes the last task of the previous page
+
   it("continues correctly after the task the cursor points at was deleted", async () => {
     const { request, db, initial } = await setup();
     const deleted: string[] = [];
@@ -161,6 +174,8 @@ describe("hidden: stable cursor pagination", { timeout: 30_000 }, () => {
     expect(ids.sort()).toEqual([...initial].sort());
     expect(deleted.length).toBeGreaterThan(3);
   });
+
+  // Prompt: existing behaviour of the endpoint (other organizations' projects are 404)
 
   it("still hides other organizations' projects", async () => {
     const { request } = await setup();

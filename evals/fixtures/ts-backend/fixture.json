@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --check .",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout=30000",
     "build": "bun build src/index.ts --target bun --outdir dist"
   },
   "dependencies": {

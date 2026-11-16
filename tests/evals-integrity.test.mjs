@@ -69,3 +69,21 @@ test('resume helpers name frozen flags, changed arm files and flipped checks', (
   assert.deepEqual(flippedChecks([{ id: 'h', pass: false, score: 0.5 }], [{ id: 'h', pass: false, score: 0.75 }]), [{ check: 'h', from: false, to: false, scoreFrom: 0.5, scoreTo: 0.75 }]);
   assert.deepEqual(flippedChecks([{ id: 'h', pass: true, score: 1 }], [{ id: 'h', pass: true, score: 1 }]), []);
 });
+
+test('semaphore lets at most `limit` holders in and hands the slot on', async () => {
+  const { semaphore } = await import('../evals/lib/plan.mjs');
+  const gate = semaphore(2);
+  let peak = 0;
+  const order = [];
+  await Promise.all([1, 2, 3, 4, 5].map(async (id) => {
+    const release = await gate.acquire();
+    peak = Math.max(peak, gate.active);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    order.push(id);
+    release();
+    release(); // a second release is a no-op
+  }));
+  assert.equal(peak, 2);
+  assert.equal(gate.active, 0);
+  assert.deepEqual([...order].sort(), [1, 2, 3, 4, 5]);
+});

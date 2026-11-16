@@ -34,6 +34,7 @@ async function expiresAtOf(request: Context["request"], token: string) {
 }
 
 describe("hidden: logout and sliding token expiry", { timeout: 30_000 }, () => {
+  // Prompt: "POST /api/auth/logout (revokes the token used, 204)"
   it("revokes the token on logout so it gets 401 everywhere", async () => {
     const { request } = await createTestContext();
     const token = await login(request);
@@ -42,6 +43,8 @@ describe("hidden: logout and sliding token expiry", { timeout: 30_000 }, () => {
     expect((await me(request, token)).status).toBe(401);
     expect((await request("GET", "/api/projects", { token })).status).toBe(401);
   });
+
+  // Prompt: "revokes the token used" (only that one)
 
   it("keeps the user's other tokens working after a logout", async () => {
     const { request } = await createTestContext();
@@ -52,6 +55,8 @@ describe("hidden: logout and sliding token expiry", { timeout: 30_000 }, () => {
     expect((await me(request, SEED_TOKENS.acmeAdmin)).status).toBe(200);
   });
 
+  // Prompt: "a revoked token must stay dead" (401 is the existing convention for bad tokens)
+
   it("answers 401 to a logout without a valid token, including a second logout", async () => {
     const { request } = await createTestContext();
     expect((await request("POST", "/api/auth/logout")).status).toBe(401);
@@ -61,6 +66,8 @@ describe("hidden: logout and sliding token expiry", { timeout: 30_000 }, () => {
     expect((await request("POST", "/api/auth/logout", { token })).status).toBe(401);
     expect((await me(request, token)).status).toBe(401);
   });
+
+  // Prompt: "POST /api/auth/logout-all (revokes all of the user's tokens, 204)"
 
   it("revokes every token of the user on logout-all, and only that user's", async () => {
     const { request } = await createTestContext();
@@ -73,6 +80,8 @@ describe("hidden: logout and sliding token expiry", { timeout: 30_000 }, () => {
     expect((await request("POST", "/api/auth/logout-all")).status).toBe(401);
   });
 
+  // Prompt: "GET /api/me should show the current expiresAt"
+
   it("includes the token's expiry in GET /api/me", async () => {
     const { request } = await createTestContext();
     const token = await login(request);
@@ -80,9 +89,10 @@ describe("hidden: logout and sliding token expiry", { timeout: 30_000 }, () => {
     const body = (await response.json()) as { id: string; expiresAt: string };
     expect(body.id).toBe("usr_ada");
     expect(typeof body.expiresAt).toBe("string");
-    expect(new Date(body.expiresAt).toISOString()).toBe(body.expiresAt);
     expect(Date.parse(body.expiresAt)).toBe(T0 + 24 * HOUR);
   });
+
+  // Prompt: "each authenticated request extends the token to TOKEN_TTL_HOURS from now"
 
   it("slides the expiry forward on every request", async () => {
     const { request } = await createTestContext();
@@ -95,15 +105,19 @@ describe("hidden: logout and sliding token expiry", { timeout: 30_000 }, () => {
     expect((await request("GET", "/api/projects", { token })).status).toBe(200);
   });
 
-  it("rejects a token from the exact moment it expires", async () => {
+  // Prompt: expiry itself (TOKEN_TTL_HOURS after login)
+
+  it("accepts an unused token until its expiry and rejects it after", async () => {
     const { request } = await createTestContext();
     const early = await login(request);
-    const exact = await login(request);
+    const late = await login(request);
     at(24 * HOUR - 1);
     expect((await me(request, early)).status).toBe(200);
-    at(24 * HOUR);
-    expect((await me(request, exact)).status).toBe(401);
+    at(24 * HOUR + 1);
+    expect((await me(request, late)).status).toBe(401);
   });
+
+  // Prompt: "never beyond 7 days after it was issued"
 
   it("never extends a token beyond 7 days after it was issued", async () => {
     const { request } = await createTestContext();
@@ -114,9 +128,11 @@ describe("hidden: logout and sliding token expiry", { timeout: 30_000 }, () => {
     }
     at(168 * HOUR - 1);
     expect(await expiresAtOf(request, token)).toBe(T0 + 168 * HOUR);
-    at(168 * HOUR);
+    at(168 * HOUR + 1);
     expect((await me(request, token)).status).toBe(401);
   });
+
+  // Prompt: "a revoked or expired token must stay dead"
 
   it("does not bring an expired token back", async () => {
     const { request, db } = await createTestContext();
@@ -129,6 +145,8 @@ describe("hidden: logout and sliding token expiry", { timeout: 30_000 }, () => {
     // Either the row was removed or its expiry was left where it was.
     for (const row of rows) expect(row.expires_at).toBeLessThanOrEqual(T0 + 24 * HOUR);
   });
+
+  // Prompt: "a revoked or expired token must stay dead" (also against requests in flight)
 
   it("does not bring a revoked token back, even with requests racing the logout", async () => {
     const { request } = await createTestContext();

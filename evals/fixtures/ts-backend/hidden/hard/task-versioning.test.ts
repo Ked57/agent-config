@@ -20,6 +20,7 @@ async function current(request: Context["request"], id: string) {
 }
 
 describe("hidden: optimistic concurrency on tasks", { timeout: 30_000 }, () => {
+  // Prompt: "tasks get a version (starting at 1 ...) that GET and PATCH also send as an ETag header like \"3\""
   it("starts existing and new tasks at version 1 with a quoted ETag", async () => {
     const { request } = await createTestContext();
     const seeded = await current(request, "tsk_4");
@@ -32,6 +33,8 @@ describe("hidden: optimistic concurrency on tasks", { timeout: 30_000 }, () => {
     expect((await current(request, id)).etag).toBe('"1"');
   });
 
+  // Prompt: "PATCH must send it back in If-Match" + "bumped on every real change"
+
   it("applies a PATCH sent with the current ETag and bumps the version", async () => {
     const { request } = await createTestContext();
     const { etag } = await current(request, "tsk_4");
@@ -41,6 +44,8 @@ describe("hidden: optimistic concurrency on tasks", { timeout: 30_000 }, () => {
     expect(await response.json()).toMatchObject({ title: "Renamed", version: 2 });
     expect((await current(request, "tsk_4")).task).toMatchObject({ title: "Renamed", version: 2 });
   });
+
+  // Prompt: "bumped on every real change"
 
   it("counts every successful change", async () => {
     const { request } = await createTestContext();
@@ -52,11 +57,17 @@ describe("hidden: optimistic concurrency on tasks", { timeout: 30_000 }, () => {
     expect(etag).toBe('"4"');
   });
 
+  // Prompt: "gets 428 without it"
+
+  // Prompt: "bumped on every real change": an empty PATCH or one that repeats current values is no change
+
   it("answers 428 to a PATCH without If-Match and changes nothing", async () => {
     const { request } = await createTestContext();
     expect((await patch(request, "tsk_4", { title: "No precondition" })).status).toBe(428);
     expect((await current(request, "tsk_4")).task).toMatchObject({ title: "Push notifications", version: 1 });
   });
+
+  // Prompt: "412 (with the current task as body) when it is stale", and a refused edit applies nothing
 
   it("answers 412 with the current task to an outdated If-Match and changes nothing", async () => {
     const { request } = await createTestContext();
@@ -79,12 +90,16 @@ describe("hidden: optimistic concurrency on tasks", { timeout: 30_000 }, () => {
     expect((await patch(request, "tsk_4", { title: "Now changed" }, '"1"')).status).toBe(200);
   });
 
+  // Prompt: "bumped on every real change": a rejected PATCH changes nothing
+
   it("does not bump the version when the existing rules reject the change", async () => {
     const { request } = await createTestContext();
     expect((await patch(request, "tsk_4", { status: "done" }, '"1"')).status).toBe(409);
     expect((await patch(request, "tsk_4", { assigneeId: "usr_gina" }, '"1"')).status).toBe(400);
     expect((await current(request, "tsk_4")).task).toMatchObject({ status: "todo", assigneeId: null, version: 1 });
   });
+
+  // Prompt: "tasks get a version" shown in every task response
 
   it("includes the version in project task lists", async () => {
     const { request } = await createTestContext();
@@ -97,6 +112,8 @@ describe("hidden: optimistic concurrency on tasks", { timeout: 30_000 }, () => {
     ]);
   });
 
+  // Prompt: "even simultaneous edits with the same If-Match must not overwrite each other"
+
   it("lets exactly one of several simultaneous edits with the same If-Match win", async () => {
     const { request } = await createTestContext();
     const titles = Array.from({ length: 8 }, (_, index) => `Edit ${index}`);
@@ -107,6 +124,8 @@ describe("hidden: optimistic concurrency on tasks", { timeout: 30_000 }, () => {
     const winner = titles[statuses.indexOf(200)];
     expect((await current(request, "tsk_4")).task).toMatchObject({ title: winner, version: 2 });
   });
+
+  // Prompt: "... must not overwrite each other": an edit that lost did not assign anyone, so it must not notify
 
   it("sends the assignment email only for the edit that won", async () => {
     const sent: MailMessage[] = [];
@@ -122,6 +141,8 @@ describe("hidden: optimistic concurrency on tasks", { timeout: 30_000 }, () => {
     expect(task.assigneeId).toBe(assignees[statuses.indexOf(200)]);
     expect(sent.map((message) => message.to)).toEqual([task.assigneeId === "usr_bob" ? "bob@acme.test" : "ada@acme.test"]);
   });
+
+  // Prompt: existing behaviour: other organizations' tasks are 404
 
   it("answers 404, not 412, for another organization's task", async () => {
     const { request } = await createTestContext();

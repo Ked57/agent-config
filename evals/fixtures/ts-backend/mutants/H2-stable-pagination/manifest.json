@@ -10,49 +10,43 @@
     {
       "file": "m1-offset-cursor.patch",
       "wrong": "The cursor encodes an offset, which shifts when tasks are created or deleted between pages",
-      "violates": "people create and delete tasks while others are paging ... every task that exists for the whole walk exactly once",
+      "violates": "every task exactly once, in order, even though ... tasks get created or deleted while someone is paging",
       "expect": "killed"
     },
     {
       "file": "m2-cursor-on-createdAt-only.patch",
       "wrong": "Keyset on createdAt alone (createdAt < cursor), skipping the rest of a tie group",
-      "violates": "many tasks with the very same createdAt ... exactly once",
+      "violates": "every task exactly once ... even though imports create many tasks with the same createdAt",
       "expect": "killed"
     },
     {
       "file": "m3-wrong-tuple-comparison.patch",
       "wrong": "Keyset written as createdAt <= c AND id < i instead of a tuple comparison",
-      "violates": "every task that exists for the whole walk exactly once",
+      "violates": "every task exactly once, in order",
       "expect": "killed"
     },
     {
       "file": "m4-cursor-is-last-id-looked-up.patch",
       "wrong": "The cursor is a task id looked up on the next request; 400 once that task is deleted",
-      "violates": "even when the task the cursor points at has been deleted in between",
+      "violates": "even though ... tasks get created or deleted while someone is paging",
       "expect": "killed"
     },
     {
       "file": "m5-no-tiebreak-in-order-by.patch",
       "wrong": "Keyset filter on (createdAt, id) but ORDER BY createdAt only",
-      "violates": "many tasks with the very same createdAt ... never repeat one",
+      "violates": "every task exactly once ... many tasks with the same createdAt",
       "expect": "killed"
     },
     {
       "file": "m6-full-last-page-still-has-cursor.patch",
       "wrong": "nextCursor is set whenever a page is full, so an exactly full last page has one",
-      "violates": "nextCursor is null on the last page, also when that page is exactly full",
+      "violates": "nextCursor null when there is nothing more",
       "expect": "killed"
     },
     {
       "file": "m7-no-maximum-limit.patch",
       "wrong": "limit has no upper bound",
-      "violates": "?limit (default 20, allowed 1 to 100, anything else is rejected with a 4xx)",
-      "expect": "killed"
-    },
-    {
-      "file": "m8-garbled-cursor-restarts.patch",
-      "wrong": "An undecodable cursor silently returns the first page",
-      "violates": "A garbled cursor is rejected with a 4xx",
+      "violates": "?limit (default 20, max 100)",
       "expect": "killed"
     }
   ]

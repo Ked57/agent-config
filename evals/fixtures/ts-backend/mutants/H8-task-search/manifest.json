@@ -10,43 +10,43 @@
     {
       "file": "m1-like-without-escaping.patch",
       "wrong": "LIKE with q pasted into the pattern",
-      "violates": "characters such as %, _ and \\ only match themselves",
+      "violates": "treat q as plain text",
       "expect": "killed"
     },
     {
       "file": "m2-like-escapes-percent-and-underscore-only.patch",
       "wrong": "LIKE ... ESCAPE '\\' escaping % and _ but not the backslash",
-      "violates": "characters such as %, _ and \\ only match themselves",
+      "violates": "treat q as plain text",
       "expect": "killed"
     },
     {
       "file": "m3-like-fully-escaped-ascii-case-only.patch",
       "wrong": "Correctly escaped LIKE, but SQLite folds only ASCII letters",
-      "violates": "ignoring letter case, also for non-English letters",
+      "violates": "case-insensitively (users write in German and French too)",
       "expect": "killed"
     },
     {
       "file": "m4-no-tie-break.patch",
       "wrong": "Sorted by updatedAt only",
-      "violates": "with ties broken by task id ascending",
+      "violates": "most recently updated first, ties by task id",
       "expect": "killed"
     },
     {
       "file": "m5-not-tenant-scoped.patch",
       "wrong": "Searches every organization's tasks",
-      "violates": "for the tasks in the caller's organization",
+      "violates": "tasks in the caller's organization",
       "expect": "killed"
     },
     {
       "file": "m6-project-filter-not-tenant-checked.patch",
       "wrong": "projectId filters without checking the project belongs to the caller (200 with no items)",
-      "violates": "is a 404 if the project is not in the caller's organization",
+      "violates": "optional ?projectId (404 if the project is not theirs)",
       "expect": "killed"
     },
     {
       "file": "m7-no-limit.patch",
       "wrong": "No limit on the number of results",
-      "violates": "Return at most 50 tasks",
+      "violates": "return the 50 most recently updated matches",
       "expect": "killed"
     },
     {
@@ -58,7 +58,7 @@
     {
       "file": "m9-length-checked-before-trimming.patch",
       "wrong": "Validates the length of q before trimming, so a blank q is accepted",
-      "violates": "must be 1 to 100 characters after trimming",
+      "violates": "reject an empty q",
       "expect": "killed"
     }
   ]

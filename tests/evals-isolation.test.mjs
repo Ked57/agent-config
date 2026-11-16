@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { compareInventories, filesNamingHome, installedPlugins, inventory, prepareRunHome } from '../evals/lib/arms.mjs';
 import { parseRemove, promptFor, resolveConfig, validateTaskSet } from '../evals/lib/config.mjs';
-import { baseEnv, isInside, killStrays, sandboxProblems } from '../evals/lib/env.mjs';
+import { assertSafeRoot, baseEnv, isInside, isStray, killStrays, removeTree, sandboxProblems } from '../evals/lib/env.mjs';
 import { moveTree } from '../evals/lib/fixtures.mjs';
 import { initEvent, initProblems, invokedCommands, loadedInstructionFiles, removalLeftovers, sessionComponents, sessionCostUsd, skillName, strayInstructionFiles, unexplainedComponents } from '../evals/lib/isolation.mjs';
 import { fixedFlagsOnResume } from '../evals/lib/plan.mjs';
@@ -219,7 +219,8 @@ test('moveTree moves a directory with its hard links intact', () => {
 });
 
 test('killStrays stops a detached server that carries the run home in its env', { skip: !fs.existsSync('/proc/self/environ') }, async () => {
-  const root = temp();
+  const scratch = temp();
+  const root = path.join(scratch, 'runs', 'r1');
   const home = path.join(root, 'home');
   fs.mkdirSync(home, { recursive: true });
   // Started in its own session and from outside the run dir, as `setsid npm run dev &` would be.
@@ -230,7 +231,7 @@ test('killStrays stops a detached server that carries the run home in its env', 
   assert.ok(killed.some((command) => command.startsWith('sleep 30')), killed.join());
   assert.equal(await exited, 'SIGKILL');
   assert.deepEqual(killStrays({ root, markers: [`HOME=${home}`] }), []);
-  fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(scratch, { recursive: true, force: true });
 });
 
 test('a plugin skill is found by its front matter name, not only its directory', () => {
@@ -256,4 +257,42 @@ test('validateTaskSet checks task files, the vitest-json reporter and the expect
   assert.match(task({ expectsComponents: ['a'], expectsPolicies: ['a'] }).join(), /not both/);
   assert.deepEqual(task({ checks: [{ id: 'h', type: 'command', run: 'vitest run', reporter: 'vitest-json' }] }), []);
   assert.match(task({ checks: [{ id: 'h', type: 'command', run: 'vitest run', reporter: 'junit' }] }).join(), /reporter must be vitest-json/);
+});
+
+test('removeTree deletes only strictly inside a deep root, never the root, a parent, or the home', () => {
+  const scratch = temp();
+  const root = path.join(scratch, 'sandbox', 'eval-abc123');
+  write(path.join(root, 'runs', 'r1', 'home', 'f'), 'x');
+  write(path.join(scratch, 'sandbox', 'other-eval', 'keep'), 'keep');
+  write(path.join(scratch, 'sandbox', 'eval-abc123-sibling', 'keep'), 'keep');
+  removeTree(path.join(root, 'runs', 'r1'), root);
+  assert.ok(!fs.existsSync(path.join(root, 'runs', 'r1')) && fs.existsSync(path.join(root, 'runs')));
+  for (const target of [root, path.join(root, '..'), path.join(root, 'runs', '..', '..'), `${root}-sibling`, path.join(scratch, 'sandbox', 'other-eval'), '', '/', null]) {
+    assert.throws(() => removeTree(target, root), /Refusing/, String(target));
+  }
+  assert.ok(fs.existsSync(path.join(scratch, 'sandbox', 'other-eval', 'keep')) && fs.existsSync(`${root}-sibling/keep`));
+  for (const shallow of ['/', '/var', '/var/tmp', 'relative/a/b/c', '', os.homedir(), path.dirname(os.homedir())]) {
+    assert.throws(() => assertSafeRoot(shallow), /Refusing/, shallow);
+    assert.throws(() => removeTree(path.join(shallow || '/x', 'a', 'b'), shallow), /Refusing/, shallow);
+  }
+  assert.equal(assertSafeRoot('/var/tmp/agent-config-evals'), '/var/tmp/agent-config-evals');
+  fs.rmSync(scratch, { recursive: true, force: true });
+});
+
+test('stray matching is exact on env entries and segment-wise on cwd, so /var/tmp prefixes never match', () => {
+  const root = '/var/tmp/agent-config-evals/e-1/runs/r1';
+  const markers = [`HOME=${root}/home`, `TMPDIR=${root}/tmp`];
+  const opts = { root, markers };
+  assert.ok(isStray({ environ: [`HOME=${root}/home`] }, opts));
+  assert.ok(isStray({ environ: [], cwd: `${root}/app/src` }, opts));
+  assert.ok(isStray({ environ: [], cwd: root }, opts));
+  for (const proc of [
+    { environ: ['HOME=/var/tmp'], cwd: '/var/tmp' },
+    { environ: [`HOME=${root}/home2`, `TMPDIR=${root}/tmp/x`], cwd: '/var/tmp/agent-config-evals/e-1/runs' },
+    { environ: ['HOME=/home/u'], cwd: `${root}2/app` },
+    { environ: [`PWD=${root}/home`, `OLDHOME=${root}/home`], cwd: '/var/tmp/repo-evals-work/agent-c' }
+  ]) assert.ok(!isStray(proc, opts), JSON.stringify(proc));
+  assert.throws(() => killStrays({ root: '/var/tmp', markers: ['HOME=/var/tmp/x'] }), /Refusing/);
+  assert.throws(() => killStrays({ root, markers: ['HOME=/var/tmp'] }), /Refusing stray marker/);
+  assert.throws(() => killStrays({ root, markers: [`HOME=${root}`] }), /Refusing stray marker/);
 });

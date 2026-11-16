@@ -10,7 +10,7 @@
   "gates": {
     "lint": "eslint . --max-warnings 0",
     "typecheck": "vue-tsc --build --force",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout=30000",
     "build": "vite build"
   },
   "dependencies": { "type": "npm", "file": "package.json" },

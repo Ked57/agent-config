@@ -10,55 +10,49 @@
     {
       "file": "m1-read-then-write.patch",
       "wrong": "Reads the balance, decides in JS, then writes the new balance",
-      "violates": "requests that arrive at the same time ... must never overdraw or double-spend",
+      "violates": "The balance must never go negative, even when requests arrive at the same time",
       "expect": "killed"
     },
     {
       "file": "m2-atomic-update-but-check-then-insert-key.patch",
       "wrong": "Atomic conditional deduction, but the idempotency key is looked up before and stored after spending",
-      "violates": "including retries with the same key ... must never ... double-spend",
+      "violates": "a retry must get the original response back and never be charged twice",
       "expect": "killed"
     },
     {
       "file": "m3-replay-returns-current-balance.patch",
       "wrong": "A replayed key answers with the current balance instead of the first answer",
-      "violates": "must return exactly the same status and body as the first request with that key",
+      "violates": "a retry must get the original response back",
       "expect": "killed"
     },
     {
       "file": "m4-refusals-not-remembered.patch",
       "wrong": "Only successful spends are recorded under the key, so a refused key is retried after a top-up",
-      "violates": "even if that one was refused or the balance has changed since",
+      "violates": "a retry must get the original response back",
       "expect": "killed"
     },
     {
       "file": "m5-key-not-scoped-to-org.patch",
       "wrong": "Idempotency keys are unique across all organizations",
-      "violates": "the same key in another organization is unrelated",
+      "violates": "so members of an organization can spend its credits",
       "expect": "killed"
     },
     {
       "file": "m6-interactive-transaction.patch",
       "wrong": "Read-check-write inside db.transaction(); concurrent requests fail with SQLITE_BUSY (500)",
-      "violates": "must each get a proper 200 or 402 (never an error)",
+      "violates": "requests that arrive together must each still get a 200 or 402",
       "expect": "killed"
     },
     {
       "file": "m7-ignores-idempotency-key.patch",
       "wrong": "Idempotency-Key header is ignored",
-      "violates": "repeating a key already used in the same organization ... must not spend again",
-      "expect": "killed"
-    },
-    {
-      "file": "m8-key-scoped-to-user.patch",
-      "wrong": "Keys are scoped per user, so another user of the organization repeating a key spends again",
-      "violates": "repeating a key already used in the same organization (by any of its users)",
+      "violates": "a retry must get the original response back and never be charged twice",
       "expect": "killed"
     },
     {
       "file": "m9-cannot-spend-to-zero.patch",
       "wrong": "Requires the balance to exceed the amount (> instead of >=)",
-      "violates": "spending down to exactly 0 is fine",
+      "violates": "402 when the balance is too low",
       "expect": "killed"
     }
   ]

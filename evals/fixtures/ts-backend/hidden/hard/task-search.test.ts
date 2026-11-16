@@ -33,6 +33,7 @@ async function search(request: Context["request"], query: string, token: string 
 const q = (text: string) => `q=${encodeURIComponent(text)}`;
 
 describe("hidden: task search", { timeout: 30_000 }, () => {
+  // Prompt: "tasks ... whose title or description contains q, case-insensitively"
   it("finds tasks whose title contains q, ignoring letter case", async () => {
     const { request } = await createTestContext();
     expect(await search(request, q("SIGNUP"))).toEqual(["tsk_3"]);
@@ -42,12 +43,16 @@ describe("hidden: task search", { timeout: 30_000 }, () => {
     expect(items[0]).toMatchObject({ id: "tsk_3", title: "Fix broken signup link", projectId: "prj_web" });
   });
 
+  // Prompt: "title or description contains q"
+
   it("finds tasks by their description too", async () => {
     const { request, db } = await createTestContext();
     await addTasks(db, [{ id: "tsk_desc", title: "Quarterly chores", description: "Renew the TLS Certificate before March" }]);
     expect(await search(request, q("tls certificate"))).toEqual(["tsk_desc"]);
     expect(await search(request, q("chores"))).toEqual(["tsk_desc"]);
   });
+
+  // Prompt: "tasks in the caller's organization"
 
   it("never returns another organization's tasks", async () => {
     const { request } = await createTestContext();
@@ -56,10 +61,14 @@ describe("hidden: task search", { timeout: 30_000 }, () => {
     expect(await search(request, q("signup"), SEED_TOKENS.globexAdmin)).toEqual([]);
   });
 
+  // Prompt: existing convention: every /api/tasks route needs a token
+
   it("requires authentication", async () => {
     const { request } = await createTestContext();
     expect((await request("GET", `/api/tasks/search?${q("signup")}`)).status).toBe(401);
   });
+
+  // Prompt: "treat q as plain text"
 
   it("matches % literally", async () => {
     const { request, db } = await createTestContext();
@@ -70,6 +79,8 @@ describe("hidden: task search", { timeout: 30_000 }, () => {
     expect(await search(request, q("100%"))).toEqual(["tsk_pct"]);
     expect(await search(request, q("%"))).toEqual(["tsk_pct"]);
   });
+
+  // Prompt: "treat q as plain text"
 
   it("matches _ literally", async () => {
     const { request, db } = await createTestContext();
@@ -82,6 +93,8 @@ describe("hidden: task search", { timeout: 30_000 }, () => {
     expect(await search(request, q("_"))).toEqual(["tsk_snake"]);
   });
 
+  // Prompt: "treat q as plain text"
+
   it("matches a backslash literally", async () => {
     const { request, db } = await createTestContext();
     await addTasks(db, [
@@ -92,6 +105,8 @@ describe("hidden: task search", { timeout: 30_000 }, () => {
     expect(await search(request, q("\\"))).toEqual(["tsk_win"]);
     expect(await search(request, q("\\%"))).toEqual([]);
   });
+
+  // Prompt: "case-insensitively (users write in German and French too)"
 
   it("ignores letter case for non-English letters too", async () => {
     const { request, db } = await createTestContext();
@@ -105,6 +120,8 @@ describe("hidden: task search", { timeout: 30_000 }, () => {
     expect(await search(request, q("été"))).toEqual(["tsk_fr"]);
   });
 
+  // Prompt: "most recently updated first, ties by task id"
+
   it("orders by most recently updated, ties broken by id", async () => {
     const { request, db } = await createTestContext();
     await addTasks(db, [
@@ -116,6 +133,8 @@ describe("hidden: task search", { timeout: 30_000 }, () => {
     ]);
     expect(await search(request, q("migrate"))).toEqual(["tsk_m_b", "tsk_m_a", "tsk_m_d", "tsk_m_e", "tsk_m_c"]);
   });
+
+  // Prompt: "return the 50 most recently updated matches"
 
   it("returns at most 50 tasks, the most recently updated ones", async () => {
     const { request, db } = await createTestContext();
@@ -129,16 +148,19 @@ describe("hidden: task search", { timeout: 30_000 }, () => {
     expect(ids.at(-1)).toBe("tsk_bulk_10");
   });
 
-  it("rejects a missing, blank or too long q with a 4xx", async () => {
+  // Prompt: "reject an empty q"
+
+  it("rejects a missing or blank q with a 4xx", async () => {
     const { request } = await createTestContext();
-    for (const query of ["", "q=", `q=${encodeURIComponent("   ")}`, q("x".repeat(101)), q(` ${"y".repeat(101)} `)]) {
+    for (const query of ["", "q=", `q=${encodeURIComponent("   ")}`]) {
       const response = await request("GET", `/api/tasks/search?${query}`, { token: SEED_TOKENS.acmeMember });
       expect(response.status).toBeGreaterThanOrEqual(400);
       expect(response.status).toBeLessThan(500);
     }
-    expect((await request("GET", `/api/tasks/search?${q("x".repeat(100))}`, { token: SEED_TOKENS.acmeMember })).status).toBe(200);
-    expect((await request("GET", `/api/tasks/search?${q(`  ${"x".repeat(100)}  `)}`, { token: SEED_TOKENS.acmeMember })).status).toBe(200);
+    expect((await request("GET", `/api/tasks/search?${q("  signup  ")}`, { token: SEED_TOKENS.acmeMember })).status).toBe(200);
   });
+
+  // Prompt: "optional ?projectId (404 if the project is not theirs)"
 
   it("narrows to one project with projectId, which must be in the caller's organization", async () => {
     const { request, db } = await createTestContext();

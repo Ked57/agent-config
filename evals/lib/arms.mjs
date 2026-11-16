@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { TELEMETRY_OFF } from './env.mjs';
+import { removeTree, TELEMETRY_OFF } from './env.mjs';
 import { skillName } from './isolation.mjs';
 
 export const WORKTREE = 'WORKTREE';
@@ -42,7 +42,7 @@ const copyWorkingTree = (repoRoot, destination) => {
 /** Resolves a toggle source to a function that materialises the content at `targetPath` under `src`. */
 function applyAdd(repoRoot, src, toggle) {
   const target = path.join(src, toggle.path);
-  fs.rmSync(target, { recursive: true, force: true });
+  removeTree(target, src);
   const fromRef = (ref, sourcePath) => {
     const sha = tryRevParse(repoRoot, ref);
     if (!sha) throw new Error(`Unknown ref in toggle: ${ref}`);
@@ -210,7 +210,7 @@ export const RUN_HOME_PATHS = ['.claude', '.agents', '.agent-config', '.cursor/p
  * into the run's own copy.
  */
 export function prepareRunHome({ template, home, files = [] }) {
-  fs.rmSync(home, { recursive: true, force: true });
+  removeTree(home, path.dirname(home));
   fs.mkdirSync(home, { recursive: true });
   for (const relative of RUN_HOME_PATHS) {
     const source = path.join(template, relative);
@@ -246,11 +246,11 @@ async function removePlugin({ src, home, env, id }) {
       for (const name of entry.skills) {
         // A skill this repository installs itself is not the plugin's to remove.
         if (fs.existsSync(path.join(src, 'skills', name))) continue;
-        for (const root of ['.claude/skills', '.agents/skills', '.cursor/skills']) fs.rmSync(path.join(home, root, name), { recursive: true, force: true });
+        for (const root of ['.claude/skills', '.agents/skills', '.cursor/skills']) removeTree(path.join(home, root, name), path.join(home, root));
         removed.skills.push(name);
       }
     } else if (entry.kind === 'cursor-local') {
-      fs.rmSync(path.join(home, '.cursor', 'plugins', 'local', entry.directory), { recursive: true, force: true });
+      removeTree(path.join(home, '.cursor', 'plugins', 'local', entry.directory), path.join(home, '.cursor', 'plugins', 'local'));
     } else {
       // Codex plugins are not read by Claude Code runs; the Codex provider will need this.
       removed.skipped.push(`${entry.harness} ${entry.kind}`);
@@ -269,7 +269,7 @@ export async function buildArm({ repoRoot, spec, armDir, plugins = 'install', np
   const src = path.join(armDir, 'src');
   const home = path.join(armDir, 'home');
   if (path.resolve(home) === path.resolve(os.homedir())) throw new Error('Refusing to install an arm into the real home directory');
-  fs.rmSync(armDir, { recursive: true, force: true });
+  removeTree(armDir, path.dirname(armDir));
   fs.mkdirSync(home, { recursive: true });
   const env = {
     PATH: process.env.PATH,
@@ -300,11 +300,11 @@ export async function buildArm({ repoRoot, spec, armDir, plugins = 'install', np
   for (const removal of spec.remove.filter((item) => !item.startsWith('plugin:'))) {
     const target = path.join(src, removal);
     if (!fs.existsSync(target)) throw new Error(`--remove target does not exist in ${spec.ref}: ${removal}`);
-    fs.rmSync(target, { recursive: true, force: true });
+    removeTree(target, src);
   }
   // The installer never reads evals/, and the agent can reach this directory by relative path from
   // its working copy: a ref that carries the suite would hand it the hidden tests and the checks.
-  fs.rmSync(path.join(src, 'evals'), { recursive: true, force: true });
+  removeTree(path.join(src, 'evals'), src);
   const before = liveConfigSnapshot();
   const install = spawnSync(process.execPath, [path.join(src, 'bin', 'agent-config.mjs'), 'sync', '--user'], { cwd: src, encoding: 'utf8', env, timeout: 15 * 60 * 1000, maxBuffer: 64 * 1024 * 1024 });
   if (install.status !== 0) throw new Error(`agent-config sync failed for ${spec.ref}: ${install.stderr || install.stdout || install.error}`);

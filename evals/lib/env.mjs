@@ -51,16 +51,41 @@ export function sandboxProblems(sandbox, home = os.homedir()) {
 }
 
 /**
+ * Throws unless `root` can own deletable trees: absolute, at least three path segments deep (so never
+ * `/`, `/var` or `/var/tmp`), and neither the home directory nor one of its ancestors.
+ */
+export function assertSafeRoot(root, home = os.homedir()) {
+  const resolved = path.resolve(String(root ?? ''));
+  const depth = resolved.split(path.sep).filter(Boolean).length;
+  if (!root || !path.isAbsolute(String(root)) || depth < 3 || isInside(home, resolved)) throw new Error(`Refusing to treat ${root} as a deletable root (too shallow, or the home or one of its ancestors)`);
+  return resolved;
+}
+
+/** Recursively deletes `target`, which must sit strictly below `root` (see `assertSafeRoot`). */
+export function removeTree(target, root) {
+  const base = assertSafeRoot(root);
+  const resolved = path.resolve(String(target ?? ''));
+  if (!target || !resolved.startsWith(base + path.sep)) throw new Error(`Refusing to delete ${target}: not inside ${base}`);
+  fs.rmSync(resolved, { recursive: true, force: true });
+}
+
+/**
  * Kills what a run left behind: processes whose environment carries one of `markers` (e.g.
  * `HOME=<run home>`, inherited by everything the agent spawned, even after `setsid`) or whose cwd sits
  * under `root`. `pkill -f <app>` missed servers started with relative paths. Linux only (reads /proc).
- * Returns the killed processes' command lines.
+ * Returns the killed processes' command lines. `root` must be a run dir (see `assertSafeRoot`) and
+ * every marker `KEY=<path>` must name a path inside it.
  */
 export function killStrays({ root, markers }) {
+  const base = assertSafeRoot(root);
+  for (const marker of markers) {
+    const value = /^[A-Z_]+=(.+)$/.exec(marker)?.[1];
+    if (!value || !path.resolve(value).startsWith(base + path.sep)) throw new Error(`Refusing stray marker ${marker}: not a path inside ${base}`);
+  }
   if (!fs.existsSync('/proc/self/environ')) return [];
   const killed = [];
   for (const pid of fs.readdirSync('/proc').filter((name) => /^\d+$/.test(name)).map(Number)) {
-    if (pid === process.pid) continue;
+    if (pid === process.pid || pid === process.ppid) continue;
     let environ;
     let cwd = '';
     try {
@@ -69,7 +94,7 @@ export function killStrays({ root, markers }) {
     } catch {
       if (!environ) continue; // another user's process, or already gone
     }
-    if (!markers.some((marker) => environ.includes(marker)) && !(cwd && isInside(cwd, root))) continue;
+    if (!isStray({ environ, cwd }, { root: base, markers })) continue;
     let command = String(pid);
     try {
       command = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').join(' ').trim() || command;
@@ -85,6 +110,13 @@ export function killStrays({ root, markers }) {
   }
   return killed;
 }
+
+/**
+ * Whether a process belongs to a run: an environment entry equal to a marker (whole entries, so
+ * `HOME=/var/tmp/x` never matches `HOME=/var/tmp/x2` or `HOME=/var/tmp`), or a cwd at or below `root`
+ * (whole path segments).
+ */
+export const isStray = ({ environ = [], cwd = '' }, { root, markers }) => markers.some((marker) => environ.includes(marker)) || Boolean(cwd && isInside(cwd, root));
 
 /**
  * agent-browser looks for its Chrome under $HOME, which is now an empty arm home. Point it at the

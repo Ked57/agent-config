@@ -6,18 +6,19 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { aggregate } from './lib/aggregate.mjs';
+import { aggregate, compareTasks } from './lib/aggregate.mjs';
 import { buildArm, compareInventories, installedPlugins, inventory, prepareRunHome } from './lib/arms.mjs';
 import { browserSmoke } from './lib/browser.mjs';
+import { combineEvals } from './lib/combine.mjs';
 import { scoreRun } from './lib/checks.mjs';
 import { DEFAULTS, judgeSetId, parseArgs, promptFor, resolveConfig, validateTaskSet } from './lib/config.mjs';
-import { browserToolEnv, killStrays, sandboxProblems, sandboxRoot } from './lib/env.mjs';
+import { assertSafeRoot, browserToolEnv, killStrays, removeTree, sandboxProblems, sandboxRoot } from './lib/env.mjs';
 import { httpSmoke } from './lib/http-smoke.mjs';
 import { copyForRun, copyTaskFiles, fixtureHash, loadFixture, moveTree, preparePristine, verifyPristine } from './lib/fixtures.mjs';
 import { initEvent, initProblems, invokedCommands, loadedInstructionFiles, removalLeftovers, sessionComponents, sessionCostUsd, strayInstructionFiles, unexplainedComponents } from './lib/isolation.mjs';
 import { buildJudgePrompt, judgePair } from './lib/judge.mjs';
 import { measureRun, recheckRun } from './lib/measure.mjs';
-import { budgetAllows, buildRunQueue, changedArmFiles, fixedFlagsOnResume, flippedChecks, planJudgePairs } from './lib/plan.mjs';
+import { budgetAllows, buildRunQueue, changedArmFiles, fixedFlagsOnResume, flippedChecks, planJudgePairs, semaphore } from './lib/plan.mjs';
 import { agentProvider, judgeProvider } from './lib/providers/index.mjs';
 import { renderReport } from './lib/report.mjs';
 
@@ -29,6 +30,9 @@ const EVALS_HOME = process.env.AGENT_CONFIG_EVALS_HOME ?? path.join(os.homedir()
 const SANDBOX_ROOT = sandboxRoot();
 const CACHE_ROOT = path.join(SANDBOX_ROOT, '.cache');
 const MAX_DIFF_CHARS = 60000;
+// Gates and hidden tests run in this process's children next to up to --concurrency agents; under
+// that load Vitest's timeouts trip. At most this many measure/smoke phases run at once.
+const CHECK_PHASES = 2;
 
 const USAGE = `Usage: npm run eval -- --b <ref> [options]
 
@@ -71,7 +75,9 @@ Execution
                             (hidden tests included); no agent runs, gates are not re-run.
   --no-strict-isolation     Keep going after a run fails the isolation check (it is excluded either way).
   --dry-run                 Build arms and fixture, print the plan, call no models.
-  --name <name>             Label for the results dir and report.`;
+  --name <name>             Label for the results dir and report.
+  --combine <dir> <dir> ... Pool finished evals of different task sets (same arms, plugins, model) into a
+                            new results dir and report over all their tasks. No model calls.`;
 
 const log = (...parts) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...parts);
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -154,7 +160,7 @@ async function probeArms({ provider, sandbox, outDir, armsInfo, armIds }) {
     const home = path.join(dir, 'home');
     const cwd = path.join(dir, 'cwd');
     const tmp = path.join(dir, 'tmp');
-    fs.rmSync(dir, { recursive: true, force: true });
+    removeTree(dir, sandbox);
     if (template) prepareRunHome({ template, home, files });
     for (const directory of [home, cwd, tmp]) fs.mkdirSync(directory, { recursive: true });
     const transcriptPath = path.join(dir, 'transcript.jsonl');
@@ -175,7 +181,7 @@ async function probeArms({ provider, sandbox, outDir, armsInfo, armIds }) {
   const builtin = await session('builtin', null);
   if (builtin.problems.length || builtin.instructions.length) throw new Error(`An empty home already loads more than Claude Code's built-ins: ${[...builtin.problems, ...builtin.instructions].join('; ')}`);
   armsInfo.builtins = { skills: builtin.components.skills, plugins: builtin.components.plugins, agents: builtin.components.agents, slashCommands: builtin.components.slashCommands, claudeCodeVersion: builtin.init.claude_code_version ?? null };
-  fs.rmSync(builtin.dir, { recursive: true, force: true });
+  removeTree(builtin.dir, sandbox);
   for (const arm of armIds) {
     const info = armsInfo[arm];
     const probe = await session(`arm-${arm}`, info.home, info.homePathFiles);
@@ -191,9 +197,9 @@ async function probeArms({ provider, sandbox, outDir, armsInfo, armIds }) {
     if (problems.length) throw new Error(`Arm ${arm} (${info.ref}) failed its probe: ${problems.join('; ')}`);
     info.expected = probe.components;
     info.probe = { instructions: probe.instructions, costUsd: probe.costUsd, claudeCodeVersion: probe.init.claude_code_version ?? null };
-    fs.rmSync(probe.dir, { recursive: true, force: true });
+    removeTree(probe.dir, sandbox);
   }
-  fs.rmSync(probeRoot, { recursive: true, force: true });
+  removeTree(probeRoot, sandbox);
 }
 
 async function pool(items, concurrency, worker, shouldStop) {
@@ -203,9 +209,71 @@ async function pool(items, concurrency, worker, shouldStop) {
   }));
 }
 
+/** The saved state of a finished eval, as `combineEvals` takes it. */
+function loadEval(dir) {
+  const config = readJson(path.join(dir, 'config.json'));
+  const judgeRoot = path.join(dir, 'results', 'judge');
+  const judgeSets = Object.fromEntries((fs.existsSync(judgeRoot) ? fs.readdirSync(judgeRoot, { withFileTypes: true }) : [])
+    .filter((entry) => entry.isDirectory()).map((entry) => [entry.name, readDir(path.join(judgeRoot, entry.name))]));
+  return { dir, config, taskSet: readJson(path.join(dir, 'taskset.json')), armsInfo: readJson(path.join(dir, 'arms.json')), runs: readDir(path.join(dir, 'results', 'runs')), judgeSets };
+}
+
+/**
+ * `--combine`: one results dir whose runs, tasks and judgments are the union of the inputs', reported
+ * like any eval, plus a descriptive per-fixture breakdown. The inputs are only read.
+ */
+function combineMain(raw) {
+  const inputs = raw.combine.map((dir) => loadEval(path.resolve(dir)));
+  const name = raw.name ?? 'combined';
+  const merged = combineEvals(inputs, { name });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const outDir = path.resolve(raw.out ?? path.join(EVALS_HOME, `${stamp}-${name}`));
+  if (fs.existsSync(path.join(outDir, 'config.json'))) throw new Error(`${outDir} already holds an eval`);
+  writeJson(path.join(outDir, 'config.json'), merged.config);
+  writeJson(path.join(outDir, 'taskset.json'), merged.taskSet);
+  writeJson(path.join(outDir, 'arms.json'), merged.armsInfo);
+  for (const run of merged.runs) writeJson(path.join(outDir, 'results', 'runs', `${run.id}.json`), run);
+  for (const [set, judgments] of Object.entries(merged.judgeSets)) for (const judgment of judgments) writeJson(path.join(outDir, 'results', 'judge', set, `${judgment.id}.json`), judgment);
+  // Diffs, transcripts and session logs come along (judgments are tied to patch hashes); worked copies stay in the source dirs.
+  for (const { dir, from, to } of merged.renames) {
+    const source = path.join(dir, 'runs', from);
+    if (!fs.existsSync(source)) continue;
+    for (const entry of fs.readdirSync(source)) {
+      if (entry !== 'app') fs.cpSync(path.join(source, entry), path.join(outDir, 'runs', to, entry), { recursive: true });
+    }
+  }
+  appendAudit(outDir, { action: 'combine', inputs: merged.config.combined.inputs });
+  const activeJudgeSet = judgeSetId(merged.config);
+  const judgments = merged.judgeSets[activeJudgeSet] ?? [];
+  const otherJudgeSets = Object.fromEntries(Object.entries(merged.judgeSets).filter(([set]) => set !== activeJudgeSet));
+  const summary = aggregate({ config: merged.config, taskSet: merged.taskSet, armsInfo: merged.armsInfo, runs: merged.runs, judgments, activeJudgeSet, otherJudgeSets });
+  // Per fixture, descriptive only: the verdict is the pooled one above.
+  summary.perFixture = Object.fromEntries([...new Set(merged.taskSet.tasks.map((task) => task.fixture))].map((fixture) => {
+    const taskIds = merged.config.taskIds.filter((id) => merged.taskSet.tasks.find((task) => task.id === id)?.fixture === fixture);
+    const runs = merged.runs.filter((run) => run.fixture === fixture && run.status !== 'isolation');
+    const primary = merged.config.singleArm ? null : compareTasks({ runs, taskIds, seed: merged.config.seed ?? 1, bounds: [0, 1], metric: 'run score', value: (run) => scoreRun(run).score });
+    return [fixture, { tasks: primary?.tasks ?? taskIds.length, runs: runs.length, meanA: primary?.meanA ?? null, meanB: primary?.meanB ?? null, meanD: primary?.mean ?? null }];
+  }));
+  summary.warnings = [];
+  summary.history = readAudit(outDir);
+  writeJson(path.join(outDir, 'summary.json'), summary);
+  const spend = { runsUsd: merged.runs.reduce((sum, run) => sum + (run.cost?.usd ?? 0), 0), judgeUsd: Object.values(merged.judgeSets).flat().reduce((sum, judgment) => sum + (judgment.costUsd ?? 0), 0) };
+  const f = (value) => (value === null || value === undefined ? '–' : value.toFixed(2));
+  const breakdown = [
+    '', '## Per fixture (descriptive)', '',
+    `Combined from ${merged.config.combined.inputs.map((input) => `\`${input.taskSet}\` (${input.runs} runs, \`${input.dir}\`)`).join(', ')}. The verdict above pools every task; these means are not separate tests.`, '',
+    '| Fixture | Paired tasks | Runs | Score A | Score B | Mean d (B−A) |', '|---|---|---|---|---|---|',
+    ...Object.entries(summary.perFixture).map(([fixture, row]) => `| \`${fixture}\` | ${row.tasks} | ${row.runs} | ${f(row.meanA)} | ${f(row.meanB)} | ${f(row.meanD)} |`), ''
+  ];
+  fs.writeFileSync(path.join(outDir, 'REPORT.md'), `${renderReport({ summary, config: merged.config, armsInfo: merged.armsInfo, taskSet: merged.taskSet, fixture: { name: merged.taskSet.fixture }, spend })}${breakdown.join('\n')}`);
+  log(`Combined ${inputs.length} evals (${merged.runs.length} runs, ${merged.config.taskIds.length} tasks) → ${outDir}`);
+  log(`Verdict: ${summary.recommendation.verdict}. Report: ${path.join(outDir, 'REPORT.md')}`);
+}
+
 async function main() {
   const raw = parseArgs(process.argv.slice(2));
   if (raw.help) return console.log(USAGE);
+  if (raw.combine) return combineMain(raw);
 
   let config;
   let outDir;
@@ -213,6 +281,7 @@ async function main() {
   if (raw.resume) {
     outDir = path.resolve(raw.resume);
     config = readJson(path.join(outDir, 'config.json'));
+    if (config.combined) throw new Error(`${outDir} was made by --combine: re-run (--resume, --recheck, --rejudge) on the source dirs, then combine again: ${config.combined.inputs.map((input) => input.dir).join(' ')}`);
     taskSet = readJson(path.join(outDir, 'taskset.json'));
     const fixed = fixedFlagsOnResume(raw);
     if (fixed.length) throw new Error(`--resume keeps the eval's arms, tasks, model and reps: drop ${fixed.join(', ')} or start a new eval`);
@@ -258,11 +327,20 @@ async function main() {
   // reported, rechecked and rejudged, but new agent runs need arms built in a sandbox.
   const sandbox = config.sandbox ?? path.join(SANDBOX_ROOT, `${path.basename(outDir)}-${sha256(outDir).slice(0, 6)}`);
   const armsFile = path.join(outDir, 'arms.json');
+  // Everything below deletes only inside this eval's own sandbox dir; a bad config.json must not widen it.
+  assertSafeRoot(sandbox);
   // Arm builds, agent runs and the judge all execute in the sandbox.
   if (!fs.existsSync(armsFile) || agentRunsWanted || (config.judge && !reportOnly)) {
     const problems = sandboxProblems(sandbox);
     if (problems.length) throw new Error(`Refusing to run agents: ${problems.join('; ')}. Set AGENT_CONFIG_EVALS_SANDBOX to a directory outside your home with no agent config above it.`);
     if (agentRunsWanted && !config.sandbox && fs.existsSync(armsFile)) throw new Error('This eval predates the sandbox (its agents ran under the results dir): start a new eval for new runs, or use --report-only, --rejudge or --recheck.');
+  }
+  // Harness children (fixture setup, gates, hidden tests, smoke servers, the judge's empty cwd) get a
+  // temp dir on local disk in the sandbox root. It carries no eval name, which the judge would see.
+  if (!reportOnly) {
+    const harnessTmp = path.join(SANDBOX_ROOT, '.tmp');
+    fs.mkdirSync(harnessTmp, { recursive: true });
+    for (const key of ['TMPDIR', 'TMP', 'TEMP']) process.env[key] = harnessTmp;
   }
   const tasksById = Object.fromEntries(taskSet.tasks.map((task) => [task.id, task]));
   const armIds = config.singleArm ? ['A'] : ['A', 'B'];
@@ -381,9 +459,10 @@ async function main() {
   }
 
   let inFlight = 0;
+  const checkPhases = semaphore(CHECK_PHASES);
   log(`${pending.length} run(s) pending, ${runs.length} already done, $${spent().toFixed(2)} spent so far`);
   // A run interrupted mid-way has no result file: its sandbox dir is stale and is redone from scratch.
-  if (pending.length) fs.rmSync(path.join(sandbox, 'runs'), { recursive: true, force: true });
+  if (pending.length) removeTree(path.join(sandbox, 'runs'), sandbox);
   await pool(pending, config.concurrency, async (job) => {
     const budget = budgetAllows(config, { spentUsd: spent(), runsDone: runs.length, runsInFlight: inFlight });
     if (!budget.ok) {
@@ -395,13 +474,14 @@ async function main() {
     const runHome = path.join(runRoot, 'home');
     const tmp = path.join(runRoot, 'tmp');
     const strayMarkers = [`HOME=${runHome}`, `TMPDIR=${tmp}`];
+    let releaseChecks = () => {};
     try {
       const task = tasksById[job.task];
       const arm = armsInfo[job.arm];
       const runDir = path.join(outDir, 'runs', job.id);
       const app = path.join(runRoot, 'app');
-      fs.rmSync(runRoot, { recursive: true, force: true });
-      fs.rmSync(runDir, { recursive: true, force: true });
+      removeTree(runRoot, sandbox);
+      removeTree(runDir, outDir);
       fs.mkdirSync(runDir, { recursive: true });
       fs.mkdirSync(tmp, { recursive: true });
       prepareRunHome({ template: arm.home, home: runHome, files: arm.homePathFiles });
@@ -433,6 +513,7 @@ async function main() {
         copyForRun(fixture, pristine, base);
         copyTaskFiles(fixture, task.files, base);
       }
+      releaseChecks = await checkPhases.acquire();
       const record = measureRun({ job, fixture, pristine: base, runDir, app, taskSet, task, provider, armsInfo, agentResult, prompt });
       record.fixtureHash = currentFixtureHash;
       record.prompt = prompt;
@@ -460,6 +541,7 @@ async function main() {
       }
       if (config.browser) record.browser = await browserSmoke({ fixture, app, outDir: path.join(runDir, 'screens'), cacheRoot: CACHE_ROOT }).catch((error) => ({ ok: false, error: String(error), routes: {} }));
       if (config.http) record.http = await httpSmoke({ fixture, app, outDir: path.join(runDir, 'http') }).catch((error) => ({ ok: false, error: String(error), requests: {} }));
+      releaseChecks();
       // The worked copy joins the results (same filesystem: a rename, hard links intact) so --recheck,
       // gates and diff.patch keep working; the session logs are kept; the run's home and tmp go.
       killStrays({ root: runRoot, markers: strayMarkers });
@@ -477,8 +559,9 @@ async function main() {
     } catch (error) {
       log(`FAILED ${job.id}: ${error.message}`);
     } finally {
+      releaseChecks();
       killStrays({ root: runRoot, markers: strayMarkers });
-      fs.rmSync(runRoot, { recursive: true, force: true });
+      removeTree(runRoot, sandbox);
       inFlight -= 1;
     }
   }, () => Boolean(stopReason));

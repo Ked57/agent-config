@@ -10,55 +10,55 @@
     {
       "file": "m1-viewer-blocked-on-patch-delete-only.patch",
       "wrong": "Viewers are refused on PATCH and DELETE only, so they can still POST",
-      "violates": "every endpoint that creates, changes or deletes something must answer them 403",
+      "violates": "viewers ... cannot change anything (403)",
       "expect": "killed"
     },
     {
       "file": "m2-viewer-can-create-projects.patch",
       "wrong": "The viewer check misses POST /api/projects",
-      "violates": "every endpoint that creates, changes or deletes something must answer them 403",
+      "violates": "viewers ... cannot change anything (403)",
       "expect": "killed"
     },
     {
       "file": "m3-viewer-assignee-checked-on-create-only.patch",
       "wrong": "Assigning a viewer is refused on create but allowed on PATCH",
-      "violates": "assigning one, when creating a task or when updating one, is a 400",
+      "violates": "tasks cannot be assigned to them (400)",
       "expect": "killed"
     },
     {
       "file": "m4-viewer-assignee-checked-on-update-only.patch",
       "wrong": "Assigning a viewer is refused on PATCH but allowed on create",
-      "violates": "assigning one, when creating a task or when updating one, is a 400",
+      "violates": "tasks cannot be assigned to them (400)",
       "expect": "killed"
     },
     {
       "file": "m5-role-cached-per-token.patch",
       "wrong": "The role is cached per token on first use",
-      "violates": "A new role takes effect on the user's existing tokens immediately",
+      "violates": "effective immediately",
       "expect": "killed"
     },
     {
       "file": "m6-count-then-update.patch",
       "wrong": "Counts the other admins, then updates in a separate statement; two simultaneous demotions both pass",
-      "violates": "that must hold even when two admins demote each other at the same time",
+      "violates": "not even when two admins demote each other at the same time",
       "expect": "killed"
     },
     {
       "file": "m7-no-last-admin-check.patch",
       "wrong": "No last-admin protection",
-      "violates": "a change that would leave none is a 409",
+      "violates": "an organization must never be left without an admin",
       "expect": "killed"
     },
     {
       "file": "m8-role-change-not-tenant-scoped.patch",
       "wrong": "PATCH /api/users/:id finds users of any organization",
-      "violates": "404 for users of other organizations",
+      "violates": "so admins can change roles in their organization",
       "expect": "killed"
     },
     {
       "file": "m9-members-can-change-roles.patch",
       "wrong": "Members may change roles",
-      "violates": "403 for non-admins",
+      "violates": "so admins can change roles",
       "expect": "killed"
     }
   ]

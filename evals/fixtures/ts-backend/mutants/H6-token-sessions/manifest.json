@@ -10,49 +10,43 @@
     {
       "file": "m1-logout-revokes-every-session.patch",
       "wrong": "logout revokes all of the user's tokens",
-      "violates": "while the user's other tokens keep working",
+      "violates": "logout (revokes the token used, 204)",
       "expect": "killed"
     },
     {
       "file": "m2-logout-all-revokes-current-only.patch",
       "wrong": "logout-all revokes only the current token",
-      "violates": "revokes every token of the current user",
-      "expect": "killed"
-    },
-    {
-      "file": "m3-valid-at-the-expiry-instant.patch",
-      "wrong": "A token is still accepted at exactly its expiry time",
-      "violates": "A token is rejected from the exact moment it expires",
+      "violates": "logout-all (revokes all of the user's tokens, 204)",
       "expect": "killed"
     },
     {
       "file": "m4-no-seven-day-cap.patch",
       "wrong": "Sliding expiry without the 7-day cap",
-      "violates": "never later than 7 days after the token was issued",
+      "violates": "never beyond 7 days after it was issued",
       "expect": "killed"
     },
     {
       "file": "m5-no-sliding-expiry.patch",
       "wrong": "Expiry is never extended",
-      "violates": "every successfully authenticated request moves the token's expiry to TOKEN_TTL_HOURS from now",
+      "violates": "each authenticated request extends the token to TOKEN_TTL_HOURS from now",
       "expect": "killed"
     },
     {
       "file": "m6-extends-before-checking.patch",
       "wrong": "Extends the expiry first and checks it afterwards, reviving expired tokens",
-      "violates": "nothing may bring an expired or revoked token back",
+      "violates": "a revoked or expired token must stay dead",
       "expect": "killed"
     },
     {
       "file": "m7-revoke-by-expiring-then-read-check-write.patch",
       "wrong": "Revokes by setting expiresAt to now and extends with read-check-then-write, so an in-flight request revives a revoked token",
-      "violates": "not even requests that were already in flight when it was revoked",
+      "violates": "a revoked or expired token must stay dead",
       "expect": "killed"
     },
     {
       "file": "m8-me-reports-login-expiry.patch",
       "wrong": "GET /api/me reports the expiry stored before this request's extension",
-      "violates": "GET /api/me should include that updated expiry as expiresAt",
+      "violates": "GET /api/me should show the current expiresAt",
       "expect": "killed"
     }
   ]

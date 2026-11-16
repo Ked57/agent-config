@@ -10,43 +10,43 @@
     {
       "file": "m1-normalise-without-dedupe.patch",
       "wrong": "Lower-cases and trims emails without merging duplicates, so the migration fails on the unique index",
-      "violates": "where that makes accounts collide, keep the account that was created first and delete the others",
+      "violates": "merges such duplicates into the account created first",
       "expect": "killed"
     },
     {
       "file": "m2-keeps-lowest-id.patch",
       "wrong": "Keeps the account with the lowest id instead of the earliest created",
-      "violates": "keep the account that was created first",
+      "violates": "merges such duplicates into the account created first",
       "expect": "killed"
     },
     {
       "file": "m3-no-task-handover.patch",
       "wrong": "Deletes duplicates without moving their tasks",
-      "violates": "handing every task assigned to a deleted account over to the kept one",
+      "violates": "merges ... keeping their tasks",
       "expect": "killed"
     },
     {
       "file": "m4-index-still-case-sensitive.patch",
       "wrong": "Keeps the plain case-sensitive unique index on email",
-      "violates": "the database itself must refuse a second account whose email differs ... only by letter case",
+      "violates": "make sure the database cannot get case-variant duplicates again",
       "expect": "killed"
     },
     {
       "file": "m5-groups-by-lower-without-trim.patch",
       "wrong": "Groups duplicates by lower(email) without trimming, so the later trim collides",
-      "violates": "emails differ only by letter case or surrounding spaces ... store every email trimmed and lower-cased",
+      "violates": "emails differ only by case or surrounding spaces",
       "expect": "killed"
     },
     {
       "file": "m6-deletes-before-handing-over.patch",
       "wrong": "Deletes duplicates first; ON DELETE SET NULL unassigns their tasks before the handover runs",
-      "violates": "handing every task assigned to a deleted account over to the kept one",
+      "violates": "merges ... keeping their tasks",
       "expect": "killed"
     },
     {
       "file": "m7-keeps-the-tidiest-address.patch",
       "wrong": "Prefers the account whose email was already lower-case and trimmed",
-      "violates": "keep the account that was created first",
+      "violates": "merges such duplicates into the account created first",
       "expect": "killed"
     }
   ]

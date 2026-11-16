@@ -52,6 +52,7 @@ const assignees = async (db: Awaited<ReturnType<typeof migrateLegacyDatabase>>) 
   Object.fromEntries((await db.all<{ id: string; assignee_id: string | null }>(sql`SELECT id, assignee_id FROM tasks ORDER BY id`)).map((row) => [row.id, row.assignee_id]));
 
 describe("hidden: email normalisation migration", { timeout: 30_000 }, () => {
+  // Prompt: "normalises every email (trimmed, lower-case)"
   it("stores the emails of accounts without duplicates trimmed and lower-cased", async () => {
     const db = await migrateLegacyDatabase();
     const users = await usersOf(db);
@@ -59,11 +60,15 @@ describe("hidden: email normalisation migration", { timeout: 30_000 }, () => {
     expect(users.find((user) => user.id === "u_cy")?.email).toBe("cy@example.test");
   });
 
+  // Prompt: "merges such duplicates into the account created first"
+
   it("keeps the earliest-created account of a group that differs by letter case", async () => {
     const db = await migrateLegacyDatabase();
     const ada = (await usersOf(db)).filter((user) => user.email.includes("ada"));
     expect(ada).toEqual([{ id: "u_ada1", email: "ada@example.test", name: "Ada first", role: "admin" }]);
   });
+
+  // Prompt: "emails differ only by case or surrounding spaces ... merges such duplicates"
 
   it("merges accounts whose emails differ only by surrounding spaces", async () => {
     const db = await migrateLegacyDatabase();
@@ -71,10 +76,14 @@ describe("hidden: email normalisation migration", { timeout: 30_000 }, () => {
     expect(dee).toEqual([{ id: "u_dee_b", email: "dee@example.test", name: "Dee early", role: "member" }]);
   });
 
+  // Prompt: "merges such duplicates into the account created first" (the others go away)
+
   it("leaves exactly one account per person", async () => {
     const db = await migrateLegacyDatabase();
     expect((await usersOf(db)).map((user) => user.id)).toEqual(["u_ada1", "u_bob", "u_cy", "u_dee_b"]);
   });
+
+  // Prompt: "merges ... keeping their tasks"
 
   it("hands the removed accounts' tasks to the kept account", async () => {
     const db = await migrateLegacyDatabase();
@@ -83,12 +92,16 @@ describe("hidden: email normalisation migration", { timeout: 30_000 }, () => {
     expect(tasks.t6).toBe("u_dee_b");
   });
 
+  // Prompt: "merges ... keeping their tasks": unrelated tasks are not touched
+
   it("leaves other tasks' assignees alone", async () => {
     const db = await migrateLegacyDatabase();
     const tasks = await assignees(db);
     expect(tasks.t4).toBe("u_bob");
     expect(tasks.t5).toBeNull();
   });
+
+  // Prompt: "make sure the database cannot get case-variant duplicates again"
 
   it("makes the database refuse a second account that differs only by letter case", async () => {
     const db = await migrateLegacyDatabase();
@@ -100,10 +113,14 @@ describe("hidden: email normalisation migration", { timeout: 30_000 }, () => {
     expect(count?.total).toBe(5);
   });
 
+  // Prompt: "make sure the database cannot get case-variant duplicates again" (new databases too)
+
   it("refuses a case variant on a freshly migrated database too", async () => {
     const { db } = await createTestContext();
     await expect(db.run(sql`INSERT INTO users (id, org_id, email, name, password_hash, role, created_at) VALUES ('u_x', 'org_acme', 'BOB@acme.test', 'N', 'x', 'member', 9000)`)).rejects.toThrow();
   });
+
+  // Prompt: existing behaviour: fresh databases migrate and seed, and login is case-insensitive
 
   it("still migrates and seeds a fresh database, and logs in whatever the letter case", async () => {
     const { request } = await createTestContext();

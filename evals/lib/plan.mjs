@@ -88,3 +88,27 @@ export function flippedChecks(before = [], after = []) {
     return [{ check: id, from, to, ...(scoreChanged ? { scoreFrom, scoreTo } : {}) }];
   });
 }
+
+/** A counting semaphore: `await acquire()` resolves to a `release` function once fewer than `limit` holders remain. */
+export function semaphore(limit) {
+  let active = 0;
+  const waiting = [];
+  const release = () => {
+    active -= 1;
+    waiting.shift()?.();
+  };
+  return {
+    acquire: async () => {
+      if (active >= limit) await new Promise((resolve) => waiting.push(resolve));
+      active += 1;
+      let released = false;
+      return () => {
+        if (!released) release();
+        released = true;
+      };
+    },
+    get active() {
+      return active;
+    }
+  };
+}
