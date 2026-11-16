@@ -1,0 +1,184 @@
+diff --git a/src/plugins/auth.ts b/src/plugins/auth.ts
+index dc934fa..d30d2c6 100644
+--- a/src/plugins/auth.ts
++++ b/src/plugins/auth.ts
+@@ -1,4 +1,4 @@
+-import { eq } from "drizzle-orm";
++import { and, eq, gte } from "drizzle-orm";
+ import { Elysia } from "elysia";
+ 
+ import type { Db } from "../db/client";
+@@ -11,7 +11,23 @@ export interface AuthUser {
+   role: "admin" | "member";
+ }
+ 
+-/** Bearer-token guard. Routes opt in with `{ requireAuth: true }` and receive `user`. */
++export interface AuthToken {
++  id: string;
++  expiresAt: Date;
++}
++
++const HOUR_MS = 60 * 60 * 1000;
++/** Sliding expiry never extends a token beyond this long after it was issued. */
++export const MAX_TOKEN_AGE_MS = 7 * 24 * HOUR_MS;
++
++export const tokenTtlMs = () =>
++  Number(process.env.TOKEN_TTL_HOURS ?? 24) * HOUR_MS;
++
++/**
++ * Bearer-token guard. Routes opt in with `{ requireAuth: true }` and receive `user` and
++ * `token`. Every accepted request slides the token's expiry forward (capped at
++ * MAX_TOKEN_AGE_MS after issue); expired or revoked tokens are never extended.
++ */
+ export const authGuard = (db: Db) =>
+   new Elysia().macro({
+     requireAuth: {
+@@ -23,12 +39,14 @@ export const authGuard = (db: Db) =>
+             message: "missing bearer token",
+           });
+         }
++        const now = Date.now();
+         const row = await db
+           .select({
+             id: users.id,
+             orgId: users.orgId,
+             role: users.role,
+-            expiresAt: apiTokens.expiresAt,
++            tokenId: apiTokens.id,
++            createdAt: apiTokens.createdAt,
+           })
+           .from(apiTokens)
+           .innerJoin(users, eq(users.id, apiTokens.userId))
+@@ -36,11 +54,29 @@ export const authGuard = (db: Db) =>
+             eq(apiTokens.tokenHash, hashToken(header.slice("Bearer ".length))),
+           )
+           .get();
+-        if (!row || row.expiresAt.getTime() < Date.now()) {
+-          return status(401, "Unauthorized");
+-        }
++        if (!row) return status(401, "Unauthorized");
++        const expiresAt = new Date(
++          Math.min(
++            now + tokenTtlMs(),
++            row.createdAt.getTime() + MAX_TOKEN_AGE_MS,
++          ),
++        );
++        // The expiry check and the extension are one statement, so a token that has
++        // expired (or is revoked concurrently) can never be brought back.
++        const [extended] = await db
++          .update(apiTokens)
++          .set({ expiresAt })
++          .where(
++            and(
++              eq(apiTokens.id, row.tokenId),
++              gte(apiTokens.expiresAt, new Date(now)),
++            ),
++          )
++          .returning({ id: apiTokens.id });
++        if (!extended) return status(401, "Unauthorized");
+         const user: AuthUser = { id: row.id, orgId: row.orgId, role: row.role };
+-        return { user };
++        const token: AuthToken = { id: row.tokenId, expiresAt };
++        return { user, token };
+       },
+     },
+   });
+diff --git a/src/routes/auth.test.ts b/src/routes/auth.test.ts
+index c997791..9b4589e 100644
+--- a/src/routes/auth.test.ts
++++ b/src/routes/auth.test.ts
+@@ -39,4 +39,25 @@ describe("auth", () => {
+         .status,
+     ).toBe(200);
+   });
++
++  it("revokes the token on logout and keeps other sessions", async () => {
++    const { request } = await createTestContext();
++    const login = async () => {
++      const response = await request("POST", "/api/auth/token", {
++        body: { email: "ada@acme.test", password: SEED_PASSWORD },
++      });
++      return ((await response.json()) as { token: string }).token;
++    };
++    const first = await login();
++    const second = await login();
++    expect(
++      (await request("POST", "/api/auth/logout", { token: first })).status,
++    ).toBe(204);
++    expect((await request("GET", "/api/me", { token: first })).status).toBe(
++      401,
++    );
++    expect((await request("GET", "/api/me", { token: second })).status).toBe(
++      200,
++    );
++  });
+ });
+diff --git a/src/routes/auth.ts b/src/routes/auth.ts
+index 2b17fec..a223b49 100644
+--- a/src/routes/auth.ts
++++ b/src/routes/auth.ts
+@@ -1,4 +1,4 @@
+-import { eq } from "drizzle-orm";
++import { and, eq } from "drizzle-orm";
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+@@ -6,7 +6,7 @@ import { apiTokens, users } from "../db/schema";
+ import { newId } from "../lib/ids";
+ import { verifyPassword } from "../lib/passwords";
+ import { generateToken, hashToken } from "../lib/tokens";
+-import { authGuard } from "../plugins/auth";
++import { authGuard, tokenTtlMs } from "../plugins/auth";
+ 
+ export const authRoutes = (db: Db) =>
+   new Elysia({ prefix: "/api" })
+@@ -22,9 +22,8 @@ export const authRoutes = (db: Db) =>
+         if (!user || !verifyPassword(body.password, user.passwordHash)) {
+           return status(401, { error: "invalid email or password" });
+         }
+-        const ttlHours = Number(process.env.TOKEN_TTL_HOURS ?? 24);
+         const token = generateToken();
+-        const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
++        const expiresAt = new Date(Date.now() + tokenTtlMs());
+         await db.insert(apiTokens).values({
+           id: newId("tok"),
+           userId: user.id,
+@@ -40,9 +39,29 @@ export const authRoutes = (db: Db) =>
+         }),
+       },
+     )
++    .post(
++      "/auth/logout",
++      async ({ user, token }) => {
++        await db
++          .delete(apiTokens)
++          .where(
++            and(eq(apiTokens.id, token.id), eq(apiTokens.userId, user.id)),
++          );
++        return new Response(null, { status: 204 });
++      },
++      { requireAuth: true },
++    )
++    .post(
++      "/auth/logout-all",
++      async ({ user }) => {
++        await db.delete(apiTokens).where(eq(apiTokens.userId, user.id));
++        return new Response(null, { status: 204 });
++      },
++      { requireAuth: true },
++    )
+     .get(
+       "/me",
+-      async ({ user }) => {
++      async ({ user, token }) => {
+         const row = await db
+           .select()
+           .from(users)
+@@ -54,6 +73,7 @@ export const authRoutes = (db: Db) =>
+           role: user.role,
+           email: row?.email,
+           name: row?.name,
++          expiresAt: token.expiresAt.toISOString(),
+         };
+       },
+       { requireAuth: true },

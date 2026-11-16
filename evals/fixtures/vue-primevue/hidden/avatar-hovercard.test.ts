@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { within } from '@testing-library/dom'
 import userEvent from '@testing-library/user-event'
-import { isShown, mountApp, sleep, text, unmountApp, waitFor } from './harness'
+import { isShown, mountApp, shownText, sleep, text, unmountApp, waitFor } from './harness'
 
 afterEach(unmountApp)
 
@@ -20,16 +20,27 @@ const adaAvatar = () => {
   return image as HTMLElement
 }
 
-/** The smallest visible element that shows Ada's card-only fields. */
+/** A shown text node containing `value`, if any. */
+function shownNodeWith(value: string): Element | null {
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if ((node.textContent ?? '').includes(value) && node.parentElement && isShown(node.parentElement)) return node.parentElement
+  }
+  return null
+}
+
+/** The smallest element showing both of Ada's card-only fields (email and location), or null. */
 function shownCard(): HTMLElement | null {
-  const candidates = [...document.body.querySelectorAll<HTMLElement>('*')].filter(
-    (element) => isShown(element) && text(element).includes(ADA.email) && text(element).includes(ADA.location),
-  )
-  return candidates.find((element) => !candidates.some((other) => other !== element && element.contains(other))) ?? null
+  const email = shownNodeWith(ADA.email)
+  const location = email && shownNodeWith(ADA.location)
+  if (!email || !location) return null
+  let card: Element | null = email
+  while (card && !card.contains(location)) card = card.parentElement
+  return card as HTMLElement | null
 }
 
 function expectCardFields(card: HTMLElement) {
-  const content = text(card)
+  const content = shownText(card)
   for (const field of [ADA.name, ADA.title, ADA.location, ADA.email]) expect(content, `card shows ${field}`).toContain(field)
   const hasLastActive = /active|seen|online/i.test(content) || card.querySelector('time') !== null
   expect(hasLastActive, 'card shows when the user was last active').toBe(true)

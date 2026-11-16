@@ -13,10 +13,10 @@ Running log for the "evaluate agent-config's own policies, skills and plugins" b
 
 | Phase | Item | Owner | State |
 |---|---|---|---|
-| 0 | `evals/INVENTORY.md` | agent F | in flight |
+| 0 | `evals/INVENTORY.md` | agent F | done (committed `1db5fa0`); F continues with component tasks |
 | 1.1 | Isolation: per-run HOME and TMPDIR outside the home tree, plugins installed, init verification | agent A | in flight |
-| 1.2 | Decision rule: task-level paired CI, MDE, "cannot conclude" | agent B | in flight |
-| 1.3 | Primary metric: hidden-test and required-check pass rate; judge as tiebreaker | agent B | in flight |
+| 1.2 | Decision rule: task-level paired CI, MDE, "cannot conclude" | agent B | done (`1db5fa0`), reviewed |
+| 1.3 | Primary metric: hidden-test and required-check pass rate; judge as tiebreaker | agent B | done (`1db5fa0`); `run.mjs` wiring requests sent to agent A |
 | 1.4 | Mutant gate (`npm run eval:mutants`) | agent C | in flight |
 | 1.5 | Weak tests: B5 strict, B6, B8, B9, B10, N2 | agent C | in flight |
 | 1.6 | Vue behavioural hidden tests; MWG wording removed from the Vue task set | agent D | in flight |
@@ -97,3 +97,4 @@ and the run is excluded and reported.
 - 2026-11-16 00:00 UTC: branch created. Probe: `claude plugin marketplace add` and `plugin install`
   work in a home under `/var/tmp`; the init event lists `pstack:*` skills, the `pstack` plugin and
   `pstack:poteto-agent`; nothing from the live home loads when cwd is outside the home tree.
+- 00:25 UTC: agent B done (stats.mjs, aggregate, report, judge; verify 121 pass). Inventory written. B's `run.mjs` requests and the inventory's findings (absolute CLAUDE.md import, 550 MB template home, unpinned plugin versions) relayed to agent A. Agents A, C, D, E, F, G still running; their files are checkpoint-committed mid-change.
