@@ -391,6 +391,14 @@ async function main() {
     }
     built.B ??= built.A;
     armsInfo = { A: built.A, B: built.B, ...compareInventories(built.A, built.B) };
+    // Same install, different invocation (e.g. "/pstack:poteto-mode" in one arm) is not an A/A control.
+    const prefixes = armIds.map((arm) => config.arms[arm]?.prefix ?? '');
+    if (armIds.length === 2 && prefixes[0] !== prefixes[1]) {
+      armsInfo.identical = false;
+      armsInfo.changedFiles = [...armsInfo.changedFiles, '(prompt prefix)'];
+      const invoked = prefixes.map((prefix) => /^\/([\w-]+):/.exec(prefix.trim())?.[1]).filter(Boolean).map((name) => `plugin:${name}`);
+      armsInfo.watched = [...new Set([...armsInfo.watched, ...invoked])].sort();
+    }
     writeJson(armsFile, armsInfo);
   }
   log(`Arms ${armsInfo.identical ? 'identical (A/A control)' : `differ in ${armsInfo.changedFiles.length} file(s); watching ${armsInfo.watched.join(', ') || 'nothing'}`}`);
