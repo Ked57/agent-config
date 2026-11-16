@@ -1,0 +1,93 @@
+{
+  "screen": "pricing",
+  "task": "D3-pricing-page",
+  "title": "Pricing",
+  "route": "/pricing",
+  "figma": { "fileKey": "Pr4cE8nVq2LmX7tB9wKd3H", "fileName": "Acme-Console-Pricing", "pageName": "Pricing" },
+  "frames": [
+    { "id": "desktop", "nodeId": "32-2", "name": "Pricing / Desktop", "label": "desktop", "viewport": { "width": 1440, "height": 900 } },
+    { "id": "mobile", "nodeId": "32-3", "name": "Pricing / Mobile", "label": "mobile", "viewport": { "width": 390, "height": 844 } },
+    {
+      "id": "desktop-yearly", "nodeId": "32-4", "name": "Pricing / Desktop / Yearly billing", "label": "state: yearly billing selected",
+      "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "choose": { "control": "Billing period", "option": "Yearly" } }]
+    },
+    {
+      "id": "desktop-faq-open", "nodeId": "32-5", "name": "Pricing / Desktop / FAQ item open", "label": "state: first question opened",
+      "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "button", "name": "Can I change plans later?" } }]
+    }
+  ],
+  "layout": {
+    "desktop": [
+      { "id": "eyebrow", "text": "Pricing" },
+      { "id": "title", "role": "heading", "name": "Plans that grow with your team", "level": 1 },
+      { "id": "subtitle", "text": "Start free for 14 days", "contains": true },
+      { "id": "period-monthly", "role": "button", "name": "Monthly" },
+      { "id": "period-yearly", "role": "button", "name": "Yearly" },
+      { "id": "save-tag", "text": "Save 20%" },
+      { "id": "plan-starter", "role": "heading", "name": "Starter", "level": 2 },
+      { "id": "price-starter", "text": "$12" },
+      { "id": "plan-growth", "role": "heading", "name": "Growth", "level": 2 },
+      { "id": "badge", "text": "Most popular", "contains": true },
+      { "id": "price-growth", "text": "$29" },
+      { "id": "per-member", "text": "/ member / month" },
+      { "id": "feature-automation", "text": "Workflow automation", "contains": true },
+      { "id": "cta-growth", "role": "button", "name": "Start free trial" },
+      { "id": "plan-scale", "role": "heading", "name": "Scale", "level": 2 },
+      { "id": "price-scale", "text": "$79" },
+      { "id": "plan-enterprise", "role": "heading", "name": "Enterprise", "level": 2 },
+      { "id": "price-custom", "text": "Custom" },
+      { "id": "cta-enterprise", "role": "button", "name": "Contact sales" },
+      { "id": "compare-title", "role": "heading", "name": "Compare plans", "level": 2 },
+      { "id": "col-growth", "role": "columnheader", "name": "Growth" },
+      { "id": "group-security", "text": "Security" },
+      { "id": "row-sso", "role": "rowheader", "name": "SAML single sign-on" },
+      { "id": "faq-title", "role": "heading", "name": "Frequently asked questions", "level": 2 },
+      { "id": "faq-first", "role": "button", "name": "Can I change plans later?" },
+      { "id": "talk-to-sales", "role": "link", "name": "Talk to sales" }
+    ],
+    "mobile": [
+      { "id": "title", "role": "heading", "name": "Plans that grow with your team", "level": 1 },
+      { "id": "period-monthly", "role": "button", "name": "Monthly" },
+      { "id": "plan-growth", "role": "heading", "name": "Growth", "level": 2 },
+      { "id": "badge", "text": "Most popular", "contains": true },
+      { "id": "price-growth", "text": "$29" },
+      { "id": "cta-growth", "role": "button", "name": "Start free trial" },
+      { "id": "plan-starter", "role": "heading", "name": "Starter", "level": 2 },
+      { "id": "plan-enterprise", "role": "heading", "name": "Enterprise", "level": 2 },
+      { "id": "compare-title", "role": "heading", "name": "Compare plans", "level": 2 },
+      { "id": "faq-title", "role": "heading", "name": "Frequently asked questions", "level": 2 },
+      { "id": "faq-first", "role": "button", "name": "Can I change plans later?" }
+    ],
+    "desktop-yearly": [
+      { "id": "period-yearly", "role": "button", "name": "Yearly" },
+      { "id": "price-starter", "text": "$10" },
+      { "id": "price-growth", "text": "$24" },
+      { "id": "billed-growth", "text": "Billed $288 yearly" },
+      { "id": "price-scale", "text": "$66" },
+      { "id": "price-custom", "text": "Custom" }
+    ],
+    "desktop-faq-open": [
+      { "id": "faq-title", "role": "heading", "name": "Frequently asked questions", "level": 2 },
+      { "id": "faq-first", "role": "button", "name": "Can I change plans later?" },
+      { "id": "faq-answer", "text": "Upgrades take effect immediately", "contains": true },
+      { "id": "faq-second", "role": "button", "name": "How does the free trial work?" },
+      { "id": "faq-last", "role": "button", "name": "What happens if we cancel?" }
+    ]
+  },
+  "behaviour": [
+    { "id": "monthly-by-default", "frame": "desktop", "expect": [{ "visibleText": "$29" }, { "visibleText": "Billed monthly", "contains": true }, { "hiddenText": "$24" }] },
+    { "id": "yearly-prices", "frame": "desktop-yearly", "expect": [{ "visibleText": "$24" }, { "visibleText": "$66" }, { "visibleText": "Billed $288 yearly" }, { "hiddenText": "$29" }] },
+    {
+      "id": "back-to-monthly", "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "choose": { "control": "Billing period", "option": "Yearly" } }, { "choose": { "control": "Billing period", "option": "Monthly" } }],
+      "expect": [{ "visibleText": "$29" }, { "hiddenText": "$24" }]
+    },
+    { "id": "faq-closed-by-default", "frame": "desktop", "expect": [{ "hiddenText": "Upgrades take effect immediately", "contains": true }] },
+    { "id": "faq-opens", "frame": "desktop-faq-open", "expect": [{ "visibleText": "Upgrades take effect immediately", "contains": true }] },
+    { "id": "plans-one-row-on-desktop", "frame": "desktop", "expect": [{ "sameRow": ["$12", "$29", "$79", "Custom"] }] },
+    { "id": "comparison-table", "frame": "desktop", "expect": [{ "visibleText": "Compare plans" }, { "visibleText": "SAML single sign-on" }, { "visibleText": "Report history" }] },
+    { "id": "mobile-highlighted-plan-first", "frame": "mobile", "expect": [{ "noHorizontalOverflow": true }, { "stacked": ["$29", "$12", "$79"] }] }
+  ]
+}

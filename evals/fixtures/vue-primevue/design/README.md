@@ -44,7 +44,7 @@ real solution ≈ 0.75 combined, a lazy one ≈ 0.45). `ramp(e; a, b)` is 1 for 
   accessible name or by visible text, against the reference's elements in `layout.json`. Element credit =
   mean(position, size) × style. Position = `ramp`(worse of |dx|, |dy| of the top-left corner; 4 px, 24 px);
   size = the worse of width and height, `ramp`((|error| − 2 px) / reference; 4 %, 15 %). Style is the
-  product of: font size `ramp`(0, 2 px), weight `ramp`(0, 300), line height `ramp`(1, 6 px), text colour,
+  product of: font size `ramp`(0, 2 px), weight `ramp`(0, 200), line height `ramp`(1, 6 px), text colour,
   background (first opaque one up the tree) and border colour each `ramp`(ΔE76; 3, 15) (a border on one side
   only = 0), corner radius `ramp`(1, 6 px) and padding `ramp`(Σ|error| of the four sides; 2, 12 px). Frame score
   = 0.8 × mean element credit (missing = 0) + 0.2 × reading-order agreement × share found.

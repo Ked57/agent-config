@@ -137,6 +137,33 @@
         ],
         "border": null
       },
+      "user-name": {
+        "x": 569,
+        "y": 234,
+        "width": 470,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
       "photo-hint": {
         "x": 569,
         "y": 254,
@@ -284,6 +311,33 @@
           225
         ]
       },
+      "email-label": {
+        "x": 489,
+        "y": 423,
+        "width": 36,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
       "email": {
         "x": 489,
         "y": 449,
@@ -372,6 +426,33 @@
           213,
           225
         ]
+      },
+      "time-zone-label": {
+        "x": 880,
+        "y": 511,
+        "width": 375,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
       },
       "time-zone": {
         "x": 881,
@@ -562,6 +643,33 @@
         ],
         "border": null
       },
+      "row-billing": {
+        "x": 489,
+        "y": 1106,
+        "width": 526,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
       "required": {
         "x": 600,
         "y": 1181,
@@ -633,6 +741,33 @@
           248,
           250,
           252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "transfer-title": {
+        "x": 489,
+        "y": 1326,
+        "width": 432,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
         ],
         "radius": 0,
         "padding": [

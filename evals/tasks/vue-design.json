@@ -124,6 +124,285 @@
           "level": "required"
         }
       ]
+    },
+    {
+      "id": "D2-account-settings",
+      "category": "design",
+      "prompt": "Implement this design from Figma.\nDesktop: https://www.figma.com/design/Ac7Rk2Wm9QzT4pLx8NvB3s/Acme-Console-Account-Settings?node-id=22-2&m=dev\nMobile: https://www.figma.com/design/Ac7Rk2Wm9QzT4pLx8NvB3s/Acme-Console-Account-Settings?node-id=22-3&m=dev\nState, a field edited, not saved yet: https://www.figma.com/design/Ac7Rk2Wm9QzT4pLx8NvB3s/Acme-Console-Account-Settings?node-id=22-4&m=dev\nState, saved with an empty first name and an invalid email: https://www.figma.com/design/Ac7Rk2Wm9QzT4pLx8NvB3s/Acme-Console-Account-Settings?node-id=22-5&m=dev\n\nImplement it at route /account; the data source is src/services/account.ts.\nThe notification switches are labelled \"<event>: <channel>\", e.g. \"Mentions: SMS\".",
+      "modes": {
+        "screenshot-only": {
+          "prompt": "Implement this screen from the mockups in design/account/ (desktop, mobile and 2 states). Implement it at route /account; the data source is src/services/account.ts. The notification switches are labelled \"<event>: <channel>\", e.g. \"Mentions: SMS\".",
+          "files": {
+            "figma-stub/account/desktop.png": "design/account/desktop.png",
+            "figma-stub/account/mobile.png": "design/account/mobile.png",
+            "figma-stub/account/desktop-unsaved.png": "design/account/desktop-unsaved.png",
+            "figma-stub/account/desktop-errors.png": "design/account/desktop-errors.png"
+          }
+        }
+      },
+      "expectsComponents": [
+        "vue-primevue",
+        "typescript",
+        "emil-design-eng",
+        "manual-qa",
+        "plugin:taste-skill"
+      ],
+      "checks": [
+        {
+          "id": "visual",
+          "label": "Visual similarity to the mockups (SSIM + colour, baseline-normalised, mean over frames)",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/account": ".design-score/screen",
+            "figma-stub/account": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs visual",
+          "reporter": "json-score",
+          "weight": 0.4,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "layout",
+          "label": "Key elements present, in order and where the design puts them",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/account": ".design-score/screen",
+            "figma-stub/account": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs layout",
+          "reporter": "json-score",
+          "weight": 0.3,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "behaviour",
+          "label": "Unsaved-changes bar, save validation, discard, switches and responsive form work as drawn",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/account": ".design-score/screen",
+            "figma-stub/account": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs behaviour",
+          "reporter": "json-score",
+          "weight": 0.2,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "a11y",
+          "label": "axe-core WCAG A/AA on every frame state, scaled by layout coverage",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/account": ".design-score/screen",
+            "figma-stub/account": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs a11y",
+          "reporter": "json-score",
+          "weight": 0.1,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        }
+      ]
+    },
+    {
+      "id": "D3-pricing-page",
+      "category": "design",
+      "prompt": "Implement this design from Figma.\nDesktop: https://www.figma.com/design/Pr4cE8nVq2LmX7tB9wKd3H/Acme-Console-Pricing?node-id=32-2&m=dev\nMobile: https://www.figma.com/design/Pr4cE8nVq2LmX7tB9wKd3H/Acme-Console-Pricing?node-id=32-3&m=dev\nState, yearly billing selected: https://www.figma.com/design/Pr4cE8nVq2LmX7tB9wKd3H/Acme-Console-Pricing?node-id=32-4&m=dev\nState, first question opened: https://www.figma.com/design/Pr4cE8nVq2LmX7tB9wKd3H/Acme-Console-Pricing?node-id=32-5&m=dev\n\nImplement it at route /pricing; the data source is src/services/pricing.ts.",
+      "modes": {
+        "screenshot-only": {
+          "prompt": "Implement this screen from the mockups in design/pricing/ (desktop, mobile and 2 states). Implement it at route /pricing; the data source is src/services/pricing.ts.",
+          "files": {
+            "figma-stub/pricing/desktop.png": "design/pricing/desktop.png",
+            "figma-stub/pricing/mobile.png": "design/pricing/mobile.png",
+            "figma-stub/pricing/desktop-yearly.png": "design/pricing/desktop-yearly.png",
+            "figma-stub/pricing/desktop-faq-open.png": "design/pricing/desktop-faq-open.png"
+          }
+        }
+      },
+      "expectsComponents": [
+        "vue-primevue",
+        "typescript",
+        "emil-design-eng",
+        "manual-qa",
+        "plugin:taste-skill"
+      ],
+      "checks": [
+        {
+          "id": "visual",
+          "label": "Visual similarity to the mockups (SSIM + colour, baseline-normalised, mean over frames)",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/pricing": ".design-score/screen",
+            "figma-stub/pricing": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs visual",
+          "reporter": "json-score",
+          "weight": 0.4,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "layout",
+          "label": "Key elements present, in order and where the design puts them",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/pricing": ".design-score/screen",
+            "figma-stub/pricing": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs layout",
+          "reporter": "json-score",
+          "weight": 0.3,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "behaviour",
+          "label": "Billing-period toggle, FAQ, plan row, comparison table and mobile plan order work as drawn",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/pricing": ".design-score/screen",
+            "figma-stub/pricing": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs behaviour",
+          "reporter": "json-score",
+          "weight": 0.2,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "a11y",
+          "label": "axe-core WCAG A/AA on every frame state, scaled by layout coverage",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/pricing": ".design-score/screen",
+            "figma-stub/pricing": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs a11y",
+          "reporter": "json-score",
+          "weight": 0.1,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        }
+      ]
+    },
+    {
+      "id": "D4-onboarding-wizard",
+      "category": "design",
+      "prompt": "Implement this design from Figma.\nDesktop: https://www.figma.com/design/On8bQ3dKw5ZrT2xYp7LmC4/Acme-Console-Onboarding?node-id=42-2&m=dev\nMobile: https://www.figma.com/design/On8bQ3dKw5ZrT2xYp7LmC4/Acme-Console-Onboarding?node-id=42-3&m=dev\nState, step 2 with \"Product development\" chosen: https://www.figma.com/design/On8bQ3dKw5ZrT2xYp7LmC4/Acme-Console-Onboarding?node-id=42-4&m=dev\nState, step 3, invites sent with an invalid email: https://www.figma.com/design/On8bQ3dKw5ZrT2xYp7LmC4/Acme-Console-Onboarding?node-id=42-5&m=dev\n\nImplement it at route /onboarding; the data source is src/services/onboarding.ts.\nThe use-case cards are radio buttons named by their titles.",
+      "modes": {
+        "screenshot-only": {
+          "prompt": "Implement this screen from the mockups in design/onboarding/ (desktop, mobile and 2 states). Implement it at route /onboarding; the data source is src/services/onboarding.ts. The use-case cards are radio buttons named by their titles.",
+          "files": {
+            "figma-stub/onboarding/desktop.png": "design/onboarding/desktop.png",
+            "figma-stub/onboarding/mobile.png": "design/onboarding/mobile.png",
+            "figma-stub/onboarding/desktop-selected.png": "design/onboarding/desktop-selected.png",
+            "figma-stub/onboarding/desktop-step3-error.png": "design/onboarding/desktop-step3-error.png"
+          }
+        }
+      },
+      "expectsComponents": [
+        "vue-primevue",
+        "typescript",
+        "emil-design-eng",
+        "manual-qa",
+        "plugin:taste-skill"
+      ],
+      "checks": [
+        {
+          "id": "visual",
+          "label": "Visual similarity to the mockups (SSIM + colour, baseline-normalised, mean over frames)",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/onboarding": ".design-score/screen",
+            "figma-stub/onboarding": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs visual",
+          "reporter": "json-score",
+          "weight": 0.4,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "layout",
+          "label": "Key elements present, in order and where the design puts them",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/onboarding": ".design-score/screen",
+            "figma-stub/onboarding": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs layout",
+          "reporter": "json-score",
+          "weight": 0.3,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "behaviour",
+          "label": "Option choice, validation on both steps, back, skip and the responsive option grid work as drawn",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/onboarding": ".design-score/screen",
+            "figma-stub/onboarding": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs behaviour",
+          "reporter": "json-score",
+          "weight": 0.2,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "a11y",
+          "label": "axe-core WCAG A/AA on every frame state, scaled by layout coverage",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/onboarding": ".design-score/screen",
+            "figma-stub/onboarding": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs a11y",
+          "reporter": "json-score",
+          "weight": 0.1,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        }
+      ]
     }
   ]
 }

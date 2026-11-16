@@ -82,7 +82,7 @@ export const LAYOUT = {
   position: [4, 24], // px of the worse of |dx|, |dy| at the top-left corner: full credit, no credit
   size: [0.04, 0.15], // relative width or height error (at least 2 px counts as full)
   fontSize: [0, 2], // px
-  fontWeight: [0, 300],
+  fontWeight: [0, 200],
   lineHeight: [1, 6], // px
   colour: [3, 15], // ΔE76 (text colour, background, border colour)
   radius: [1, 6], // px

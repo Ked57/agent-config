@@ -27,7 +27,7 @@ function stubFiles(dir = STUB) {
 }
 
 test('figma stub holds only what a Figma file exposes: no source, component library, test ids or hidden checks', () => {
-  const hidden = new Set(['Row actions', 'Date range', 'noHorizontalOverflow', 'sameRow', 'stacked', 'visibleText', 'hiddenText', 'baselines', 'layout.json', '.design-score']);
+  const hidden = new Set(['Row actions', 'Date range', 'Mentions: SMS', 'noHorizontalOverflow', 'sameRow', 'stacked', 'visibleText', 'hiddenText', 'baselines', 'layout.json', '.design-score']);
   for (const name of screens) {
     const screen = JSON.parse(fs.readFileSync(path.join(DESIGN, name, 'screen.json'), 'utf8'));
     for (const specs of Object.values(screen.layout)) for (const spec of specs) if (spec.id.includes('-')) hidden.add(spec.id);
@@ -184,9 +184,9 @@ test('layout score: position and size credit times style credit per element, ord
   const off = scoreLayout(reference, { a: box(0, 0), b: box(0, 54), c: box(200, 64) });
   assert.equal(off.elements.b, 0.75);
   assert.equal(off.elements.c, 0.5);
-  // Style is multiplicative: one weight step (100) off keeps two thirds, a wrong text colour or background none.
+  // Style is multiplicative: one weight step (100) off keeps half, a wrong text colour or background none.
   const styled = scoreLayout(reference, { a: box(0, 0, { fontWeight: 500 }), b: box(0, 40, { color: [2, 132, 199] }), c: box(200, 40, { background: [209, 250, 229] }) });
-  assert.ok(Math.abs(styled.elements.a - 2 / 3) < 1e-9, `a ${styled.elements.a}`);
+  assert.equal(styled.elements.a, 0.5);
   assert.equal(styled.elements.b, 0);
   assert.equal(styled.elements.c, 0);
   // A border the reference does not have, or a missing one, costs the whole style credit.

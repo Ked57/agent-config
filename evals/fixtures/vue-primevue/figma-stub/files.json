@@ -74,5 +74,75 @@
         ]
       }
     ]
+  },
+  "Pr4cE8nVq2LmX7tB9wKd3H": {
+    "name": "Acme-Console-Pricing",
+    "pages": [
+      {
+        "id": "0:1",
+        "name": "Pricing",
+        "frames": [
+          {
+            "nodeId": "32:2",
+            "name": "Pricing / Desktop",
+            "bundle": "pricing/desktop.json",
+            "screenshot": "pricing/desktop.png"
+          },
+          {
+            "nodeId": "32:3",
+            "name": "Pricing / Mobile",
+            "bundle": "pricing/mobile.json",
+            "screenshot": "pricing/mobile.png"
+          },
+          {
+            "nodeId": "32:4",
+            "name": "Pricing / Desktop / Yearly billing",
+            "bundle": "pricing/desktop-yearly.json",
+            "screenshot": "pricing/desktop-yearly.png"
+          },
+          {
+            "nodeId": "32:5",
+            "name": "Pricing / Desktop / FAQ item open",
+            "bundle": "pricing/desktop-faq-open.json",
+            "screenshot": "pricing/desktop-faq-open.png"
+          }
+        ]
+      }
+    ]
+  },
+  "On8bQ3dKw5ZrT2xYp7LmC4": {
+    "name": "Acme-Console-Onboarding",
+    "pages": [
+      {
+        "id": "0:1",
+        "name": "Onboarding",
+        "frames": [
+          {
+            "nodeId": "42:2",
+            "name": "Onboarding / Step 2 / Desktop",
+            "bundle": "onboarding/desktop.json",
+            "screenshot": "onboarding/desktop.png"
+          },
+          {
+            "nodeId": "42:3",
+            "name": "Onboarding / Step 2 / Mobile",
+            "bundle": "onboarding/mobile.json",
+            "screenshot": "onboarding/mobile.png"
+          },
+          {
+            "nodeId": "42:4",
+            "name": "Onboarding / Step 2 / Option selected",
+            "bundle": "onboarding/desktop-selected.json",
+            "screenshot": "onboarding/desktop-selected.png"
+          },
+          {
+            "nodeId": "42:5",
+            "name": "Onboarding / Step 3 / Invalid email",
+            "bundle": "onboarding/desktop-step3-error.json",
+            "screenshot": "onboarding/desktop-step3-error.png"
+          }
+        ]
+      }
+    ]
   }
 }

@@ -1,0 +1,229 @@
+diff --git a/src/components/onboarding/UseCaseCards.vue b/src/components/onboarding/UseCaseCards.vue
+new file mode 100644
+index 0000000..e35d262
+--- /dev/null
++++ b/src/components/onboarding/UseCaseCards.vue
+@@ -0,0 +1,24 @@
++<script setup lang="ts">
++import RadioButton from 'primevue/radiobutton'
++import type { UseCase } from '@/services/onboarding'
++
++defineProps<{ options: UseCase[]; invalid: boolean }>()
++const selected = defineModel<UseCase['id'] | null>({ required: true })
++
++</script>
++
++<template>
++  <div class="grid gap-3 sm:grid-cols-2">
++    <label
++      v-for="option in options"
++      :key="option.id"
++      class="relative flex cursor-pointer gap-4 rounded-lg border border-surface-200 bg-surface-0 p-3 pr-12"
++    >
++      <span class="flex min-w-0 flex-col gap-1">
++        <span class="text-sm font-semibold text-surface-900">{{ option.label }}</span>
++        <span class="text-sm leading-5 text-surface-500">{{ option.description }}</span>
++      </span>
++      <RadioButton v-model="selected" :value="option.id" name="use-case" class="!absolute right-4 top-4" />
++    </label>
++  </div>
++</template>
+diff --git a/src/components/onboarding/WizardStepper.vue b/src/components/onboarding/WizardStepper.vue
+new file mode 100644
+index 0000000..eea37b3
+--- /dev/null
++++ b/src/components/onboarding/WizardStepper.vue
+@@ -0,0 +1,42 @@
++<script setup lang="ts">
++import type { WizardStep } from '@/services/onboarding'
++
++defineProps<{ steps: WizardStep[]; current: number }>()
++</script>
++
++<template>
++  <nav aria-label="Setup progress">
++    <ol class="flex items-center">
++      <li v-for="(step, index) in steps" :key="step.id" class="flex items-center" :class="{ 'flex-1': index < steps.length - 1 }">
++        <div class="flex items-center gap-3" :aria-current="index === current ? 'step' : undefined">
++          <span
++            class="flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums"
++            :class="index < current
++              ? 'bg-primary-600 text-white'
++              : index === current
++                ? 'border-2 border-primary-600 bg-surface-0 text-primary-700 ring-4 ring-primary-100'
++                : 'border border-surface-300 bg-surface-0 text-surface-500'"
++          >
++            <i v-if="index < current" class="pi pi-check text-xs" aria-hidden="true"></i>
++            <template v-else>{{ index + 1 }}</template>
++          </span>
++          <span
++            class="text-sm"
++            :class="[
++              index < current ? 'font-medium text-surface-900' : index === current ? 'font-semibold text-primary-700' : 'text-surface-500',
++              index === current ? '' : 'sr-only sm:not-sr-only',
++            ]"
++          >
++            {{ step.label }}<span v-if="index < current" class="sr-only"> (done)</span>
++          </span>
++        </div>
++        <span
++          v-if="index < steps.length - 1"
++          class="mx-3 h-0.5 flex-1 rounded-full sm:mx-4"
++          :class="index < current ? 'bg-primary-600' : 'bg-surface-200'"
++          aria-hidden="true"
++        ></span>
++      </li>
++    </ol>
++  </nav>
++</template>
+diff --git a/src/router/index.ts b/src/router/index.ts
+index 507c8a9..866c522 100644
+--- a/src/router/index.ts
++++ b/src/router/index.ts
+@@ -5,6 +5,7 @@ export const router = createRouter({
+   history: createWebHistory(),
+   routes: [
+     { path: '/', name: 'dashboard', component: DashboardView, meta: { title: 'Dashboard' } },
++    { path: '/onboarding', name: 'onboarding', component: () => import('@/views/OnboardingView.vue'), meta: { title: 'Set up your workspace' } },
+     { path: '/projects', name: 'projects', component: () => import('@/views/ProjectsView.vue'), meta: { title: 'Projects' } },
+     { path: '/users', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { title: 'Users' } },
+     { path: '/users/:id', name: 'user', component: () => import('@/views/UserDetailView.vue'), props: true, meta: { title: 'User' } },
+diff --git a/src/views/OnboardingView.vue b/src/views/OnboardingView.vue
+new file mode 100644
+index 0000000..81f4e00
+--- /dev/null
++++ b/src/views/OnboardingView.vue
+@@ -0,0 +1,133 @@
++<script setup lang="ts">
++import { computed, ref } from 'vue'
++import Button from 'primevue/button'
++import InputText from 'primevue/inputtext'
++import Select from 'primevue/select'
++import SelectButton from 'primevue/selectbutton'
++import UseCaseCards from '@/components/onboarding/UseCaseCards.vue'
++import { fetchOnboarding, sendInvites, submitWorkspace, type InviteRole, type Onboarding, type UseCase } from '@/services/onboarding'
++
++const data = ref<Onboarding | null>(null)
++const step = ref(1)
++const workspaceName = ref('')
++const useCase = ref<UseCase['id'] | null>(null)
++const teamSize = ref('2–10')
++const inviteEmail = ref('')
++const inviteRole = ref<InviteRole>('Member')
++const useCaseError = ref('')
++const emailError = ref('')
++
++void fetchOnboarding().then((result) => {
++  data.value = result
++  step.value = result.currentStep
++  workspaceName.value = result.workspaceName
++})
++
++const stepLabel = computed(() => (data.value ? `Step ${step.value + 1} of ${data.value.steps.length}` : ''))
++const chosen = computed(() => data.value?.useCases.find((option) => option.id === useCase.value) ?? null)
++
++async function continueFromWorkspace() {
++  if (!useCase.value) {
++    useCaseError.value = 'Choose what you’ll use Acme Console for.'
++    return
++  }
++  useCaseError.value = ''
++  await submitWorkspace({ name: workspaceName.value, useCase: useCase.value, teamSize: teamSize.value })
++  step.value = 2
++}
++
++async function invite() {
++  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.value.trim())) {
++    emailError.value = 'Enter a valid email address, like name@company.com.'
++    return
++  }
++  emailError.value = ''
++  await sendInvites([{ email: inviteEmail.value.trim(), role: inviteRole.value }])
++  step.value = 3
++}
++
++function chooseUseCase(value: UseCase['id'] | null) {
++  useCase.value = value
++  useCaseError.value = ''
++}
++</script>
++
++<template>
++  <div v-if="data" class="mx-auto flex max-w-3xl flex-col gap-8">
++    <header>
++      <p class="text-sm font-medium text-primary-700">{{ stepLabel }}</p>
++      <h1 class="text-3xl font-bold">Set up your workspace</h1>
++    </header>
++
++    <div class="rounded-lg border border-surface-200 bg-surface-0">
++      <form v-if="step === 1" class="flex flex-col gap-6 p-5" novalidate @submit.prevent="continueFromWorkspace">
++        <div>
++          <h2 class="text-lg font-semibold text-surface-900">Tell us about your workspace</h2>
++          <p class="mt-1 text-sm text-surface-500">We use this to set up templates and defaults for your team.</p>
++        </div>
++        <div class="flex flex-col gap-1.5">
++          <label for="workspace-name" class="text-sm font-medium text-surface-700">Workspace name</label>
++          <InputText id="workspace-name" v-model="workspaceName" class="sm:max-w-sm" />
++        </div>
++        <fieldset class="flex flex-col gap-3">
++          <legend class="mb-3 text-sm font-medium text-surface-700">What will you use Acme Console for?</legend>
++          <UseCaseCards :model-value="useCase" :options="data.useCases" :invalid="!!useCaseError" @update:model-value="chooseUseCase" />
++          <small v-if="useCaseError" class="flex items-center gap-1.5 text-sm text-red-600">
++            <i class="pi pi-exclamation-circle" aria-hidden="true"></i>{{ useCaseError }}
++          </small>
++          <small v-else-if="chosen" class="flex items-center gap-1.5 text-sm text-primary-700">
++            <i class="pi pi-sparkles" aria-hidden="true"></i>We’ll add starter templates for {{ chosen.label.toLowerCase() }}.
++          </small>
++        </fieldset>
++        <div class="flex flex-col gap-2">
++          <span id="team-size-label" class="text-sm font-medium text-surface-700">Team size</span>
++          <SelectButton v-model="teamSize" :options="data.teamSizes" :allow-empty="false" aria-labelledby="team-size-label" class="self-start [&_.p-togglebutton]:!text-surface-700" />
++        </div>
++      </form>
++
++      <form v-else-if="step === 2" class="flex flex-col gap-6 p-5" novalidate @submit.prevent="invite">
++        <div>
++          <h2 class="text-lg font-semibold text-surface-900">Invite your team</h2>
++          <p class="mt-1 text-sm text-surface-500">Teammates get an email with a link to join the {{ workspaceName }} workspace.</p>
++        </div>
++        <div class="grid gap-4 sm:grid-cols-[1fr_10rem]">
++          <div class="flex flex-col gap-1.5">
++            <label for="invite-email" class="text-sm font-medium text-surface-700">Email address</label>
++            <InputText id="invite-email" v-model="inviteEmail" type="email" placeholder="name@company.com" :invalid="!!emailError" />
++            <small v-if="emailError" class="flex items-center gap-1.5 text-sm text-red-600">
++              <i class="pi pi-exclamation-circle" aria-hidden="true"></i>{{ emailError }}
++            </small>
++          </div>
++          <div class="flex flex-col gap-1.5">
++            <span id="invite-role-label" class="text-sm font-medium text-surface-700">Role</span>
++            <Select v-model="inviteRole" :options="data.inviteRoles" aria-labelledby="invite-role-label" />
++          </div>
++        </div>
++        <p class="text-sm text-surface-600">You can invite more people and change roles from Settings later.</p>
++      </form>
++
++      <div v-else class="flex flex-col items-center gap-3 p-8 text-center sm:p-12">
++        <span class="flex size-12 items-center justify-center rounded-full bg-primary-100 text-primary-700" aria-hidden="true">
++          <i class="pi pi-check text-lg"></i>
++        </span>
++        <h2 class="text-lg font-semibold text-surface-900">Start your trial</h2>
++        <p class="max-w-sm text-sm text-surface-500">Your {{ data.trialDays }}-day Growth trial starts today. No card needed until it ends.</p>
++      </div>
++
++      <div class="flex items-center gap-3 px-5 pb-5">
++        <template v-if="step === 1">
++          <Button label="Continue" icon="pi pi-arrow-right" icon-pos="right" @click="continueFromWorkspace" />
++        </template>
++        <template v-else-if="step === 2">
++          <Button label="Back" icon="pi pi-arrow-left" severity="secondary" text @click="step = 1" />
++          <Button label="Skip for now" severity="secondary" text class="ml-auto" @click="step = 3" />
++          <Button label="Send invites" icon="pi pi-send" class="!border-primary-700 !bg-primary-700" @click="invite" />
++        </template>
++        <template v-else>
++          <Button label="Back" icon="pi pi-arrow-left" severity="secondary" text @click="step = 2" />
++          <Button label="Finish setup" class="ml-auto !border-primary-700 !bg-primary-700" />
++        </template>
++      </div>
++    </div>
++  </div>
++</template>
