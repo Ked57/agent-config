@@ -242,4 +242,82 @@ describe("spec #201: archive and restore projects", () => {
     expect((await request("PATCH", "/api/tasks/tsk_4", { ...member, body: { title: "Push it" } })).status).toBe(200);
     expect((await request("DELETE", "/api/tasks/tsk_4", admin)).status).toBe(204);
   });
+
+  it("R12: every task response carries readOnly, following the project's archive state", async () => {
+    const { request } = await createTestContext();
+    const created = await json<{ id: string; readOnly: boolean }>(await request("POST", "/api/projects/prj_app/tasks", { ...admin, body: { title: "Fresh" } }));
+    expect(created.readOnly).toBe(false);
+    const patched = await request("PATCH", "/api/tasks/tsk_4", { ...member, body: { title: "Push it" } });
+    expect(await json(patched)).toMatchObject({ readOnly: false });
+    expect((await archive(request, "prj_app")).status).toBe(200);
+    expect(await json(await request("GET", "/api/tasks/tsk_4", member))).toMatchObject({ readOnly: true });
+    const list = await json<{ items: Array<{ id: string; readOnly: boolean }> }>(await request("GET", "/api/projects/prj_app/tasks", member));
+    expect(list.items.map((task) => task.readOnly)).toEqual([true, true]);
+    expect(await json(await request("GET", "/api/tasks/tsk_1", member))).toMatchObject({ readOnly: false });
+    expect((await request("POST", "/api/projects/prj_app/restore", admin)).status).toBe(200);
+    expect(await json(await request("GET", "/api/tasks/tsk_4", member))).toMatchObject({ readOnly: false });
+  });
+
+  it("R13: of simultaneous archive requests exactly one wins and its values are stored", async () => {
+    const { request } = await createTestContext();
+    const reasons = ["r0", "r1", "r2", "r3", "r4"];
+    const responses = await Promise.all(reasons.map((reason) => request("POST", "/api/projects/prj_app/archive", { ...admin, body: { reason } })));
+    const statuses = responses.map((response) => response.status).sort();
+    expect(statuses).toEqual([200, 409, 409, 409, 409]);
+    const bodies = await Promise.all(responses.map((response) => json<Project & { code?: string; archiveReason?: string }>(response)));
+    const winner = bodies.find((_, index) => responses[index]?.status === 200);
+    for (const [index, body] of bodies.entries()) if (responses[index]?.status === 409) expect(body.code).toBe("already_archived");
+    const stored = await json<Project & { archiveReason: string }>(await request("GET", "/api/projects/prj_app", admin));
+    expect(stored.archivedAt).toBe(winner?.archivedAt);
+    expect(stored.archiveReason).toBe(winner?.archiveReason);
+  });
+
+  it("R13: of simultaneous restores exactly one wins", async () => {
+    const { request } = await createTestContext();
+    expect((await archive(request, "prj_app")).status).toBe(200);
+    const responses = await Promise.all([0, 1, 2, 3].map(() => request("POST", "/api/projects/prj_app/restore", admin)));
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409, 409, 409]);
+    for (const response of responses) if (response.status === 409) expect(await json(response)).toMatchObject({ code: "not_archived" });
+  });
+
+  it("R14: deleting the archiving user keeps the project archived with archivedBy null", async () => {
+    const { request, db } = await createTestContext();
+    expect((await archive(request, "prj_app")).status).toBe(200);
+    await db.run(sql`DELETE FROM users WHERE id = 'usr_ada'`);
+    const project = await json<Project>(await request("GET", "/api/projects/prj_app", member));
+    expect(project.archivedBy).toBeNull();
+    expect(typeof project.archivedAt).toBe("string");
+  });
+
+  it("R15: archived=true lists the most recently archived first; all keeps name order", async () => {
+    const { request } = await createTestContext();
+    expect((await archive(request, "prj_billing")).status).toBe(200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect((await archive(request, "prj_app")).status).toBe(200);
+    expect(await listIds(request, "?archived=true")).toEqual(["prj_app", "prj_billing"]);
+    expect(await listIds(request, "?archived=all")).toEqual(["prj_billing", "prj_app", "prj_web"]);
+  });
+
+  it("R16: an archive reason is trimmed, stored, listed and cleared by a restore", async () => {
+    const { request } = await createTestContext();
+    const response = await request("POST", "/api/projects/prj_app/archive", { ...admin, body: { reason: "  Shipped v1  " } });
+    expect(response.status).toBe(200);
+    expect(await json(response)).toMatchObject({ archiveReason: "Shipped v1" });
+    const list = await json<{ items: Array<{ id: string; archiveReason: string | null }> }>(await request("GET", "/api/projects?archived=all", admin));
+    expect(Object.fromEntries(list.items.map((item) => [item.id, item.archiveReason]))).toEqual({ prj_app: "Shipped v1", prj_billing: null, prj_web: null });
+    const restored = await request("POST", "/api/projects/prj_app/restore", admin);
+    expect(await json(restored)).toMatchObject({ archiveReason: null });
+    const bare = await archive(request, "prj_app");
+    expect(await json(bare)).toMatchObject({ archiveReason: null });
+  });
+
+  it("R16: an empty, too long or unknown-keyed archive body is 422 and archives nothing", async () => {
+    const { request } = await createTestContext();
+    for (const body of [{ reason: "   " }, { reason: "x".repeat(201) }, { reason: "ok", force: true }, { why: "ok" }]) {
+      const response = await request("POST", "/api/projects/prj_app/archive", { ...admin, body });
+      expect(response.status).toBe(422);
+    }
+    expect(await listIds(request)).toContain("prj_app");
+    expect((await request("POST", "/api/projects/prj_app/archive", { ...admin, body: { reason: "y".repeat(200) } })).status).toBe(200);
+  });
 });

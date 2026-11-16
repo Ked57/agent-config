@@ -33,13 +33,13 @@
     },
     {
       "file": "m5-default-list-includes-archived.patch",
-      "wrong": "archived projects stay in the default list; only ?archived=true filters",
+      "wrong": "archived projects stay in the default list",
       "violates": "R7",
       "expect": "killed"
     },
     {
       "file": "m6-patch-not-read-only.patch",
-      "wrong": "PATCH ignores the archive (only create and delete are blocked)",
+      "wrong": "PATCH ignores the archive",
       "violates": "R9",
       "expect": "killed"
     },
@@ -71,6 +71,48 @@
       "file": "m11-create-not-read-only.patch",
       "wrong": "creating tasks in an archived project still works",
       "violates": "R9",
+      "expect": "killed"
+    },
+    {
+      "file": "m12-archive-check-then-update.patch",
+      "wrong": "archive checks archivedAt, then updates unconditionally, so simultaneous archives all succeed",
+      "violates": "R13",
+      "expect": "killed"
+    },
+    {
+      "file": "m13-restore-check-then-update.patch",
+      "wrong": "restore updates unconditionally, so simultaneous restores all succeed",
+      "violates": "R13",
+      "expect": "killed"
+    },
+    {
+      "file": "m14-get-task-without-read-only.patch",
+      "wrong": "GET /api/tasks/:id always reports readOnly: false",
+      "violates": "R12",
+      "expect": "killed"
+    },
+    {
+      "file": "m15-archived-list-by-name.patch",
+      "wrong": "archived=true keeps the name order",
+      "violates": "R15",
+      "expect": "killed"
+    },
+    {
+      "file": "m16-unknown-body-keys-accepted.patch",
+      "wrong": "unknown keys in the archive body are ignored",
+      "violates": "R16",
+      "expect": "killed"
+    },
+    {
+      "file": "m17-restore-keeps-reason.patch",
+      "wrong": "a restore leaves archiveReason in place",
+      "violates": "R16",
+      "expect": "killed"
+    },
+    {
+      "file": "m18-archived-by-fk-blocks-delete.patch",
+      "wrong": "archived_by references users without ON DELETE SET NULL (what drizzle-kit generates for ADD COLUMN)",
+      "violates": "R14",
       "expect": "killed"
     }
   ]

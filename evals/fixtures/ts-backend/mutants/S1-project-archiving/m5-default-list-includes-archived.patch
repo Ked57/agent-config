@@ -1,11 +1,12 @@
 diff --git a/drizzle/0001_project_archiving.sql b/drizzle/0001_project_archiving.sql
 new file mode 100644
-index 0000000..215cb7c
+index 0000000..418a7a5
 --- /dev/null
 +++ b/drizzle/0001_project_archiving.sql
-@@ -0,0 +1,2 @@
+@@ -0,0 +1,3 @@
 +ALTER TABLE `projects` ADD `archived_at` integer;--> statement-breakpoint
-+ALTER TABLE `projects` ADD `archived_by` text REFERENCES users(id) ON DELETE set null;
++ALTER TABLE `projects` ADD `archived_by` text REFERENCES users(id) ON DELETE set null;--> statement-breakpoint
++ALTER TABLE `projects` ADD `archive_reason` text;
 \ No newline at end of file
 diff --git a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
 index 711e2b9..6d208e5 100644
@@ -27,21 +28,22 @@ index 711e2b9..6d208e5 100644
  }
 \ No newline at end of file
 diff --git a/src/db/schema.ts b/src/db/schema.ts
-index 6a14aa4..b42876a 100644
+index 6a14aa4..5b3f5b9 100644
 --- a/src/db/schema.ts
 +++ b/src/db/schema.ts
-@@ -53,6 +53,10 @@ export const projects = sqliteTable(
+@@ -53,6 +53,11 @@ export const projects = sqliteTable(
      name: text("name").notNull(),
      description: text("description"),
      createdAt: createdAt(),
 +    archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
++    archiveReason: text("archive_reason"),
 +    archivedBy: text("archived_by").references(() => users.id, {
 +      onDelete: "set null",
 +    }),
    },
    (table) => [index("projects_org_idx").on(table.orgId)],
  );
-@@ -93,3 +97,4 @@ export const tasks = sqliteTable(
+@@ -93,3 +98,4 @@ export const tasks = sqliteTable(
  
  export type Task = typeof tasks.$inferSelect;
  export type User = typeof users.$inferSelect;
@@ -150,16 +152,16 @@ index 0000000..2cee181
 +  return Boolean(project?.archivedAt);
 +}
 diff --git a/src/routes/projects.ts b/src/routes/projects.ts
-index 3143433..6a2489c 100644
+index 3143433..3de8f7d 100644
 --- a/src/routes/projects.ts
 +++ b/src/routes/projects.ts
 @@ -1,4 +1,4 @@
 -import { and, asc, count, eq } from "drizzle-orm";
-+import { and, asc, count, eq, isNotNull, isNull } from "drizzle-orm";
++import { and, asc, count, desc, eq, isNotNull, isNull } from "drizzle-orm";
  import { Elysia, t } from "elysia";
  
  import type { Db } from "../db/client";
-@@ -6,18 +6,30 @@ import { projects, tasks, users } from "../db/schema";
+@@ -6,19 +6,47 @@ import { projects, tasks, users } from "../db/schema";
  import { newId } from "../lib/ids";
  import { authGuard } from "../plugins/auth";
  import { notifyTaskAssigned } from "../services/notifications";
@@ -172,6 +174,18 @@ index 3143433..6a2489c 100644
 +  true: isNotNull(projects.archivedAt),
 +  all: undefined,
 +};
++
++/** The trimmed reason, undefined when none was given, or false when the body is invalid. */
++function archiveReason(body: unknown): string | undefined | false {
++  if (body === undefined || body === null || body === "") return undefined;
++  if (typeof body !== "object" || Array.isArray(body)) return false;
++  const { reason, ...rest } = body as Record<string, unknown>;
++  if (Object.keys(rest).length > 0) return false;
++  if (reason === undefined) return undefined;
++  if (typeof reason !== "string") return false;
++  const trimmed = reason.trim();
++  return trimmed.length >= 1 && trimmed.length <= 200 ? trimmed : false;
++}
  
  export const projectRoutes = (db: Db) =>
    new Elysia({ prefix: "/api/projects" })
@@ -184,21 +198,28 @@ index 3143433..6a2489c 100644
            .select()
            .from(projects)
 -          .where(eq(projects.orgId, user.orgId))
+-          .orderBy(asc(projects.name));
 +          .where(
 +            and(
 +              eq(projects.orgId, user.orgId),
 +              archivedFilter[query.archived ?? "all"],
 +            ),
 +          )
-           .orderBy(asc(projects.name));
++          .orderBy(
++            ...(query.archived === "true"
++              ? [desc(projects.archivedAt), asc(projects.name)]
++              : [asc(projects.name)]),
++          );
          const items = [];
          for (const project of rows) {
-@@ -33,12 +45,21 @@ export const projectRoutes = (db: Db) =>
+           const counts = await db
+@@ -33,12 +61,22 @@ export const projectRoutes = (db: Db) =>
              name: project.name,
              description: project.description,
              createdAt: project.createdAt.toISOString(),
 +            archivedAt: project.archivedAt?.toISOString() ?? null,
 +            archivedBy: project.archivedBy,
++            archiveReason: project.archiveReason,
              taskCounts,
            });
          }
@@ -216,7 +237,7 @@ index 3143433..6a2489c 100644
      )
      .post(
        "/",
-@@ -52,7 +73,8 @@ export const projectRoutes = (db: Db) =>
+@@ -52,7 +90,8 @@ export const projectRoutes = (db: Db) =>
              description: body.description,
            })
            .returning();
@@ -226,7 +247,7 @@ index 3143433..6a2489c 100644
        },
        {
          requireAuth: true,
-@@ -73,7 +95,97 @@ export const projectRoutes = (db: Db) =>
+@@ -73,7 +112,117 @@ export const projectRoutes = (db: Db) =>
            )
            .get();
          if (!project) return status(404, "Project not found");
@@ -237,7 +258,7 @@ index 3143433..6a2489c 100644
 +    )
 +    .post(
 +      "/:id/archive",
-+      async ({ params, user, status }) => {
++      async ({ params, body, user, status }) => {
 +        if (user.role !== "admin")
 +          return status(403, {
 +            code: "forbidden",
@@ -254,6 +275,12 @@ index 3143433..6a2489c 100644
 +          return status(404, {
 +            code: "project_not_found",
 +            message: "project not found",
++          });
++        const reason = archiveReason(body);
++        if (reason === false)
++          return status(422, {
++            code: "invalid_reason",
++            message: "the reason must be 1 to 200 characters",
 +          });
 +        if (project.archivedAt)
 +          return status(409, {
@@ -278,7 +305,11 @@ index 3143433..6a2489c 100644
 +          });
 +        const [archived] = await db
 +          .update(projects)
-+          .set({ archivedAt: new Date(), archivedBy: user.id })
++          .set({
++            archivedAt: new Date(),
++            archivedBy: user.id,
++            archiveReason: reason ?? null,
++          })
 +          .where(and(eq(projects.id, project.id), isNull(projects.archivedAt)))
 +          .returning();
 +        if (!archived)
@@ -288,7 +319,11 @@ index 3143433..6a2489c 100644
 +          });
 +        return toProjectResponse(archived);
 +      },
-+      { requireAuth: true },
++      {
++        requireAuth: true,
++        // Validated by hand: the framework strips unknown keys, and R16 refuses them.
++        body: t.Optional(t.Unknown()),
++      },
 +    )
 +    .post(
 +      "/:id/restore",
@@ -317,15 +352,31 @@ index 3143433..6a2489c 100644
 +          });
 +        const [restored] = await db
 +          .update(projects)
-+          .set({ archivedAt: null, archivedBy: null })
-+          .where(eq(projects.id, project.id))
++          .set({ archivedAt: null, archivedBy: null, archiveReason: null })
++          .where(
++            and(eq(projects.id, project.id), isNotNull(projects.archivedAt)),
++          )
 +          .returning();
-+        if (!restored) throw new Error("update returned no row");
++        if (!restored)
++          return status(409, {
++            code: "not_archived",
++            message: "project is not archived",
++          });
 +        return toProjectResponse(restored);
        },
        { requireAuth: true },
      )
-@@ -108,6 +220,7 @@ export const projectRoutes = (db: Db) =>
+@@ -93,7 +242,8 @@ export const projectRoutes = (db: Db) =>
+           .from(tasks)
+           .where(eq(tasks.projectId, project.id))
+           .orderBy(asc(tasks.createdAt));
+-        return { items: rows.map(toTaskResponse) };
++        const readOnly = Boolean(project.archivedAt);
++        return { items: rows.map((task) => toTaskResponse(task, readOnly)) };
+       },
+       { requireAuth: true },
+     )
+@@ -108,6 +258,7 @@ export const projectRoutes = (db: Db) =>
            )
            .get();
          if (!project) return status(404, "Project not found");
@@ -333,20 +384,35 @@ index 3143433..6a2489c 100644
          if (body.assigneeId) {
            const assignee = await db
              .select()
+@@ -137,7 +288,7 @@ export const projectRoutes = (db: Db) =>
+         if (!task) throw new Error("insert returned no row");
+         if (task.assigneeId)
+           await notifyTaskAssigned(db, task, task.assigneeId);
+-        return status(201, toTaskResponse(task));
++        return status(201, toTaskResponse(task, false));
+       },
+       {
+         requireAuth: true,
 diff --git a/src/routes/serializers.ts b/src/routes/serializers.ts
-index f62bf85..e4e6fd0 100644
+index f62bf85..69ed4a7 100644
 --- a/src/routes/serializers.ts
 +++ b/src/routes/serializers.ts
-@@ -1,4 +1,4 @@
+@@ -1,6 +1,6 @@
 -import type { Task } from "../db/schema";
 +import type { Project, Task } from "../db/schema";
  
- export function toTaskResponse(task: Task) {
+-export function toTaskResponse(task: Task) {
++export function toTaskResponse(task: Task, readOnly: boolean) {
    return {
-@@ -14,3 +14,15 @@ export function toTaskResponse(task: Task) {
+     id: task.id,
+     projectId: task.projectId,
+@@ -12,5 +12,19 @@ export function toTaskResponse(task: Task) {
+     dueDate: task.dueDate,
+     createdAt: task.createdAt.toISOString(),
      updatedAt: task.updatedAt.toISOString(),
-   };
- }
++    readOnly,
++  };
++}
 +
 +export function toProjectResponse(project: Project) {
 +  return {
@@ -357,10 +423,11 @@ index f62bf85..e4e6fd0 100644
 +    createdAt: project.createdAt.toISOString(),
 +    archivedAt: project.archivedAt?.toISOString() ?? null,
 +    archivedBy: project.archivedBy,
-+  };
-+}
++    archiveReason: project.archiveReason,
+   };
+ }
 diff --git a/src/routes/tasks.ts b/src/routes/tasks.ts
-index c62bf5d..a1ca2b7 100644
+index c62bf5d..423ead1 100644
 --- a/src/routes/tasks.ts
 +++ b/src/routes/tasks.ts
 @@ -5,6 +5,7 @@ import type { Db } from "../db/client";
@@ -371,7 +438,19 @@ index c62bf5d..a1ca2b7 100644
  import { toTaskResponse } from "./serializers";
  
  export const taskRoutes = (db: Db) =>
-@@ -32,6 +33,8 @@ export const taskRoutes = (db: Db) =>
+@@ -19,7 +20,10 @@ export const taskRoutes = (db: Db) =>
+           .where(eq(tasks.id, params.id))
+           .get();
+         if (!task) return status(404, { error: "task not found" });
+-        return toTaskResponse(task);
++        return toTaskResponse(
++          task,
++          await isProjectArchived(db, task.projectId),
++        );
+       },
+       { requireAuth: true },
+     )
+@@ -32,6 +36,8 @@ export const taskRoutes = (db: Db) =>
            .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
            .get();
          if (!task) return status(404, { error: "task not found" });
@@ -380,7 +459,26 @@ index c62bf5d..a1ca2b7 100644
  
          const changes: Partial<typeof tasks.$inferInsert> = {};
  
-@@ -138,6 +141,14 @@ export const taskRoutes = (db: Db) =>
+@@ -100,7 +106,8 @@ export const taskRoutes = (db: Db) =>
+           changes.dueDate = body.dueDate;
+         }
+ 
+-        if (Object.keys(changes).length === 0) return toTaskResponse(task);
++        if (Object.keys(changes).length === 0)
++          return toTaskResponse(task, false);
+         changes.updatedAt = new Date();
+ 
+         const [updated] = await db
+@@ -110,7 +117,7 @@ export const taskRoutes = (db: Db) =>
+           .returning();
+         if (!updated) throw new Error("update returned no row");
+         if (newAssignee) await notifyTaskAssigned(db, updated, newAssignee);
+-        return toTaskResponse(updated);
++        return toTaskResponse(updated, false);
+       },
+       {
+         requireAuth: true,
+@@ -138,6 +145,14 @@ export const taskRoutes = (db: Db) =>
        "/:id",
        async ({ params, user, status }) => {
          if (user.role !== "admin") return status(403, "Forbidden");

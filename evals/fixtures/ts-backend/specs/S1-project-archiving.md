@@ -25,12 +25,14 @@ restored.
 
 ## 2. Data
 
-- A new drizzle-kit migration (do not edit `0000_init.sql`) adds two nullable columns to `projects`:
+- A new drizzle-kit migration (do not edit `0000_init.sql`) adds three nullable columns to `projects`:
   - `archived_at` (integer, `timestamp_ms` mode), null while the project is active;
   - `archived_by` (text), the admin who archived it, a foreign key to `users.id` with
-    `ON DELETE SET NULL`.
-- Project JSON, everywhere a project is returned, gains `archivedAt` (ISO 8601 string or `null`)
-  and `archivedBy` (user id or `null`). The list items gain both as well.
+    `ON DELETE SET NULL`;
+  - `archive_reason` (text), the optional reason given when archiving (R16).
+- Project JSON, everywhere a project is returned, gains `archivedAt` (ISO 8601 string or `null`),
+  `archivedBy` (user id or `null`) and `archiveReason` (string or `null`). The list items gain
+  all three as well.
 
 ## 3. Requirements
 
@@ -54,7 +56,8 @@ restored.
   - `all`: both.
 
   Any other value is a validation error (`422`, the framework's default for query validation).
-  Ordering (by name) and `taskCounts` are unchanged and are computed for archived projects too.
+  Ordering (by name, except as R15 says) and `taskCounts` are unchanged and are computed for
+  archived projects too.
 
 - **R8.** `GET /api/projects/:id` and `GET /api/projects/:id/tasks` keep working for archived
   projects (`200`). `GET /api/tasks/:id` keeps working for tasks in archived projects.
@@ -71,12 +74,28 @@ restored.
   archived project's task is `409 project_archived`, not the transition error.
 - **R11.** After a restore, the project's tasks can be created, changed and deleted again under the
   normal rules.
+- **R12.** Every task JSON the API returns gains `readOnly: boolean`, `true` exactly when the
+  task's project is archived: `GET /api/tasks/:id`, `GET /api/projects/:id/tasks`,
+  `POST /api/projects/:id/tasks` and `PATCH /api/tasks/:id`. It follows the project: a restore
+  makes it `false` again.
+- **R13.** Archive and restore are safe under concurrency. When several archive requests for the
+  same project arrive at the same time, exactly one gets `200` and the others `409
+already_archived`, and the stored `archivedBy`, `archivedAt` and `archiveReason` are the
+  winner's. The same holds for simultaneous restores (one `200`, the others `409 not_archived`).
+- **R14.** Deleting the user who archived a project keeps the project archived, with
+  `archivedBy: null` (the foreign key in section 2).
+- **R15.** `GET /api/projects?archived=true` lists the most recently archived project first
+  (descending `archivedAt`, then by name). `archived=all` and the default keep the name order.
+- **R16.** The archive request takes an optional JSON body `{ "reason": string }`: the reason is
+  trimmed, 1 to 200 characters after trimming, and stored as `archiveReason` (`null` when no body
+  or no reason is sent). An empty or longer reason, or any other key in the body, is `422` and
+  archives nothing. A restore clears `archiveReason`.
 
 ## 4. API contract
 
 ```
 POST /api/projects/:id/archive   admin   200 Project | 403 forbidden | 404 project_not_found
-                                         | 409 already_archived | 409 project_has_active_tasks
+  body (optional) { reason? }            | 409 already_archived | 409 project_has_active_tasks | 422
 POST /api/projects/:id/restore   admin   200 Project | 403 forbidden | 404 project_not_found
                                          | 409 not_archived
 GET  /api/projects?archived=false|true|all
@@ -90,7 +109,8 @@ GET  /api/projects?archived=false|true|all
   "description": "New marketing site",
   "createdAt": "2026-11-01T10:00:00.000Z",
   "archivedAt": "2026-11-16T09:30:00.000Z",
-  "archivedBy": "usr_ada"
+  "archivedBy": "usr_ada",
+  "archiveReason": "Relaunch shipped"
 }
 ```
 
@@ -112,6 +132,8 @@ GET  /api/projects?archived=false|true|all
   is unchanged afterwards.
 - Restore, then create, change and delete a task in that project.
 - A member and another organization's admin get `403` and `404` on both new routes.
+- Five simultaneous archive requests: one `200`, four `409 already_archived`.
+- Every task response shows `readOnly` matching its project.
 
 ## 6. Out of scope
 

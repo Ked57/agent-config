@@ -17,12 +17,12 @@ Running log for the "evaluate agent-config's own policies, skills and plugins" b
 | 1.1 | Isolation: per-run HOME and TMPDIR outside the home tree, plugins installed, init verification | agent A | done, reviewed: bare and WORKTREE arms pass the per-run isolation check on a real haiku run |
 | 1.2 | Decision rule: task-level paired CI, MDE, "cannot conclude" | agent B | done (`1db5fa0`), reviewed |
 | 1.3 | Primary metric: hidden-test and required-check pass rate; judge as tiebreaker | agent B | done (`1db5fa0`); `run.mjs` wiring requests sent to agent A |
-| 1.4 | Mutant gate (`npm run eval:mutants`) | agent C | in flight |
-| 1.5 | Weak tests: B5 strict, B6, B8, B9, B10, N2 | agent C | in flight |
-| 1.6 | Vue behavioural hidden tests; MWG wording removed from the Vue task set | agent D | in flight |
-| 2 | `ts-backend-hard` task set (from the stream 7 drafts) | agent E | in flight |
-| 2 | `poteto-spec` task set (4–6 spec-sized tasks) | agent G | in flight |
-| 2 | Component tasks from the inventory's mapping | not started | waits for F |
+| 1.4 | Mutant gate (`npm run eval:mutants`) | agent C | done: `evals/mutants.mjs`; base ts-backend gate green (132 checks, about 5–6 min, so not part of `verify`; a structural manifest test is) |
+| 1.5 | Weak tests: B5 strict, B6, B8, B9, B10, N2 | agent C | done: B5 strict (3 of 4 saved solutions now fail by design), B6 11/11, B8 11/11, B9 9/9 with delivery required, B10 11/11, B11 7/8, N2 6/6 |
+| 1.6 | Vue behavioural hidden tests; MWG wording removed from the Vue task set | agent D | done: 14 of 15 tasks have jsdom behavioural tests (C5 static only), 91 of 92 mutants killed; but all 126 saved real solutions pass every case (ceiling) |
+| 2 | `ts-backend-hard` task set | agent E | H1–H8 verified (67 of 67 mutants) but baseline passed 85 of 85 cases; E is rewriting prompts to state invariants, not case lists, and recalibrating (cap $8) |
+| 2 | `poteto-spec` task set | agent G | S1–S5 verified; S1 at ceiling; G calibrating S2–S5 and hardening (cap $7) |
+| 2 | Component tasks | agent F | done: K1–K5; K6, K7 are gaps |
 | 2 | Prompt prefixes per arm, ablation arms (`--b-remove plugin:x`), bare arm | agent A | done; `/pstack:poteto-mode` prefix confirmed to load the skill headless; task-level `files` ship specs before the run |
 | 3 | Comparison 1: full agent-config vs bare Claude Code | lead | waits for 1 and 2 |
 | 3 | Comparison 2: poteto-mode on vs off | lead | waits for 1 and 2 |
@@ -119,3 +119,5 @@ and the run is excluded and reported.
   spec-stated interaction requirements. Noted: Vitest's default 5 s timeout fails under machine load;
   hidden checks and fixture gates get `--testTimeout=30000` before the freeze, and Phase 3 runs at low
   concurrency.
+- 05:32 UTC: agents C and D done; verify passes (177). E reported the hard set at ceiling (85 of 85) and was sent back to rewrite prompts as invariants and recalibrate. Agent A resumed for `--combine` (one report across both fixtures for comparison 1), a deletion-safety audit (three agents saw `/var/tmp/repo-evals-work` wiped at about 05:00) and `--testTimeout=30000` on the fixture test gates.
+- Calibration spend so far (outside the Phase 3 budget, reported separately): A $0.06, E $6.63, G $1.05.
