@@ -21,6 +21,7 @@ Apply this policy only in repositories using Vue 3 + TypeScript. Before changing
 
 ## UI, accessibility, and tests
 
+- Before writing or changing template markup or styles, read `~/.agents/skills/emil-design-eng/SKILL.md` and apply it.
 - When PrimeVue is installed, reuse its established components, the repository token preset, and local UI primitives.
 - When customising PrimeVue dialogs, preserve accessible names, trigger state, configured keyboard dismissal, and focus behaviour; verify keyboard opening, navigation, and focus after close in the rendered UI, matching the installed version and intentional dismissal restrictions.
 - Use i18n for user-facing text unless the local convention explicitly differs.

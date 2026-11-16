@@ -23,7 +23,7 @@ declared dependencies.
 - Browser automation → `agent-browser`; specialized workflows come from `agent-browser skills get`. `manual-qa` loads this owner for browser UI.
 - `fullstack-typescript-quality` loads `fullstack-typescript-static`, `fullstack-typescript-tests`, and `fullstack-typescript-mutation`; those children own their gates.
 - Public page or app screen that needs a designed look → `design-taste-frontend`. Cursor reads `~/.cursor/skills/design-taste-frontend/SKILL.md`. Claude and Codex load the taste-skill plugin.
-- UI implementation or visual critique → `emil-design-eng`.
+- Building, restyling, or critiquing component or screen markup and styles → `emil-design-eng`; read it before editing templates or styles. `vue-primevue.md` repeats this step for Vue.
 - Worst-case data and layout breakage → `break-ui`.
 - New motion → `animate`.
 - Dropped frames or which property to animate → `animation-performance`.

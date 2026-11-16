@@ -41,3 +41,23 @@ test('every npm package a skill tells the reader to install was verified to exis
   );
   assert.deepEqual(unverified, [], 'verify with `npm view <name>` and add to tests/verified-npm-packages.json');
 });
+
+test('every skill routing.md routes to is installed by this repository', async () => {
+  const { externalPlugins } = await import('../bin/external-plugins.mjs');
+  const installed = new Set([
+    ...fs.readdirSync(path.join(root, 'skills')).filter((name) => fs.existsSync(path.join(root, 'skills', name, 'SKILL.md'))),
+    ...externalPlugins.flatMap((entry) => entry.skills ?? [])
+  ]);
+  const routing = fs.readFileSync(path.join(root, 'policy/routing.md'), 'utf8');
+  const skillSection = routing.slice(routing.indexOf('## 2. Skills'), routing.indexOf('## Exit'));
+  const routed = [...skillSection.matchAll(/→ `([a-z0-9-]+)`/g)].map((match) => match[1]);
+  assert.ok(routed.includes('emil-design-eng'));
+  assert.deepEqual(routed.filter((name) => !installed.has(name)), []);
+});
+
+// Agents read the Vue policy whenever they route a Vue task but skip bare skill names on
+// functional UI work, so the policy carries the explicit load step for emil-design-eng.
+test('the Vue policy tells agents to read emil-design-eng before template or style edits', () => {
+  const vue = fs.readFileSync(path.join(root, 'policy/vue-primevue.md'), 'utf8');
+  assert.match(vue, /Before writing or changing template markup or styles, read `~\/\.agents\/skills\/emil-design-eng\/SKILL\.md`/);
+});
