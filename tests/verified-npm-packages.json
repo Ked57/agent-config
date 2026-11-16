@@ -1,0 +1,13 @@
+{
+  "note": "npm packages that skills/**/SKILL.md tell the reader to install. Add a name only after `npm view <name> name version` succeeds and the package provides what the skill says.",
+  "verified": "2026-11-16",
+  "packages": [
+    "agent-browser",
+    "eslint",
+    "eslint-plugin-sonarjs",
+    "knip",
+    "quality-metrics",
+    "ts-morph",
+    "typescript-eslint"
+  ]
+}
