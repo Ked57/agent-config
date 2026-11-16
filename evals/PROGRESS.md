@@ -1,5 +1,7 @@
 # feat/repo-evals progress
 
+**Status: done (2026-11-16 15:00 UTC).** Heartbeat `e95b56f3` deleted. Results, open gaps and the ablation proposal: see the end of the log and `evals/NEXT.md`.
+
 Running log for the "evaluate agent-config's own policies, skills and plugins" brief. Any resume
 (the lead's or a heartbeat's) starts here, then `git log --oneline -15` and `git status`.
 
@@ -24,9 +26,9 @@ Running log for the "evaluate agent-config's own policies, skills and plugins" b
 | 2 | `poteto-spec` task set | agent G | S1–S5 verified; S1 at ceiling; G calibrating S2–S5 and hardening (cap $7) |
 | 2 | Component tasks | agent F | done: K1–K5; K6, K7 are gaps |
 | 2 | Prompt prefixes per arm, ablation arms (`--b-remove plugin:x`), bare arm | agent A | done; `/pstack:poteto-mode` prefix confirmed to load the skill headless; task-level `files` ship specs before the run |
-| 3 | Comparison 1: full agent-config vs bare Claude Code | lead | waits for 1 and 2 |
-| 3 | Comparison 2: poteto-mode on vs off | lead | waits for 1 and 2 |
-| — | `evals/NEXT.md` ablation proposal | lead | not started |
+| 3 | Comparison 1: full agent-config vs bare Claude Code | lead | done: `~/agent-config-evals/2026-11-16T10-20-full-vs-bare` |
+| 3 | Comparison 2: poteto-mode on vs off | lead | done: `~/agent-config-evals/2026-11-16T10-20-poteto-mode` |
+| — | `evals/NEXT.md` ablation proposal | lead | done |
 
 ## Decisions (binding for all subagents)
 
@@ -186,3 +188,22 @@ and the run is excluded and reported.
   Driver relaunched at 11:47; resume rebuilds the cache. Lesson: never link the live cache by hand; use
   `--recheck` or `evals/mutants.mjs`.
 - Phase 3 spend so far: full-vs-bare $36.30, poteto-mode $2.94.
+- 12:10–14:40 UTC: third usage-limit pause, mid comparison 2. The driver slept and resumed, but two S4
+  runs started while the account was still limited ended in 0 minutes at $0 and were recorded as
+  isolation failures (three account-gated built-in skills were absent). The lead moved those two
+  records to `<poteto-mode dir>/discarded/` and resumed; both runs then completed normally. Fixed in
+  `evals/lib/isolation.mjs`: an absent built-in is a note, and a refused run is discarded, not recorded.
+- 14:52 UTC: **comparison 2 complete** (10 runs, $18.80): run score 1.00 vs 1.00, all 5 tasks at
+  ceiling (117 of 117 hidden cases in both arms); cost +71% with poteto-mode (CI +19% to +120%); judge
+  +0.14 (CI −0.17 to +0.45); pstack fired in 5 of 5 prefixed runs, `pstack:poteto-agent` used in 2.
+- 14:55 UTC: H1 hidden test corrected (unique Idempotency-Key on every request, no extra body field),
+  H1 mutant gate 8 of 8, `--recheck` on `fvb-hard` (H1 bare 3/9 → 8/9, original checks kept in the
+  record), recombined. The pre-recheck combined report is kept in `~/agent-config-evals/phase3/`.
+  **Final comparison 1**: run score bare 0.93, full 0.98, d +0.04, 95% CI −0.04 to +0.12, MDE 0.12 at 37
+  tasks, 30 at ceiling → cannot conclude; cost full +103% (CI +75% to +139%); judge +0.06 (CI −0.08 to +0.21).
+- Spend: Phase 3 $55.12 (full-vs-bare $36.32, poteto-mode $18.80) of the $80 budget. Calibration and
+  probes outside it: about $18.50. The remaining budget was not spent on a second rep: with every
+  spec task at ceiling, more reps cannot change the primary metric.
+- Open gaps: tasks are too easy for the primary metric (see `NEXT.md` step 0); no React fixture; C5 has
+  no browser check; K6 and K7 not built; B11 m7, S4 m11 and C5 m6 mutants survive; the combined report
+  does not repeat the source report's "Rechecked" line; the sandbox lives in a service-private `/var/tmp`.
