@@ -106,3 +106,4 @@ and the run is excluded and reported.
   15 verify tests fail (task sets and mutant gate mid-change). Agent A's report was complete before the
   limit; not resumed. Next for the lead: review each agent's result, get `npm run verify` and
   `npm run eval:mutants` green, freeze tasks, then Phase 3 cost estimates and runs.
+- 05:00 UTC: the lead's session restarted and stopped C, D, E, F, G mid-work again (about 15 minutes of progress, checkpoint-committed: `poteto-spec.json` now exists; verify 166 pass, 10 fail). All five re-sent a continue message.
