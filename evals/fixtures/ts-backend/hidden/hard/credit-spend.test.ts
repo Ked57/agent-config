@@ -11,8 +11,9 @@ async function balance(db: Context["db"], orgId: string) {
   return org?.credits;
 }
 
+// Every request carries a key: the prompt says clients send one, so a solution may require it.
 const spend = (request: Context["request"], token: string, amount: unknown, key?: string) =>
-  request("POST", "/api/credits/spend", { token, body: { amount, reason: "export" }, headers: key ? { "idempotency-key": key } : {} });
+  request("POST", "/api/credits/spend", { token, body: { amount }, headers: { "idempotency-key": key ?? crypto.randomUUID() } });
 
 const topUp = (request: Context["request"], id: string, orgId: string, credits: number) =>
   request("POST", "/api/webhooks/billing", { headers: { "x-webhook-secret": "test-webhook-secret" }, body: { id, type: "payment.succeeded", data: { orgId, credits } } });
