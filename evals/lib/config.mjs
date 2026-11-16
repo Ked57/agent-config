@@ -296,6 +296,7 @@ export function validateTaskSet(taskSet) {
         if (check.expect !== undefined && !['pass', 'fail'].includes(check.expect)) errors.push(`${cwhere}: expect must be pass or fail`);
         if (check.reporter !== undefined && !['vitest-json', 'json-score'].includes(check.reporter)) errors.push(`${cwhere}: reporter must be vitest-json or json-score`);
         if (check.passAt !== undefined && (check.reporter !== 'json-score' || typeof check.passAt !== 'number' || check.passAt < 0 || check.passAt > 1)) errors.push(`${cwhere}: passAt must be a number in 0..1 on a json-score check`);
+        if (check.browserTools !== undefined && typeof check.browserTools !== 'boolean') errors.push(`${cwhere}: browserTools must be true or false`);
         if (check.copy !== undefined && !relativeMap(check.copy)) {
           errors.push(`${cwhere}: copy must map fixture-relative paths to app-relative paths`);
         }

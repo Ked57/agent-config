@@ -1,0 +1,125 @@
+{
+  "name": "vue-design",
+  "description": "Build a screen from a design hand-off (Figma frame links read through the Figma MCP server, or PNG mockups) in the Vue 3 + PrimeVue 4 + Tailwind 4 admin console. Scored continuously on visual similarity, layout, behaviour and accessibility.",
+  "fixture": "vue-primevue",
+  "categories": {
+    "design": {
+      "label": "Screens from a design hand-off"
+    }
+  },
+  "smoke": [
+    "D1-analytics-dashboard"
+  ],
+  "featurePatterns": {
+    "primevueImport": "from ['\"]primevue/",
+    "inlineSvg": "<svg\\b",
+    "chartLibrary": "chart\\.js|echarts|apexcharts|recharts|primevue/chart"
+  },
+  "defaultMode": "figma-link",
+  "modes": {
+    "figma-link": {
+      "serverFiles": "figma-stub",
+      "mcpServers": {
+        "figma": {
+          "command": "node",
+          "args": [
+            "{serverDir}/server.mjs"
+          ]
+        }
+      }
+    },
+    "screenshot-only": {}
+  },
+  "tasks": [
+    {
+      "id": "D1-analytics-dashboard",
+      "category": "design",
+      "prompt": "Implement this design from Figma.\nDesktop: https://www.figma.com/design/Xk3dQ9vLm2PaRt7YwZb4Nc/Acme-Console-Analytics?node-id=12-2&m=dev\nMobile: https://www.figma.com/design/Xk3dQ9vLm2PaRt7YwZb4Nc/Acme-Console-Analytics?node-id=12-3&m=dev\nState, row menu open: https://www.figma.com/design/Xk3dQ9vLm2PaRt7YwZb4Nc/Acme-Console-Analytics?node-id=12-4&m=dev\nState, last 7 days selected: https://www.figma.com/design/Xk3dQ9vLm2PaRt7YwZb4Nc/Acme-Console-Analytics?node-id=12-5&m=dev\nState, empty workspace: https://www.figma.com/design/Xk3dQ9vLm2PaRt7YwZb4Nc/Acme-Console-Analytics?node-id=12-6&m=dev\n\nImplement it at route /analytics; the data source is src/services/analytics.ts.\nThe date-range control is labelled \"Date range\", and the row menus are icon buttons labelled \"Row actions\".",
+      "modes": {
+        "screenshot-only": {
+          "prompt": "Implement this screen from the mockups in design/analytics/ (desktop, mobile and three states). Implement it at route /analytics; the data source is src/services/analytics.ts. The date-range control is labelled \"Date range\", and the row menus are icon buttons labelled \"Row actions\".",
+          "files": {
+            "figma-stub/analytics/desktop.png": "design/analytics/desktop.png",
+            "figma-stub/analytics/mobile.png": "design/analytics/mobile.png",
+            "figma-stub/analytics/desktop-row-menu-open.png": "design/analytics/desktop-row-menu-open.png",
+            "figma-stub/analytics/desktop-range-7d.png": "design/analytics/desktop-range-7d.png",
+            "figma-stub/analytics/desktop-empty.png": "design/analytics/desktop-empty.png"
+          }
+        }
+      },
+      "expectsComponents": [
+        "vue-primevue",
+        "typescript",
+        "emil-design-eng",
+        "manual-qa",
+        "plugin:taste-skill"
+      ],
+      "checks": [
+        {
+          "id": "visual",
+          "label": "Visual similarity to the mockups (SSIM + colour, baseline-normalised, mean over frames)",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/analytics": ".design-score/screen",
+            "figma-stub/analytics": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs visual",
+          "reporter": "json-score",
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "layout",
+          "label": "Key elements present, in order and where the design puts them",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/analytics": ".design-score/screen",
+            "figma-stub/analytics": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs layout",
+          "reporter": "json-score",
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "behaviour",
+          "label": "Row menu, date range, desktop row, mobile stacking and empty state work as drawn",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/analytics": ".design-score/screen",
+            "figma-stub/analytics": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs behaviour",
+          "reporter": "json-score",
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "a11y",
+          "label": "axe-core WCAG A/AA on every frame state, scaled by layout coverage",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/analytics": ".design-score/screen",
+            "figma-stub/analytics": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs a11y",
+          "reporter": "json-score",
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        }
+      ]
+    }
+  ]
+}

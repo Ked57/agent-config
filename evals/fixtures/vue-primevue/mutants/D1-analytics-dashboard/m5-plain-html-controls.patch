@@ -1,0 +1,333 @@
+diff --git a/src/components/AppHeader.vue b/src/components/AppHeader.vue
+index 7361176..b9a2a3b 100644
+--- a/src/components/AppHeader.vue
++++ b/src/components/AppHeader.vue
+@@ -1,6 +1,7 @@
+ <script setup lang="ts">
+ const links = [
+   { to: '/', label: 'Dashboard', icon: 'pi pi-chart-bar' },
++  { to: '/analytics', label: 'Analytics', icon: 'pi pi-chart-line' },
+   { to: '/projects', label: 'Projects', icon: 'pi pi-briefcase' },
+   { to: '/users', label: 'Users', icon: 'pi pi-users' },
+   { to: '/gallery', label: 'Gallery', icon: 'pi pi-images' },
+diff --git a/src/components/analytics/ActivityList.vue b/src/components/analytics/ActivityList.vue
+new file mode 100644
+index 0000000..28325ea
+--- /dev/null
++++ b/src/components/analytics/ActivityList.vue
+@@ -0,0 +1,34 @@
++<script setup lang="ts">
++import type { Activity } from '@/services/analytics'
++
++defineProps<{ items: Activity[] }>()
++
++const icons: Record<Activity['kind'], { icon: string; tone: string }> = {
++  upgrade: { icon: 'pi pi-arrow-up', tone: 'bg-emerald-50 text-emerald-700' },
++  payment: { icon: 'pi pi-credit-card', tone: 'bg-sky-50 text-sky-700' },
++  signup: { icon: 'pi pi-user-plus', tone: 'bg-violet-50 text-violet-700' },
++  refund: { icon: 'pi pi-replay', tone: 'bg-amber-50 text-amber-700' },
++  cancellation: { icon: 'pi pi-times', tone: 'bg-red-50 text-red-700' },
++}
++
++const when = (iso: string) =>
++  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(iso))
++</script>
++
++<template>
++  <section class="flex flex-col gap-4 rounded-xl border border-surface-200 bg-surface-0 p-5">
++    <h2 class="text-base font-semibold text-surface-900">Recent activity</h2>
++    <ol v-if="items.length" class="flex flex-col gap-4">
++      <li v-for="item in items" :key="item.id" class="flex items-start gap-3">
++        <span class="flex size-8 shrink-0 items-center justify-center rounded-full" :class="icons[item.kind].tone">
++          <i :class="icons[item.kind].icon" class="text-sm" aria-hidden="true"></i>
++        </span>
++        <div class="min-w-0 text-sm">
++          <p class="text-surface-900"><span class="font-medium">{{ item.actor }}</span> {{ item.text }}</p>
++          <p class="text-surface-500"><time :datetime="item.at">{{ when(item.at) }}</time></p>
++        </div>
++      </li>
++    </ol>
++    <p v-else class="py-6 text-center text-sm text-surface-500">No activity yet</p>
++  </section>
++</template>
+diff --git a/src/components/analytics/KpiCard.vue b/src/components/analytics/KpiCard.vue
+new file mode 100644
+index 0000000..c006261
+--- /dev/null
++++ b/src/components/analytics/KpiCard.vue
+@@ -0,0 +1,36 @@
++<script setup lang="ts">
++import { computed } from 'vue'
++import TrendLine from '@/components/analytics/TrendLine.vue'
++import type { Kpi } from '@/services/analytics'
++
++const props = defineProps<{ kpi: Kpi }>()
++
++const value = computed(() => {
++  const { value: raw, format } = props.kpi
++  if (format === 'currency') return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(raw)
++  if (format === 'percent') return `${raw.toFixed(1)}%`
++  return new Intl.NumberFormat('en-US').format(raw)
++})
++
++const up = computed(() => props.kpi.delta >= 0)
++</script>
++
++<template>
++  <article class="flex flex-col gap-3 rounded-xl border border-surface-200 bg-surface-0 p-5">
++    <h2 class="text-sm font-medium text-surface-500">{{ kpi.label }}</h2>
++    <div class="flex items-end justify-between gap-3">
++      <p class="text-3xl font-semibold tracking-tight text-surface-900 tabular-nums">{{ value }}</p>
++      <TrendLine :values="kpi.trend" :positive="up" />
++    </div>
++    <p class="flex items-center gap-2 text-sm">
++      <span
++        class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium tabular-nums"
++        :class="up ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'"
++      >
++        <i :class="up ? 'pi pi-arrow-up-right' : 'pi pi-arrow-down-right'" class="text-xs" aria-hidden="true"></i>
++        {{ up ? '+' : '−' }}{{ Math.abs(kpi.delta).toFixed(1) }}%
++      </span>
++      <span class="text-surface-500">vs previous period</span>
++    </p>
++  </article>
++</template>
+diff --git a/src/components/analytics/RevenueChart.vue b/src/components/analytics/RevenueChart.vue
+new file mode 100644
+index 0000000..1038895
+--- /dev/null
++++ b/src/components/analytics/RevenueChart.vue
+@@ -0,0 +1,85 @@
++<script setup lang="ts">
++import { computed } from 'vue'
++import type { RevenuePoint } from '@/services/analytics'
++
++const props = defineProps<{ points: RevenuePoint[]; rangeLabel: string }>()
++
++const WIDTH = 720
++const HEIGHT = 260
++const PAD = { top: 12, right: 8, bottom: 28, left: 52 }
++const plotWidth = WIDTH - PAD.left - PAD.right
++const plotHeight = HEIGHT - PAD.top - PAD.bottom
++
++const money = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
++const compact = (value: number) => `$${value >= 1000 ? `${Math.round(value / 100) / 10}k` : value}`
++
++const scale = computed(() => {
++  const max = Math.max(...props.points.map((point) => point.revenue))
++  // A round step (1, 2 or 5 × 10^n) giving at most five gridlines above zero.
++  const magnitude = Math.pow(10, Math.floor(Math.log10(max / 5)))
++  const step = [1, 2, 5, 10].map((factor) => factor * magnitude).find((candidate) => candidate * 5 >= max) ?? magnitude * 10
++  const top = Math.ceil(max / step) * step
++  return { top, ticks: Array.from({ length: Math.round(top / step) + 1 }, (_, index) => index * step) }
++})
++
++const coords = computed(() => {
++  const step = plotWidth / Math.max(props.points.length - 1, 1)
++  return props.points.map((point, index) => ({
++    x: PAD.left + index * step,
++    y: PAD.top + plotHeight - (point.revenue / scale.value.top) * plotHeight,
++    label: point.label,
++  }))
++})
++
++const line = computed(() => coords.value.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' '))
++const area = computed(() => {
++  const first = coords.value[0]
++  const last = coords.value[coords.value.length - 1]
++  if (!first || !last) return ''
++  const base = PAD.top + plotHeight
++  return `${line.value} L${last.x.toFixed(1)},${base} L${first.x.toFixed(1)},${base} Z`
++})
++
++const xLabels = computed(() => {
++  const every = Math.ceil(coords.value.length / 7)
++  return coords.value.filter((_, index) => index % every === 0)
++})
++
++const total = computed(() => props.points.reduce((sum, point) => sum + point.revenue, 0))
++const yFor = (value: number) => PAD.top + plotHeight - (value / scale.value.top) * plotHeight
++</script>
++
++<template>
++  <section class="flex flex-col gap-4 rounded-xl border border-surface-200 bg-surface-0 p-5">
++    <header class="flex flex-wrap items-start justify-between gap-2">
++      <div>
++        <h2 class="text-base font-semibold text-surface-900">Revenue over time</h2>
++        <p class="text-sm text-surface-500">{{ rangeLabel }} · {{ money(total) }} total</p>
++      </div>
++      <span class="flex items-center gap-2 text-sm text-surface-600">
++        <span class="inline-block size-2.5 rounded-full bg-primary"></span>
++        Revenue
++      </span>
++    </header>
++    <svg
++      :viewBox="`0 0 ${WIDTH} ${HEIGHT}`"
++      class="h-auto w-full"
++      role="img"
++      :aria-label="`Revenue chart, ${rangeLabel.toLowerCase()}, ${money(total)} total`"
++    >
++      <defs>
++        <linearGradient id="revenue-fill" x1="0" x2="0" y1="0" y2="1">
++          <stop offset="0%" stop-color="var(--p-primary-500)" stop-opacity="0.22" />
++          <stop offset="100%" stop-color="var(--p-primary-500)" stop-opacity="0" />
++        </linearGradient>
++      </defs>
++      <g v-for="tick in scale.ticks" :key="tick">
++        <line :x1="PAD.left" :x2="WIDTH - PAD.right" :y1="yFor(tick)" :y2="yFor(tick)" class="stroke-surface-200" stroke-width="1" />
++        <text :x="PAD.left - 10" :y="yFor(tick) + 4" text-anchor="end" class="fill-surface-500 text-[11px]">{{ compact(tick) }}</text>
++      </g>
++      <path :d="area" fill="url(#revenue-fill)" />
++      <path :d="line" fill="none" stroke="var(--p-primary-500)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
++      <text v-for="point in xLabels" :key="point.label" :x="point.x" :y="HEIGHT - 8" text-anchor="middle" class="fill-surface-500 text-[11px]">{{ point.label }}</text>
++    </svg>
++  </section>
++</template>
+diff --git a/src/components/analytics/TopCustomersTable.vue b/src/components/analytics/TopCustomersTable.vue
+new file mode 100644
+index 0000000..f56b439
+--- /dev/null
++++ b/src/components/analytics/TopCustomersTable.vue
+@@ -0,0 +1,48 @@
++<script setup lang="ts">
++import { ref } from 'vue'
++import { initials } from '@/utils/format'
++import type { Customer } from '@/services/analytics'
++
++defineProps<{ customers: Customer[] }>()
++
++const money = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
++const count = (value: number) => new Intl.NumberFormat('en-US').format(value)
++const open = ref<string | null>(null)
++</script>
++
++<template>
++  <section class="flex flex-col gap-4 rounded-xl border border-surface-200 bg-surface-0 p-5">
++    <header class="flex items-center justify-between gap-2">
++      <h2 class="text-base font-semibold text-surface-900">Top customers</h2>
++      <span class="text-sm text-surface-500">By revenue</span>
++    </header>
++    <div class="overflow-x-auto">
++      <table class="w-full min-w-[40rem] text-left">
++        <thead>
++          <tr><th>Customer</th><th>Plan</th><th>Status</th><th class="text-right">Orders</th><th class="text-right">Revenue</th><th><span class="sr-only">Actions</span></th></tr>
++        </thead>
++        <tbody>
++          <tr v-if="!customers.length"><td colspan="6">No customers yet</td></tr>
++          <tr v-for="customer in customers" :key="customer.id">
++            <td>
++              <span aria-hidden="true">{{ initials(customer.name) }}</span>
++              {{ customer.name }}<br />{{ customer.email }}
++            </td>
++            <td>{{ customer.plan }}</td>
++            <td>{{ customer.status }}</td>
++            <td class="text-right">{{ count(customer.orders) }}</td>
++            <td class="text-right">{{ money(customer.revenue) }}</td>
++            <td class="relative">
++              <button type="button" aria-label="Row actions" @click="open = open === customer.id ? null : customer.id">...</button>
++              <ul v-if="open === customer.id" class="absolute right-0 z-10 bg-white">
++                <li><button type="button">View customer</button></li>
++                <li><button type="button">Send invoice</button></li>
++                <li><button type="button">Remove</button></li>
++              </ul>
++            </td>
++          </tr>
++        </tbody>
++      </table>
++    </div>
++  </section>
++</template>
+diff --git a/src/components/analytics/TrendLine.vue b/src/components/analytics/TrendLine.vue
+new file mode 100644
+index 0000000..7d88b4c
+--- /dev/null
++++ b/src/components/analytics/TrendLine.vue
+@@ -0,0 +1,24 @@
++<script setup lang="ts">
++import { computed } from 'vue'
++
++const props = defineProps<{ values: number[]; positive: boolean }>()
++
++const WIDTH = 72
++const HEIGHT = 32
++
++const path = computed(() => {
++  const min = Math.min(...props.values)
++  const max = Math.max(...props.values)
++  const span = max - min || 1
++  const step = WIDTH / Math.max(props.values.length - 1, 1)
++  return props.values
++    .map((value, index) => `${index === 0 ? 'M' : 'L'}${(index * step).toFixed(1)},${(HEIGHT - 2 - ((value - min) / span) * (HEIGHT - 4)).toFixed(1)}`)
++    .join(' ')
++})
++</script>
++
++<template>
++  <svg :viewBox="`0 0 ${WIDTH} ${HEIGHT}`" :width="WIDTH" :height="HEIGHT" aria-hidden="true" class="shrink-0">
++    <path :d="path" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" :class="positive ? 'stroke-emerald-500' : 'stroke-red-500'" />
++  </svg>
++</template>
+diff --git a/src/router/index.ts b/src/router/index.ts
+index 507c8a9..34d1408 100644
+--- a/src/router/index.ts
++++ b/src/router/index.ts
+@@ -5,6 +5,7 @@ export const router = createRouter({
+   history: createWebHistory(),
+   routes: [
+     { path: '/', name: 'dashboard', component: DashboardView, meta: { title: 'Dashboard' } },
++    { path: '/analytics', name: 'analytics', component: () => import('@/views/AnalyticsView.vue'), meta: { title: 'Analytics' } },
+     { path: '/projects', name: 'projects', component: () => import('@/views/ProjectsView.vue'), meta: { title: 'Projects' } },
+     { path: '/users', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { title: 'Users' } },
+     { path: '/users/:id', name: 'user', component: () => import('@/views/UserDetailView.vue'), props: true, meta: { title: 'User' } },
+diff --git a/src/views/AnalyticsView.vue b/src/views/AnalyticsView.vue
+new file mode 100644
+index 0000000..f86ded3
+--- /dev/null
++++ b/src/views/AnalyticsView.vue
+@@ -0,0 +1,46 @@
++<script setup lang="ts">
++import { computed, ref, watch } from 'vue'
++import ActivityList from '@/components/analytics/ActivityList.vue'
++import KpiCard from '@/components/analytics/KpiCard.vue'
++import RevenueChart from '@/components/analytics/RevenueChart.vue'
++import TopCustomersTable from '@/components/analytics/TopCustomersTable.vue'
++import { dateRanges, defaultDateRange, fetchAnalytics, type Analytics, type DateRange } from '@/services/analytics'
++
++const range = ref<DateRange>(defaultDateRange)
++const data = ref<Analytics | null>(null)
++
++const rangeLabel = computed(() => dateRanges.find((option) => option.value === range.value)?.label ?? '')
++
++watch(range, async (value) => {
++  const result = await fetchAnalytics(value)
++  if (value === range.value) data.value = result
++}, { immediate: true })
++</script>
++
++<template>
++  <section class="flex flex-col gap-6">
++    <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
++      <div>
++        <h1 class="text-2xl font-semibold tracking-tight text-surface-900">Analytics</h1>
++        <p class="mt-1 text-sm text-surface-500">Revenue and customer health across your workspace.</p>
++      </div>
++      <div class="flex gap-3">
++        <select v-model="range" aria-label="Date range"><option v-for="option in dateRanges" :key="option.value" :value="option.value">{{ option.label }}</option></select>
++        <button type="button">Export report</button>
++      </div>
++    </header>
++
++    <template v-if="data">
++      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
++        <KpiCard v-for="kpi in data.kpis" :key="kpi.id" :kpi="kpi" />
++      </div>
++
++      <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
++        <RevenueChart class="lg:col-span-2" :points="data.revenue" :range-label="rangeLabel" />
++        <ActivityList :items="data.activity" />
++      </div>
++
++      <TopCustomersTable :customers="data.customers" />
++    </template>
++  </section>
++</template>

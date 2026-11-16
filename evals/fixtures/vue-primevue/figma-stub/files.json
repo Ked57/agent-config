@@ -1,0 +1,43 @@
+{
+  "Xk3dQ9vLm2PaRt7YwZb4Nc": {
+    "name": "Acme-Console-Analytics",
+    "pages": [
+      {
+        "id": "0:1",
+        "name": "Analytics",
+        "frames": [
+          {
+            "nodeId": "12:2",
+            "name": "Analytics / Desktop",
+            "bundle": "analytics/desktop.json",
+            "screenshot": "analytics/desktop.png"
+          },
+          {
+            "nodeId": "12:3",
+            "name": "Analytics / Mobile",
+            "bundle": "analytics/mobile.json",
+            "screenshot": "analytics/mobile.png"
+          },
+          {
+            "nodeId": "12:4",
+            "name": "Analytics / Desktop / Row menu open",
+            "bundle": "analytics/desktop-row-menu-open.json",
+            "screenshot": "analytics/desktop-row-menu-open.png"
+          },
+          {
+            "nodeId": "12:5",
+            "name": "Analytics / Desktop / Last 7 days",
+            "bundle": "analytics/desktop-range-7d.json",
+            "screenshot": "analytics/desktop-range-7d.png"
+          },
+          {
+            "nodeId": "12:6",
+            "name": "Analytics / Desktop / Empty",
+            "bundle": "analytics/desktop-empty.json",
+            "screenshot": "analytics/desktop-empty.png"
+          }
+        ]
+      }
+    ]
+  }
+}

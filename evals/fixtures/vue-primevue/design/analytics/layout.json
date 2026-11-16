@@ -1,0 +1,383 @@
+{
+  "generatedFrom": "mutants/D1-analytics-dashboard/reference.patch",
+  "frames": {
+    "desktop": {
+      "title": {
+        "x": 160,
+        "y": 109,
+        "width": 359,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600
+      },
+      "date-range": {
+        "x": 942,
+        "y": 124,
+        "width": 134,
+        "height": 40,
+        "fontSize": 16,
+        "fontWeight": 400
+      },
+      "export": {
+        "x": 1129,
+        "y": 123,
+        "width": 151,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400
+      },
+      "kpi-revenue-label": {
+        "x": 181,
+        "y": 210,
+        "width": 226,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500
+      },
+      "kpi-revenue": {
+        "x": 181,
+        "y": 242,
+        "width": 138,
+        "height": 36,
+        "fontSize": 30,
+        "fontWeight": 600
+      },
+      "kpi-customers-label": {
+        "x": 465,
+        "y": 210,
+        "width": 226,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500
+      },
+      "kpi-customers": {
+        "x": 465,
+        "y": 242,
+        "width": 82,
+        "height": 36,
+        "fontSize": 30,
+        "fontWeight": 600
+      },
+      "kpi-orders-label": {
+        "x": 749,
+        "y": 210,
+        "width": 226,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500
+      },
+      "kpi-orders": {
+        "x": 749,
+        "y": 242,
+        "width": 82,
+        "height": 36,
+        "fontSize": 30,
+        "fontWeight": 600
+      },
+      "kpi-conversion-label": {
+        "x": 1033,
+        "y": 210,
+        "width": 226,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500
+      },
+      "kpi-conversion": {
+        "x": 1033,
+        "y": 242,
+        "width": 74,
+        "height": 36,
+        "fontSize": 30,
+        "fontWeight": 600
+      },
+      "chart-title": {
+        "x": 181,
+        "y": 380,
+        "width": 187,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600
+      },
+      "activity-title": {
+        "x": 938,
+        "y": 380,
+        "width": 321,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600
+      },
+      "activity-first": {
+        "x": 982,
+        "y": 420,
+        "width": 277,
+        "height": 40,
+        "fontSize": 14,
+        "fontWeight": 400
+      },
+      "table-title": {
+        "x": 181,
+        "y": 810,
+        "width": 115,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600
+      },
+      "col-customer": {
+        "x": 161,
+        "y": 850,
+        "width": 390,
+        "height": 49,
+        "fontSize": 16,
+        "fontWeight": 400
+      },
+      "col-status": {
+        "x": 729,
+        "y": 850,
+        "width": 175,
+        "height": 49,
+        "fontSize": 16,
+        "fontWeight": 400
+      },
+      "col-revenue": {
+        "x": 1042,
+        "y": 850,
+        "width": 161,
+        "height": 49,
+        "fontSize": 16,
+        "fontWeight": 400
+      },
+      "row-first": {
+        "x": 161,
+        "y": 899,
+        "width": 390,
+        "height": 69,
+        "fontSize": 16,
+        "fontWeight": 400
+      },
+      "tag-past-due": {
+        "x": 753,
+        "y": 1061,
+        "width": 59,
+        "height": 21,
+        "fontSize": 14,
+        "fontWeight": 700
+      },
+      "row-first-revenue": {
+        "x": 1042,
+        "y": 899,
+        "width": 161,
+        "height": 69,
+        "fontSize": 16,
+        "fontWeight": 500
+      },
+      "row-actions": {
+        "x": 1219,
+        "y": 913,
+        "width": 40,
+        "height": 40,
+        "fontSize": 16,
+        "fontWeight": 400
+      }
+    },
+    "mobile": {
+      "title": {
+        "x": 16,
+        "y": 349,
+        "width": 358,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600
+      },
+      "date-range": {
+        "x": 17,
+        "y": 442,
+        "width": 153,
+        "height": 40,
+        "fontSize": 16,
+        "fontWeight": 400
+      },
+      "export": {
+        "x": 223,
+        "y": 441,
+        "width": 151,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400
+      },
+      "kpi-revenue": {
+        "x": 37,
+        "y": 560,
+        "width": 138,
+        "height": 36,
+        "fontSize": 30,
+        "fontWeight": 600
+      },
+      "kpi-customers": {
+        "x": 37,
+        "y": 722,
+        "width": 82,
+        "height": 36,
+        "fontSize": 30,
+        "fontWeight": 600
+      },
+      "kpi-orders": {
+        "x": 37,
+        "y": 884,
+        "width": 82,
+        "height": 36,
+        "fontSize": 30,
+        "fontWeight": 600
+      },
+      "kpi-conversion": {
+        "x": 37,
+        "y": 1046,
+        "width": 74,
+        "height": 36,
+        "fontSize": 30,
+        "fontWeight": 600
+      },
+      "chart-title": {
+        "x": 37,
+        "y": 1184,
+        "width": 187,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600
+      },
+      "activity-title": {
+        "x": 37,
+        "y": 1416,
+        "width": 316,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600
+      },
+      "table-title": {
+        "x": 37,
+        "y": 1846,
+        "width": 115,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600
+      }
+    },
+    "desktop-row-menu-open": {
+      "row-actions": {
+        "x": 1219,
+        "y": 913,
+        "width": 40,
+        "height": 40,
+        "fontSize": 16,
+        "fontWeight": 400
+      },
+      "menu-view": {
+        "x": 1260,
+        "y": 966,
+        "width": 113,
+        "height": 16,
+        "fontSize": 16,
+        "fontWeight": 400
+      },
+      "menu-invoice": {
+        "x": 1260,
+        "y": 1000,
+        "width": 97,
+        "height": 16,
+        "fontSize": 16,
+        "fontWeight": 400
+      },
+      "menu-remove": {
+        "x": 1260,
+        "y": 1037,
+        "width": 61,
+        "height": 16,
+        "fontSize": 16,
+        "fontWeight": 400
+      }
+    },
+    "desktop-range-7d": {
+      "date-range": {
+        "x": 942,
+        "y": 124,
+        "width": 134,
+        "height": 40,
+        "fontSize": 16,
+        "fontWeight": 400
+      },
+      "kpi-revenue": {
+        "x": 181,
+        "y": 242,
+        "width": 119,
+        "height": 36,
+        "fontSize": 30,
+        "fontWeight": 600
+      },
+      "kpi-orders": {
+        "x": 749,
+        "y": 242,
+        "width": 56,
+        "height": 36,
+        "fontSize": 30,
+        "fontWeight": 600
+      },
+      "kpi-conversion": {
+        "x": 1033,
+        "y": 242,
+        "width": 74,
+        "height": 36,
+        "fontSize": 30,
+        "fontWeight": 600
+      },
+      "row-first-revenue": {
+        "x": 1042,
+        "y": 899,
+        "width": 161,
+        "height": 69,
+        "fontSize": 16,
+        "fontWeight": 500
+      }
+    },
+    "desktop-empty": {
+      "title": {
+        "x": 160,
+        "y": 109,
+        "width": 359,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600
+      },
+      "kpi-revenue": {
+        "x": 181,
+        "y": 242,
+        "width": 138,
+        "height": 36,
+        "fontSize": 30,
+        "fontWeight": 600
+      },
+      "table-title": {
+        "x": 181,
+        "y": 759,
+        "width": 115,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600
+      },
+      "empty-customers": {
+        "x": 653,
+        "y": 948,
+        "width": 135,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 500
+      },
+      "empty-activity": {
+        "x": 938,
+        "y": 420,
+        "width": 321,
+        "height": 68,
+        "fontSize": 14,
+        "fontWeight": 400
+      }
+    }
+  }
+}

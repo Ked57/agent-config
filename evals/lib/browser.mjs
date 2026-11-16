@@ -9,18 +9,52 @@ import { TELEMETRY_OFF, freePort } from './env.mjs';
 
 let playwrightPromise = null;
 
-async function loadPlaywright(cacheRoot) {
+// Packages in the eval cache's tools dir: the browser smoke step needs Playwright; design-task scorers
+// (checks with `"browserTools": true`) also use pngjs and axe-core. Never in a fixture. Pinned:
+// design scores compare renders against stored mockups, so a Chromium or axe upgrade must be deliberate.
+export const BROWSER_TOOLS = { playwright: '1.65.1', pngjs: '7.0.0', 'axe-core': '4.14.1' };
+
+/**
+ * Installs the browser tools into `<cacheRoot>/tools` once (Playwright with Chromium plus the image and
+ * accessibility packages) and returns that dir. Installs into a temp dir renamed into place, so parallel
+ * mutant workers never see a half-installed copy.
+ */
+export function ensureBrowserTools(cacheRoot) {
   const tools = path.join(cacheRoot, 'tools');
-  const entry = path.join(tools, 'node_modules', 'playwright', 'index.mjs');
-  if (!fs.existsSync(entry)) {
-    fs.mkdirSync(tools, { recursive: true });
-    const env = { ...process.env, ...TELEMETRY_OFF };
-    for (const command of ['npm init -y >/dev/null', 'npm install --no-audit --no-fund --loglevel=error playwright', 'npx playwright install chromium']) {
-      const result = spawnSync('bash', ['-c', command], { cwd: tools, env, encoding: 'utf8' });
-      if (result.status !== 0) throw new Error(`Playwright setup failed (${command}): ${result.stderr}`);
+  const version = (dir, name) => {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(dir, 'node_modules', name, 'package.json'), 'utf8')).version;
+    } catch {
+      return null;
     }
+  };
+  const installed = (dir) => Object.entries(BROWSER_TOOLS).every(([name, wanted]) => version(dir, name) === wanted);
+  if (installed(tools)) return tools;
+  fs.mkdirSync(cacheRoot, { recursive: true });
+  const staging = fs.mkdtempSync(path.join(cacheRoot, 'tools-staging-'));
+  const env = { ...process.env, ...TELEMETRY_OFF };
+  try {
+    for (const command of ['npm init -y >/dev/null', `npm install --no-audit --no-fund --loglevel=error ${Object.entries(BROWSER_TOOLS).map(([name, wanted]) => `${name}@${wanted}`).join(' ')}`, 'npx playwright install chromium']) {
+      const result = spawnSync('bash', ['-c', command], { cwd: staging, env, encoding: 'utf8' });
+      if (result.status !== 0) throw new Error(`Browser tools setup failed (${command}): ${result.stderr}`);
+    }
+    if (!installed(tools)) {
+      fs.rmSync(tools, { recursive: true, force: true });
+      try {
+        fs.renameSync(staging, tools);
+      } catch (error) {
+        if (!installed(tools)) throw error; // another worker won the race
+      }
+    }
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
   }
-  return import(pathToFileURL(entry).href);
+  return tools;
+}
+
+async function loadPlaywright(cacheRoot) {
+  const tools = ensureBrowserTools(cacheRoot);
+  return import(pathToFileURL(path.join(tools, 'node_modules', 'playwright', 'index.mjs')).href);
 }
 
 export async function browserSmoke({ fixture, app, outDir, cacheRoot }) {

@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { commandTags, countFeatures, mcpCalls, subagentCalls, detectPolicies, evaluateChecks, newDependencies, parseJsonScore, parseUnifiedDiff, parseVitestJson, scoreRun } from './checks.mjs';
 import { matchesAny } from './config.mjs';
-import { TELEMETRY_OFF } from './env.mjs';
+import { TELEMETRY_OFF, sandboxRoot } from './env.mjs';
+import { ensureBrowserTools } from './browser.mjs';
 
 const GATE_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -42,9 +43,10 @@ export function runCommandCheck(check, { fixture, app }) {
   }
   try {
     const base = { id: check.id, label: check.label ?? check.id, level: check.level ?? 'required' };
+    const toolsEnv = check.browserTools ? { EVAL_TOOLS_DIR: ensureBrowserTools(path.join(sandboxRoot(), '.cache')) } : {};
     if (check.reporter === 'vitest-json') return vitestCheck(check, app, base);
-    if (check.reporter === 'json-score') return jsonScoreCheck(check, app, base);
-    const result = runGate(check.run, app, (check.timeoutSec ?? 600) * 1000);
+    if (check.reporter === 'json-score') return jsonScoreCheck(check, app, base, toolsEnv);
+    const result = runGate(check.run, app, (check.timeoutSec ?? 600) * 1000, toolsEnv);
     const pass = check.expect === 'fail' ? !result.ok : result.ok;
     return { ...base, pass, score: pass ? 1 : 0, detail: pass ? '' : result.tail.slice(-600) };
   } finally {
@@ -83,11 +85,11 @@ function vitestCheck(check, app, base) {
  * to signal "below threshold"); `pass` is `score >= passAt` (default 1). No valid file, or a timeout,
  * scores 0 with the output's tail as detail.
  */
-function jsonScoreCheck(check, app, base) {
+function jsonScoreCheck(check, app, base, extraEnv = {}) {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-score-'));
   try {
     const scoreFile = path.join(scratch, 'score.json');
-    const result = runGate(check.run, app, (check.timeoutSec ?? 600) * 1000, { EVAL_SCORE_FILE: scoreFile });
+    const result = runGate(check.run, app, (check.timeoutSec ?? 600) * 1000, { ...extraEnv, EVAL_SCORE_FILE: scoreFile });
     const report = !result.timedOut && fs.existsSync(scoreFile) ? parseJsonScore(fs.readFileSync(scoreFile, 'utf8')) : null;
     if (!report) {
       const why = result.timedOut ? `timed out after ${check.timeoutSec ?? 600}s` : fs.existsSync(scoreFile) ? 'invalid score file' : 'no score file';
