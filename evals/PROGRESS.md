@@ -226,6 +226,7 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
 | R5.1 | Comparison: `main` vs `fix/skill-bugs` on `vue-design` | not started |
 | R5.2 | Comparison: poteto-mode on vs off on the new backend set | not started |
 | R5.3 | Comparison: `manual-qa` removed, reusing arm A of R5.2 | not started |
+| R5.4 | Comparison: figma-link vs screenshot-only on `main`, 1 rep, reusing arm A of R5.1 | not started |
 | R6 | `NEXT.md`, final summary, delete heartbeat | not started |
 
 ## Round 2 decisions
@@ -237,6 +238,23 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
 - Mockups reach the agent as PNG files shipped into the app with task-level `files`; the agent reads
   them with its image-capable Read tool. The reference implementation never ships.
 - Disk: saved run apps no longer keep `node_modules`; watch `df` before long evals.
+- **Addendum (16:05 UTC): design tasks follow the user's Figma hand-off.** The user copies a prompt
+  with a link to a frame; the agent reads the frame through Figma's MCP server; no Code Connect.
+  - A local, offline, deterministic stdio stub of Figma's MCP server serves `get_design_context`,
+    `get_variable_defs`, `get_screenshot` and `get_metadata` under the official names, with responses
+    generated from the hidden reference design (layer tree, sizes, spacing, text styles, colour
+    tokens) and shaped like the official server's (docs checked first). It never leaks the Vue
+    source, PrimeVue choices or hidden checks, and never connects to the real Figma. The fidelity gap
+    is documented.
+  - Prompts mimic Figma's copied prompt: a fake `https://www.figma.com/design/<fileKey>/...?node-id=<id>`
+    link per frame plus a one-line request.
+  - Two input modes per task, chosen per arm with `--a-mode` / `--b-mode`: `figma-link` (stub server
+    plus links; primary) and `screenshot-only` (PNGs as files, no MCP).
+  - The stub is copied into each run's sandbox and registered only for `vue-design` runs. The
+    isolation check expects exactly that server in `figma-link` mode and none otherwise.
+  - Comparisons: design skills (`main` vs `fix/skill-bugs`) runs in `figma-link`; a 1-rep figma-link
+    vs screenshot-only comparison on `main` reuses the figma-link arm. If the budget is short, the
+    design-pack `--b-remove` ablations go first.
 - Spend is tracked per item in the log below.
 
 ## Round 2 log
@@ -244,3 +262,14 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
 - 15:35 UTC: heartbeat created; R1 started.
 - 16:00 UTC: R1 done ($0.90 of probes). Halstead: the package exists as `quality-metrics` (the skill never named it; agents guessed `eslint-plugin-quality-metrics`, which 404s); skill now names it and its install line; test `tests/skill-references.test.mjs` checks install lists against a verified allowlist. `emil-design-eng`: installed and listed fine; agents on a working Vue task read routing and the Vue policy but skipped the bare skill name. Fix: sharper routing line plus a load step in `policy/vue-primevue.md`. Haiku probes on a working Vue task: before 0 of 4 loaded it, routing line alone 0 of 9, final fix 2 of 5 (2 of 2 runs that read the Vue policy; sonnet 1 of 1); control prompt 0 of 2. About 45% of haiku runs never read `routing.md` at all: not fixed.
 - 16:02 UTC: R2 started (arm reuse, `json-score` reporter, telemetry undercount, concurrency default 1).
+- 16:00 UTC: R1 done ($0.90 of probes). Halstead: the package exists as `quality-metrics` (the skill
+  never named it; agents guessed `eslint-plugin-quality-metrics`, which 404s). The skill now names it
+  with an install line; `tests/skill-references.test.mjs` checks install lists against a verified
+  allowlist. `emil-design-eng`: installed and listed fine; agents on a working Vue task read routing
+  and the Vue policy but skipped the bare skill name. Fix: a sharper routing line plus a load step in
+  `policy/vue-primevue.md`. Haiku probes on a working Vue task: before 0 of 4 loaded it, routing line
+  alone 0 of 9, final fix 2 of 5 (2 of 2 runs that read the Vue policy; sonnet 1 of 1); control
+  prompt 0 of 2. About 45% of haiku runs never read `routing.md` at all: not fixed.
+- 16:02 UTC: R2 started (arm reuse, `json-score` reporter, telemetry undercount, concurrency default 1).
+- 16:05 UTC: user addendum on the Figma workflow recorded under decisions; R2 extended with per-arm
+  input modes and a task-set MCP server (copied into the run sandbox, checked by isolation).
