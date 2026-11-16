@@ -64,6 +64,24 @@ ships, plus `claude plugin list --json`), and the arm's probe (below). Plugin ve
 both arms are built back to back so they fetch the same upstream state, and a difference shows up as a
 watched `plugin:<name>`.
 
+**Arm cache.** A built template home is cached in
+`${AGENT_CONFIG_EVALS_HOME:-~/agent-config-evals}/.cache/arms/<key>/` (`home/` plus `entry.json` with
+the arm's inventory, plugin versions and commits, `builtAt`, and the home path its files embed). The key
+hashes everything that determines the build: the ref's commit, the content of the extracted tree after
+toggles (which covers a `WORKTREE` checkout and what each `--x-add` resolved to), the removals including
+`plugin:<id>`, `--plugins`, and the suite's `ARM_BUILD_VERSION`. An entry younger than
+`--arm-cache-hours` (default 24) is copied into the sandbox arm dir instead of running the installer: the
+template's path is rewritten in the files that name it (as for a run home), the copy's file digests must
+equal the cached inventory (else the arm is built fresh), and the log says `Arm A: reused cached build
+from <date> (plugins ...)`. Only the part of the home a run reads is cached (about 200 MB per arm). The
+arm probe still runs in every eval, so the expectation is checked against what actually loads.
+`--arm-cache-hours 0` disables the cache (no read, no write); `--rebuild-arms` builds fresh and replaces
+the entry. `BARE` arms are not cached. An install that fails on the network (HTTP 429, "rate limit",
+"Could not resolve host", a timeout) is retried after 60, 180 and 300 s; if it still fails and an expired
+entry exists, that entry is used with a warning in the log, `audit.jsonl` (`arm-cache-fallback`) and the
+report's integrity warnings. `arms.json` records per arm `cache.status` (`stored`, `reused`,
+`expired-fallback` or `off`) and the key.
+
 **Toggles** edit the extracted tree before the install, or the installed home after it:
 
 - `--b-add policy/<name>.md[=<src>]` or `--b-add skills/<name>[=<src>]`: `<src>` is a ref (same path),
@@ -103,6 +121,10 @@ touches lives in a sandbox outside the home tree, `$AGENT_CONFIG_EVALS_SANDBOX` 
 | `<sandbox>/<eval>/runs/<id>/{home,app,tmp}` | one run: a copy of the template home, the worked copy, its `TMPDIR` |
 | `<sandbox>/<eval>/judge/home` | the judge's config home (the judge itself runs from an empty temp directory) |
 | `<sandbox>/.cache/` | the prepared fixtures, the npm cache for installs, Playwright |
+| `~/agent-config-evals/.cache/arms/<key>/` | cached arm template homes (see Arms); outside the sandbox so they survive a service restart |
+
+The arm cache is the one piece of agent config under the home tree. That is safe because no agent
+process ever runs with its cwd or `HOME` there: builds, probes and runs use copies in the sandbox.
 
 The suite refuses to start when the sandbox sits inside your home, or when the sandbox or any
 ancestor holds `.claude`, `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` or `.mcp.json`: Claude Code loads
@@ -177,7 +199,10 @@ copied to `<results>/runs/<id>/session/`, and the run's home and tmp are deleted
 - Auth: `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` from your env if set. Otherwise the
   short-lived access token from your Claude login is read (read-only) at each spawn. The refresh
   token is never copied, so isolated runs can't rotate your login. Very long evals can outlive the
-  access token; `--resume` picks up the refreshed one.
+  access token: a run that ends in an authentication error (HTTP 401/403, "OAuth token revoked",
+  `authentication_error`, "invalid x-api-key", "token has expired") is discarded and retried once at
+  once with a freshly read token; if that fails too, the eval stops with exit code 75 and asks you to
+  log in again (`claude`), then `--resume`.
 - Telemetry is off for every process: `DISABLE_TELEMETRY`, `DISABLE_ERROR_REPORTING`,
   `DISABLE_AUTOUPDATER`, `DO_NOT_TRACK`, and the npm update notifier.
 
@@ -536,7 +561,8 @@ original judge's id the first time they are resumed.
   `--resume`, a missing or half-built arm is rebuilt from the same ref and toggles, re-probed, and
   compared with `arms.json`: identical installed files and plugin versions and commits → the eval goes
   on (the report's integrity warnings and `audit.jsonl` note the rebuild); otherwise it stops, unless
-  `--accept-arm-drift` is passed, which records the drift and goes on. The fixture cache and judge home
+  `--accept-arm-drift` is passed, which records the drift and goes on. The rebuild takes a fresh entry
+  from the arm cache when there is one, so it usually costs seconds and no network. The fixture cache and judge home
   are rebuilt as needed.
 - `--min-free-mb <n>` (default 1500, 0 disables): before starting an agent run, wait while
   `MemAvailable` is lower, logging once a minute. A global out-of-memory kill takes the whole eval down.
@@ -544,8 +570,8 @@ original judge's id the first time they are resumed.
   "You've hit your session limit · resets …", a rate or usage limit, or an overload/5xx), or an agent
   that died from a signal without a result, is not recorded: nothing new starts, the partial report is
   written with the reason under `summary.providerStop` (including the reset time when given), and the
-  suite exits with code **75**. Its spend is counted in that session only. To run a long eval
-  unattended:
+  suite exits with code **75**. An authentication error is handled the same way after one immediate
+  retry (see Isolation, Auth). To run a long eval unattended:
 
   ```sh
   dir=~/agent-config-evals/<timestamp>-<name>   # from the first run's log
@@ -553,6 +579,13 @@ original judge's id the first time they are resumed.
   while [ "$code" = 75 ]; do sleep 1800; npm run eval -- --resume "$dir"; code=$?; done
   ``` Ctrl-C finishes in-flight work and writes a partial report; a second
   Ctrl-C aborts.
+- **Discarded spend.** A discarded run's spend (from its session log) is kept in
+  `results/discarded.json` and counts toward `--max-usd` across resumes; the report's spend line shows
+  it as "discarded runs $x (n run(s) ...)" and includes it in the total.
+- `--redo <id,id> --resume <dir>` redoes recorded runs (for example one that a provider error ended
+  before this suite recognised it): their records, saved run dirs and every judgment that used them
+  move to `<dir>/discarded/<timestamp>/` (same layout), their recorded cost joins the discarded spend,
+  `audit.jsonl` gets a `redo` entry, and the runs are run again.
 - `--report-only --resume <dir>` re-aggregates without calling any model. It keeps the judge set the
   last report used, even if `config.json` names another (it says so in the integrity warnings); pass
   `--judge-model` to switch.

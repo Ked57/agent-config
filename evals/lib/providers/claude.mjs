@@ -88,6 +88,7 @@ export const PROBE_MODEL = 'claude-haiku-5-5';
 
 const LIMIT_TEXT = /session limit|usage limit|rate[ _-]?limit|usage_limit|\b429\b|too many requests/i;
 const TRANSIENT_TEXT = /overloaded|api_error|internal server error|\b50[0-9]\b|service unavailable/i;
+const AUTH_TEXT = /oauth token (?:has been )?revoked|authentication_error|invalid x-api-key|token has expired|failed to authenticate/i;
 
 /**
  * Whether a session ended because of the provider, not the task: a usage or rate limit (429, "You've
@@ -95,13 +96,17 @@ const TRANSIENT_TEXT = /overloaded|api_error|internal server error|\b50[0-9]\b|s
  * `output` is the stream-json transcript or a `--output-format json` envelope; `stderr` is checked
  * when there is no result. A session that started but produced no usable work (no result or an error
  * result, $0, no tool calls, and at most one turn or under 20 s) was refused even without a 429 in the
- * text, and counts as transient. Returns `{ kind: 'usage-limit' | 'transient', message, resets }` or null.
+ * text, and counts as transient. An HTTP 401/403 authentication error ("OAuth token revoked": the
+ * access token read from the live login expired mid-run) is `auth`, whatever work came before it; the
+ * stream's `<synthetic>` error messages are checked for it when there is no result.
+ * Returns `{ kind: 'usage-limit' | 'transient' | 'auth', message, resets }` or null.
  */
 export function providerFailure(output = '', stderr = '') {
   let result = null;
   let started = false;
   let toolCalls = 0;
   let replies = 0;
+  const synthetic = [];
   for (const line of output.split('\n')) {
     try {
       const event = JSON.parse(line);
@@ -111,12 +116,14 @@ export function providerFailure(output = '', stderr = '') {
         toolCalls += (event.message?.content ?? []).filter((block) => block?.type === 'tool_use').length;
         // Claude Code reports API errors as `<synthetic>` assistant messages; those are not replies.
         if (event.message?.model !== '<synthetic>') replies += 1;
+        else synthetic.push(...(event.message?.content ?? []).map((block) => block?.text).filter(Boolean));
       }
     } catch {
       // not JSON
     }
   }
   const classify = (text, status) => {
+    if (status === 401 || status === 403 || AUTH_TEXT.test(text)) return { kind: 'auth', message: text.trim().split('\n')[0].slice(0, 300), resets: null };
     const limited = status === 429 || LIMIT_TEXT.test(text);
     if (!limited && !(status >= 500 || TRANSIENT_TEXT.test(text))) return null;
     const message = text.trim().split('\n')[0].slice(0, 300);
@@ -126,6 +133,9 @@ export function providerFailure(output = '', stderr = '') {
     ? (result.is_error ? classify([result.api_error, result.result, result.error].filter(Boolean).join('\n'), result.api_error_status ?? null) : null)
     : (stderr ? classify(stderr, null) : null);
   if (explicit) return explicit;
+  // Only an auth error is taken from the stream: other API errors there may have been retried.
+  const authInStream = result ? null : synthetic.find((text) => AUTH_TEXT.test(text));
+  if (authInStream) return { kind: 'auth', message: authInStream.trim().split('\n')[0].slice(0, 300), resets: null };
   // Turns or duration must be reported as near zero: an error result without them (e.g. max turns
   // with a missing count) is not taken for a refusal. Without a result, any real model reply is work.
   const below = (value, max) => typeof value === 'number' && value <= max;

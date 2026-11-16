@@ -72,7 +72,7 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture }) {
   }
   if (summary.stoppedEarly) lines.push(`- **Stopped early:** ${summary.stoppedEarly}. Results are partial.`);
   const spend = summary.spend;
-  if (spend) lines.push(`- Spend: agent runs ${fmt(spend.runsUsd)}${spend.reusedRuns ? ` (new runs only; the ${spend.reusedRuns} reused run(s) recorded ${fmt((spend.reusedUsdByArm?.A ?? 0) + (spend.reusedUsdByArm?.B ?? 0))} in the evals that made them, not spent here)` : ''}, judge (\`${spend.judgeSet ?? 'n/a'}\`) $${fmt(spend.judgeUsd)}${Object.keys(spend.otherJudgeSetsUsd).length ? `, other judge sets $${fmt(Object.values(spend.otherJudgeSetsUsd).reduce((a, b) => a + b, 0))}` : ''}, total $${fmt(spend.totalUsd)}${config.maxUsd ? ` (cap $${config.maxUsd})` : ''}.`);
+  if (spend) lines.push(`- Spend: agent runs ${fmt(spend.runsUsd)}${spend.reusedRuns ? ` (new runs only; the ${spend.reusedRuns} reused run(s) recorded ${fmt((spend.reusedUsdByArm?.A ?? 0) + (spend.reusedUsdByArm?.B ?? 0))} in the evals that made them, not spent here)` : ''}, judge (\`${spend.judgeSet ?? 'n/a'}\`) $${fmt(spend.judgeUsd)}${Object.keys(spend.otherJudgeSetsUsd).length ? `, other judge sets $${fmt(Object.values(spend.otherJudgeSetsUsd).reduce((a, b) => a + b, 0))}` : ''}${spend.discardedRuns ? `, discarded runs $${fmt(spend.discardedUsd)} (${spend.discardedRuns} run(s) cut off by the provider or redone, not recorded; see \`results/discarded.json\`)` : ''}, total $${fmt(spend.totalUsd)}${config.maxUsd ? ` (cap $${config.maxUsd})` : ''}.`);
   for (const arm of ['A', 'B']) {
     const smoke = summary.runtimeSmoke?.[arm];
     if (smoke) lines.push(`- Runtime smoke (browser/HTTP) arm ${arm}: ${smoke.pass}/${smoke.runs} runs passed.`);
@@ -143,6 +143,7 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture }) {
     for (const arm of ['A', 'B']) if (spend.reusedUsdByArm?.[arm]) lines.push(`| Reused runs, arm ${arm} (recorded cost, paid by the eval that made them) | ${fmt(spend.reusedUsdByArm[arm])} | – |`);
     lines.push(`| Judge \`${spend.judgeSet ?? 'n/a'}\` (${summary.judgments} judgments, $${fmt(spend.judgeUsdPerJudgment, 3)} each) | ${fmt(spend.judgeUsd)} | ${share(spend.judgeUsd)} |`);
     for (const [id, usd] of Object.entries(spend.otherJudgeSetsUsd)) lines.push(`| Judge \`${id}\` (comparison set) | ${fmt(usd)} | ${share(usd)} |`);
+    if (spend.discardedRuns) lines.push(`| Discarded runs (${spend.discardedRuns}, no record) | ${fmt(spend.discardedUsd)} | ${share(spend.discardedUsd)} |`);
     lines.push('');
   }
 

@@ -33,9 +33,9 @@ export const DEFAULTS = Object.freeze({
   reuse: true
 });
 
-const LIST_FLAGS = new Set(['a-add', 'a-remove', 'b-add', 'b-remove', 'env', 'watch', 'only', 'reuse-from']);
-const BOOLEAN_FLAGS = new Set(['smoke', 'browser', 'http', 'no-judge', 'dry-run', 'report-only', 'rejudge', 'recheck', 'single-arm', 'strict-isolation', 'no-strict-isolation', 'accept-arm-drift', 'keep-linked', 'no-reuse', 'assume-template-unchanged', 'help']);
-const NUMBER_FLAGS = new Set(['min-free-mb', 'reps', 'concurrency', 'timeout-min', 'judge-reps', 'judge-controls', 'max-usd', 'max-runs']);
+const LIST_FLAGS = new Set(['a-add', 'a-remove', 'b-add', 'b-remove', 'env', 'watch', 'only', 'reuse-from', 'redo']);
+const BOOLEAN_FLAGS = new Set(['smoke', 'browser', 'http', 'no-judge', 'dry-run', 'report-only', 'rejudge', 'recheck', 'single-arm', 'strict-isolation', 'no-strict-isolation', 'accept-arm-drift', 'keep-linked', 'no-reuse', 'assume-template-unchanged', 'rebuild-arms', 'help']);
+const NUMBER_FLAGS = new Set(['min-free-mb', 'reps', 'concurrency', 'timeout-min', 'judge-reps', 'judge-controls', 'max-usd', 'max-runs', 'arm-cache-hours']);
 const STRING_FLAGS = new Set(['a', 'b', 'tasks', 'provider', 'model', 'effort', 'judge-provider', 'judge-model', 'judge-effort', 'judge-command', 'out', 'resume', 'name', 'plugins', 'a-prefix', 'b-prefix', 'a-mode', 'b-mode', 'backfill-keys']);
 
 const camel = (flag) => flag.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
@@ -72,7 +72,7 @@ export function parseArgs(argv) {
     } else if (LIST_FLAGS.has(flag)) {
       const key = camel(flag);
       const value = takeValue();
-      const values = flag === 'only' ? value.split(',').map((item) => item.trim()).filter(Boolean) : [value];
+      const values = ['only', 'redo'].includes(flag) ? value.split(',').map((item) => item.trim()).filter(Boolean) : [value];
       options[key] = [...(options[key] ?? []), ...values];
     } else if (STRING_FLAGS.has(flag)) {
       options[camel(flag)] = takeValue();

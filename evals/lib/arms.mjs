@@ -242,9 +242,10 @@ export const RUN_HOME_PATHS = ['.claude', '.agents', '.agent-config', '.cursor/p
  * Copies the Claude-relevant part of an arm's template home (`RUN_HOME_PATHS`) to a run's home
  * (`cp -a`, so modes and symlinks survive) and rewrites the template's absolute path to the run
  * home's in `files` (from `filesNamingHome`), so CLAUDE.md imports and plugin install paths point
- * into the run's own copy.
+ * into the run's own copy. `from` is the path string the template's files embed, when it is not
+ * `template` itself (a cached arm home keeps the path of the sandbox home it was built in).
  */
-export function prepareRunHome({ template, home, files = [] }) {
+export function prepareRunHome({ template, home, files = [], from = template }) {
   removeTree(home, path.dirname(home));
   fs.mkdirSync(home, { recursive: true });
   for (const relative of RUN_HOME_PATHS) {
@@ -256,7 +257,7 @@ export function prepareRunHome({ template, home, files = [] }) {
   }
   for (const relative of files) {
     const file = path.join(home, relative);
-    if (fs.existsSync(file)) fs.writeFileSync(file, fs.readFileSync(file, 'utf8').split(template).join(home));
+    if (fs.existsSync(file)) fs.writeFileSync(file, fs.readFileSync(file, 'utf8').split(from).join(home));
   }
 }
 
@@ -295,12 +296,134 @@ async function removePlugin({ src, home, env, id }) {
 }
 
 /**
+ * Bump when the arm build changes in a way the cache key cannot see (what the build does, what it
+ * records): every cached arm template is then rebuilt.
+ */
+export const ARM_BUILD_VERSION = 1;
+/** Waits before each retry of an arm install that failed on the network (GitHub 429s, DNS, clone timeouts). */
+export const BUILD_RETRY_WAITS_S = [60, 180, 300];
+
+/** Whether an arm install failed on the network or a rate limit rather than on the ref itself. */
+export const isNetworkFailure = (text) => /\b429\b|too many requests|rate[ _-]?limit|could not resolve host|timed out|ETIMEDOUT/i.test(String(text ?? ''));
+
+/** Content digest of an extracted ref: every file's relative path and bytes (node_modules and .git skipped). */
+export function treeDigest(directory) {
+  const hash = crypto.createHash('sha256');
+  for (const file of listFiles(directory).map((full) => path.relative(directory, full).split(path.sep).join('/')).sort()) {
+    hash.update(`${file}\0`).update(fs.readFileSync(path.join(directory, file))).update('\0');
+  }
+  return hash.digest('hex');
+}
+
+/**
+ * The arm cache key: everything that determines a build. `srcDigest` is the extracted tree after the
+ * toggles were applied, so it covers a WORKTREE checkout and the resolved content of every add and
+ * removal; `sha`, `add` (with what each resolved to) and `remove` name them too.
+ */
+export function armCacheKey({ sha = null, srcDigest, add = [], remove = [], pluginMode, version = ARM_BUILD_VERSION }) {
+  const inputs = {
+    version,
+    sha,
+    srcDigest,
+    add: add.map((toggle) => ({ path: toggle.path, source: toggle.source ?? null, resolved: toggle.resolved ?? null })),
+    remove: [...remove].sort(),
+    removedPlugins: remove.filter((item) => item.startsWith('plugin:')).sort(),
+    pluginMode
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(inputs)).digest('hex').slice(0, 32);
+}
+
+/**
+ * Whether to reuse a cached arm: `reuse` when an entry exists, is younger than `maxAgeHours` and no
+ * rebuild was asked for; `off` when `maxAgeHours` is 0 (no read, no write); else `build`. `fallback` is
+ * the existing entry, used only if a fresh build fails on the network.
+ */
+export function cacheDecision({ entry, nowMs, maxAgeHours, rebuild = false }) {
+  if (!maxAgeHours) return { action: 'off', fallback: null, ageHours: null };
+  const ageHours = entry ? (nowMs - Date.parse(entry.builtAt)) / 3600000 : null;
+  const fresh = entry && Number.isFinite(ageHours) && ageHours >= 0 && ageHours < maxAgeHours;
+  return { action: fresh && !rebuild ? 'reuse' : 'build', fallback: entry ?? null, ageHours };
+}
+
+/** A cache entry (`entry.json` with its `home/`), or null. */
+export function readCacheEntry(cacheDir) {
+  try {
+    const entry = JSON.parse(fs.readFileSync(path.join(cacheDir, 'entry.json'), 'utf8'));
+    return fs.existsSync(path.join(cacheDir, 'home')) ? entry : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Stores a built arm's template home (the `RUN_HOME_PATHS` part, which is all a run or probe reads) with
+ * its metadata and the home path its files embed. Written beside the entry, then renamed into place.
+ */
+export function storeArmCache({ cacheRoot, key, built }) {
+  const cacheDir = path.join(cacheRoot, key);
+  const staging = path.join(cacheRoot, `${key}.tmp-${process.pid}`);
+  fs.mkdirSync(cacheRoot, { recursive: true });
+  removeTree(staging, cacheRoot);
+  prepareRunHome({ template: built.home, home: path.join(staging, 'home'), files: [] });
+  const builtAt = new Date().toISOString();
+  fs.writeFileSync(path.join(staging, 'entry.json'), `${JSON.stringify({ key, builtAt, homePath: built.home, built }, null, 2)}\n`);
+  removeTree(cacheDir, cacheRoot);
+  fs.renameSync(staging, cacheDir);
+  return builtAt;
+}
+
+/**
+ * Copies a cached template home to `home`, rewriting the cached home path in the files that name it,
+ * and checks the copy's file digests against the cached inventory. Returns the arm metadata for `home`,
+ * or throws when the copy does not match.
+ */
+export function restoreArmCache({ cacheDir, entry, home }) {
+  prepareRunHome({ template: path.join(cacheDir, 'home'), home, files: entry.built.homePathFiles ?? [], from: entry.homePath });
+  const changed = changedArmFiles(entry.built.hashes, inventory(home).hashes);
+  if (changed.length) throw new Error(`cached arm ${entry.key} does not match its inventory (${changed.slice(0, 5).join(', ')})`);
+  return { ...entry.built, home };
+}
+
+/**
+ * Runs the ref's installer into a fresh `home` (and the `plugin:<id>` removals), checking that the live
+ * config is untouched. Returns the plugin list and the removed plugins.
+ */
+async function installArm({ src, home, armDir, env, spec }) {
+  removeTree(home, armDir);
+  fs.mkdirSync(home, { recursive: true });
+  fs.mkdirSync(env.TMPDIR, { recursive: true });
+  const before = liveConfigSnapshot();
+  const install = spawnSync(process.execPath, [path.join(src, 'bin', 'agent-config.mjs'), 'sync', '--user'], { cwd: src, encoding: 'utf8', env, timeout: 15 * 60 * 1000, maxBuffer: 64 * 1024 * 1024 });
+  if (install.status !== 0) throw new Error(`agent-config sync failed for ${spec.ref}: ${install.stderr || install.stdout || ''}${install.error ? ` (${install.error.message})` : ''}`);
+  const removedPlugins = [];
+  for (const removal of spec.remove.filter((item) => item.startsWith('plugin:'))) {
+    removedPlugins.push(await removePlugin({ src, home, env, id: removal.slice('plugin:'.length) }));
+  }
+  const after = liveConfigSnapshot();
+  const changed = Object.keys({ ...before, ...after }).filter((key) => before[key] !== after[key]);
+  if (changed.length) throw new Error(`Live agent config changed during an arm build (${changed.slice(0, 5).join(', ')}); aborting`);
+  fs.writeFileSync(path.join(armDir, 'install.log'), `${install.stdout}\n${install.stderr}`);
+  const list = spawnSync('claude', ['plugin', 'list', '--json'], { cwd: home, env, encoding: 'utf8', timeout: 120000 });
+  try {
+    const pluginList = JSON.parse(list.stdout.slice(Math.max(0, list.stdout.search(/[[{]/)))).map((plugin) => ({ id: plugin.id, version: plugin.version ?? null, enabled: plugin.enabled ?? null }));
+    return { pluginList, removedPlugins };
+  } catch {
+    throw new Error(`claude plugin list --json failed in arm ${spec.ref}: ${(list.stderr || list.stdout).slice(0, 300)}`);
+  }
+}
+
+/**
  * Builds one arm into `armDir` (src/ + home/) and returns its metadata. `BARE` leaves the home empty.
  * Otherwise the ref's own installer runs with HOME, CLAUDE_CONFIG_DIR and CODEX_HOME inside the home,
  * so its `claude plugin`, `npx skills` and `git` calls install there; `plugins: 'skip'` sets
  * AGENT_CONFIG_EXTERNAL_PLUGINS=skip. `plugin:<id>` removals run after the install.
+ *
+ * `cache` (`{ root, maxAgeHours, rebuild }`) reuses a template home built from the same inputs (see
+ * `armCacheKey`, `cacheDecision`) instead of installing, and stores fresh builds. An install that fails
+ * on the network is retried after `BUILD_RETRY_WAITS_S`; after the last, an expired entry is used.
+ * The result's `cache` says what happened: `reused`, `stored`, `expired-fallback` or `off`.
  */
-export async function buildArm({ repoRoot, spec, armDir, plugins = 'install', npmCache = null }) {
+export async function buildArm({ repoRoot, spec, armDir, plugins = 'install', npmCache = null, cache = null, log = () => {}, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
   const src = path.join(armDir, 'src');
   const home = path.join(armDir, 'home');
   if (path.resolve(home) === path.resolve(os.homedir())) throw new Error('Refusing to install an arm into the real home directory');
@@ -341,24 +464,38 @@ export async function buildArm({ repoRoot, spec, armDir, plugins = 'install', np
   // The installer never reads evals/, and the agent can reach this directory by relative path from
   // its working copy: a ref that carries the suite would hand it the hidden tests and the checks.
   removeTree(path.join(src, 'evals'), src);
-  const before = liveConfigSnapshot();
-  const install = spawnSync(process.execPath, [path.join(src, 'bin', 'agent-config.mjs'), 'sync', '--user'], { cwd: src, encoding: 'utf8', env, timeout: 15 * 60 * 1000, maxBuffer: 64 * 1024 * 1024 });
-  if (install.status !== 0) throw new Error(`agent-config sync failed for ${spec.ref}: ${install.stderr || install.stdout || install.error}`);
-  for (const removal of spec.remove.filter((item) => item.startsWith('plugin:'))) {
-    meta.removedPlugins.push(await removePlugin({ src, home, env, id: removal.slice('plugin:'.length) }));
+
+  const key = cache ? armCacheKey({ sha: meta.sha, srcDigest: treeDigest(src), add: meta.add, remove: spec.remove, pluginMode: plugins }) : null;
+  const cacheDir = key ? path.join(cache.root, key) : null;
+  const decision = cacheDecision({ entry: cacheDir ? readCacheEntry(cacheDir) : null, nowMs: Date.now(), maxAgeHours: cache?.maxAgeHours ?? 0, rebuild: cache?.rebuild });
+  const finish = (built) => {
+    fs.writeFileSync(path.join(armDir, BUILT_MARKER), new Date().toISOString());
+    return built;
+  };
+  if (decision.action === 'reuse') {
+    try {
+      return finish({ ...restoreArmCache({ cacheDir, entry: decision.fallback, home }), cache: { status: 'reused', key, builtAt: decision.fallback.builtAt } });
+    } catch (error) {
+      log(`Arm ${spec.ref}: ${error.message}; building it fresh`);
+    }
   }
-  const after = liveConfigSnapshot();
-  const changed = Object.keys({ ...before, ...after }).filter((key) => before[key] !== after[key]);
-  if (changed.length) throw new Error(`Live agent config changed during an arm build (${changed.slice(0, 5).join(', ')}); aborting`);
-  fs.writeFileSync(path.join(armDir, 'install.log'), `${install.stdout}\n${install.stderr}`);
-  const list = spawnSync('claude', ['plugin', 'list', '--json'], { cwd: home, env, encoding: 'utf8', timeout: 120000 });
-  let pluginList = [];
-  try {
-    pluginList = JSON.parse(list.stdout.slice(Math.max(0, list.stdout.search(/[[{]/)))).map((plugin) => ({ id: plugin.id, version: plugin.version ?? null, enabled: plugin.enabled ?? null }));
-  } catch {
-    throw new Error(`claude plugin list --json failed in arm ${spec.ref}: ${(list.stderr || list.stdout).slice(0, 300)}`);
+  let installed;
+  for (let attempt = 0; !installed; attempt += 1) {
+    try {
+      installed = await installArm({ src, home, armDir, env, spec });
+    } catch (error) {
+      if (!isNetworkFailure(error.message)) throw error;
+      if (attempt < BUILD_RETRY_WAITS_S.length) {
+        log(`Arm ${spec.ref}: install failed on the network (${error.message.split('\n')[0].slice(0, 200)}); retry ${attempt + 1}/${BUILD_RETRY_WAITS_S.length} in ${BUILD_RETRY_WAITS_S[attempt]} s`);
+        await sleep(BUILD_RETRY_WAITS_S[attempt] * 1000);
+        continue;
+      }
+      if (!decision.fallback) throw error;
+      const built = restoreArmCache({ cacheDir, entry: decision.fallback, home });
+      return finish({ ...built, cache: { status: 'expired-fallback', key, builtAt: decision.fallback.builtAt, error: error.message.slice(0, 300) } });
+    }
   }
-  const built = { ...meta, pluginList, homePathFiles: filesNamingHome(home), ...inventory(home) };
-  fs.writeFileSync(path.join(armDir, BUILT_MARKER), new Date().toISOString());
-  return built;
+  const built = { ...meta, removedPlugins: installed.removedPlugins, pluginList: installed.pluginList, homePathFiles: filesNamingHome(home), ...inventory(home) };
+  const builtAt = decision.action === 'off' ? null : storeArmCache({ cacheRoot: cache.root, key, built });
+  return finish({ ...built, cache: decision.action === 'off' ? { status: 'off' } : { status: 'stored', key, builtAt } });
 }

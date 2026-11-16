@@ -402,6 +402,22 @@ test('providerFailure tells a usage limit or overload from a task failure', asyn
   assert.equal(providerFailure('', ''), null);
 });
 
+test('providerFailure treats an authentication error as an auth failure, whatever work preceded it', async () => {
+  const { providerFailure } = await import('../evals/lib/providers/claude.mjs');
+  // Trimmed result event of D1-analytics-dashboard__A__r1 (2026-11-16): 24 turns and $1.27 before the token was revoked.
+  const revoked = '{"type":"system","subtype":"init"}\n{"type":"assistant","message":{"model":"claude-opus-5-5","content":[{"type":"tool_use","name":"Read","input":{}}]}}\n{"type":"result","is_error":true,"num_turns":24,"subtype":"success","api_error_status":401,"api_error_origin":"first_party","result":"Failed to authenticate: OAuth token revoked. Please log in again or contact your administrator.","total_cost_usd":1.27161,"duration_ms":150104}';
+  assert.deepEqual(providerFailure(revoked), { kind: 'auth', message: 'Failed to authenticate: OAuth token revoked. Please log in again or contact your administrator.', resets: null });
+  assert.equal(providerFailure('{"type":"result","is_error":true,"api_error_status":403,"result":"Forbidden"}').kind, 'auth');
+  assert.equal(providerFailure('{"type":"result","is_error":true,"result":"API Error: {\\"type\\":\\"authentication_error\\"}"}').kind, 'auth');
+  assert.equal(providerFailure('{"type":"result","is_error":true,"result":"Invalid x-api-key"}').kind, 'auth');
+  assert.equal(providerFailure('', 'Error: OAuth token has expired').kind, 'auth');
+  // No result event: an auth error in a <synthetic> message counts; another API error there does not.
+  const synthetic = (text) => `{"type":"system","subtype":"init"}\n{"type":"assistant","message":{"model":"claude-opus-5-5","content":[{"type":"tool_use","name":"Bash","input":{}}]}}\n{"type":"assistant","message":{"model":"<synthetic>","content":[{"type":"text","text":"${text}"}]}}`;
+  assert.equal(providerFailure(synthetic('API Error: 401 OAuth token revoked')).kind, 'auth');
+  assert.equal(providerFailure(synthetic('API Error: 500 Internal server error')), null);
+  assert.equal(providerFailure('{"type":"result","is_error":false,"result":"Added an authentication_error handler for 401s."}'), null, 'a successful run talking about auth is not a failure');
+});
+
 test('providerFailure treats a session that did no work as a refusal, but not a real failed run', async () => {
   const { providerFailure } = await import('../evals/lib/providers/claude.mjs');
   const initLine = { type: 'system', subtype: 'init', skills: [] };

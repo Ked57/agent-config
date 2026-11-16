@@ -10,6 +10,7 @@ import { aggregate, compareTasks } from './lib/aggregate.mjs';
 import { armBuilt, BUILT_MARKER, buildArm, rebuildDecision, compareInventories, installedPlugins, inventory, prepareRunHome } from './lib/arms.mjs';
 import { browserSmoke } from './lib/browser.mjs';
 import { combineEvals } from './lib/combine.mjs';
+import { readDiscarded, recordDiscarded, redoRuns } from './lib/discard.mjs';
 import { scoreRun } from './lib/checks.mjs';
 import { DEFAULTS, judgeSetId, parseArgs, promptFor, resolveConfig, taskForMode, validateTaskSet } from './lib/config.mjs';
 import { assertSafeRoot, browserToolEnv, killStrays, memAvailableMb, removeTree, sandboxProblems, sandboxRoot } from './lib/env.mjs';
@@ -31,6 +32,11 @@ const EVALS_HOME = process.env.AGENT_CONFIG_EVALS_HOME ?? path.join(os.homedir()
 // fixture cache lives there too, so nothing an agent can reach by relative path sits under the home.
 const SANDBOX_ROOT = sandboxRoot();
 const CACHE_ROOT = path.join(SANDBOX_ROOT, '.cache');
+// Built arm template homes, keyed by their build inputs (see `armCacheKey`). Unlike the sandbox, this
+// survives a host service restart (which wipes a service-private /var/tmp). It sits under the home
+// tree, which is safe because no agent process ever runs with its cwd or HOME here: runs and probes
+// get copies in the sandbox.
+const ARM_CACHE_ROOT = path.join(EVALS_HOME, '.cache', 'arms');
 const MAX_DIFF_CHARS = 60000;
 // Gates and hidden tests run in this process's children next to up to --concurrency agents; under
 // that load Vitest's timeouts trip. At most this many measure/smoke phases run at once.
@@ -53,6 +59,8 @@ Arms
   --a-mode / --b-mode <name>         Input mode of that arm (the task set's modes, e.g. MCP server vs attached files;
                             default: its defaultMode).
   --plugins install|skip    Install the refs' external plugins into the arms (default: install).
+  --arm-cache-hours <n>     Reuse a cached arm build younger than this (default: 24; 0 = no cache).
+  --rebuild-arms            Build the arms fresh and replace their cache entries.
 Tasks
   --tasks <name|file>       Task set in evals/tasks/<name>.json or a path (default: ${DEFAULTS.tasks}).
   --only <id,id>            Run only these task ids.   --smoke   Task set's smoke subset, 1 rep.
@@ -76,6 +84,8 @@ Execution
   --http                    Boot the service and hit the fixture's HTTP endpoints after each run.
   --out <dir>               Results dir (default: ~/agent-config-evals/<timestamp>-<name>).
   --resume <dir>            Continue an earlier eval (finished runs and judgments are skipped).
+  --redo <id,id>            With --resume: move these runs' records, run dirs and judgments to
+                            discarded/<timestamp>/ and run them again (recorded in audit.jsonl).
   --report-only             With --resume: re-aggregate and rewrite the report only.
   --recheck                 With --resume: re-score saved runs against the repo's current task checks
                             (hidden tests included); no agent runs, gates are not re-run.
@@ -333,6 +343,7 @@ async function main() {
   if (raw.help) return console.log(USAGE);
   if (raw.combine) return combineMain(raw);
   if (raw.backfillKeys) return backfillMain(path.resolve(raw.backfillKeys), raw);
+  if (raw.redo && (!raw.resume || raw.dryRun || raw.reportOnly || raw.rejudge || raw.recheck)) throw new Error('--redo takes --resume <dir> and agent runs (not --dry-run, --report-only, --rejudge or --recheck)');
 
   let config;
   let outDir;
@@ -356,6 +367,11 @@ async function main() {
       // Keep config.json in step with the report: a later --report-only must pick the same judge set.
       if (Object.keys(overrides).length) writeJson(path.join(outDir, 'config.json'), config);
       appendAudit(outDir, { action: raw.recheck ? 'recheck' : raw.rejudge ? 'rejudge' : raw.reportOnly ? 'report-only' : 'resume', overrides });
+    }
+    if (raw.redo) {
+      const redone = redoRuns({ outDir, ids: raw.redo });
+      appendAudit(outDir, { action: 'redo', movedTo: path.relative(outDir, redone.dir), runs: redone.runs });
+      log(`--redo: moved ${redone.runs.map((run) => `${run.id} ($${run.usd.toFixed(2)}${run.judgments.length ? `, ${run.judgments.length} judgment(s)` : ''})`).join(', ')} to ${redone.dir}; they run again`);
     }
   } else {
     taskSet = loadTaskSet(raw.tasks ?? DEFAULTS.tasks);
@@ -406,6 +422,17 @@ async function main() {
     for (const key of ['TMPDIR', 'TMP', 'TEMP']) process.env[key] = harnessTmp;
   }
   const tasksById = Object.fromEntries(taskSet.tasks.map((task) => [task.id, task]));
+  const armCache = { root: ARM_CACHE_ROOT, maxAgeHours: raw.armCacheHours ?? 24, rebuild: Boolean(raw.rebuildArms) };
+  const pluginsOf = (built) => built.plugins.map((plugin) => `${plugin.id}@${plugin.version}`).join(', ') || 'none';
+  const buildAndLog = async (arm, armDir) => {
+    const built = await buildArm({ repoRoot: REPO_ROOT, spec: config.arms[arm], armDir, plugins: config.plugins ?? 'skip', npmCache: path.join(CACHE_ROOT, 'npm-cache'), cache: armCache, log });
+    if (built.cache?.status === 'reused') log(`Arm ${arm}: reused cached build from ${built.cache.builtAt} (plugins ${pluginsOf(built)})`);
+    if (built.cache?.status === 'expired-fallback') {
+      log(`WARNING: arm ${arm} could not be built (${built.cache.error}); USING THE EXPIRED CACHED BUILD FROM ${built.cache.builtAt}`);
+      appendAudit(outDir, { action: 'arm-cache-fallback', arm, key: built.cache.key, builtAt: built.cache.builtAt, error: built.cache.error });
+    }
+    return built;
+  };
   const armIds = config.singleArm ? ['A'] : ['A', 'B'];
   let armsInfo;
   if (fs.existsSync(armsFile)) {
@@ -418,7 +445,7 @@ async function main() {
         // The sandbox may live in a service-private tmp that is recreated empty on every restart:
         // rebuild the arm from the same ref and toggles, and go on only if it comes out the same.
         log(`Arm ${arm}'s build in ${armDir} is missing or incomplete; rebuilding it from ${config.arms[arm].ref}`);
-        const fresh = await buildArm({ repoRoot: REPO_ROOT, spec: config.arms[arm], armDir, plugins: config.plugins ?? 'skip', npmCache: path.join(CACHE_ROOT, 'npm-cache') });
+        const fresh = await buildAndLog(arm, armDir);
         const decision = rebuildDecision(arm, armsInfo[arm], fresh, Boolean(raw.acceptArmDrift));
         log(decision.text);
         // A refused rebuild must not pass for a finished one on the next resume.
@@ -445,8 +472,8 @@ async function main() {
     const built = {};
     for (const arm of armIds) {
       log(`Building arm ${arm} from ${config.arms[arm].ref}${config.arms[arm].add.length + config.arms[arm].remove.length ? ' with toggles' : ''} in ${path.join(sandbox, 'arms', arm)}`);
-      built[arm] = await buildArm({ repoRoot: REPO_ROOT, spec: config.arms[arm], armDir: path.join(sandbox, 'arms', arm), plugins: config.plugins ?? 'skip', npmCache: path.join(CACHE_ROOT, 'npm-cache') });
-      log(`Arm ${arm}: ${built[arm].policies.length} policies, ${built[arm].skills.length} skills, plugins ${built[arm].plugins.map((plugin) => `${plugin.id}@${plugin.version}`).join(', ') || 'none'}`);
+      built[arm] = await buildAndLog(arm, path.join(sandbox, 'arms', arm));
+      log(`Arm ${arm}: ${built[arm].policies.length} policies, ${built[arm].skills.length} skills, plugins ${pluginsOf(built[arm])}`);
     }
     built.B ??= built.A;
     armsInfo = { A: built.A, B: built.B, ...compareInventories(built.A, built.B) };
@@ -464,6 +491,10 @@ async function main() {
       armsInfo.changedFiles = [...armsInfo.changedFiles, '(input mode)'];
     }
     writeJson(armsFile, armsInfo);
+  }
+  for (const arm of armIds) {
+    const { cache } = armsInfo[arm];
+    if (cache?.status === 'expired-fallback') warnings.push(`Arm ${arm} is an expired cached build from ${cache.builtAt}: a fresh build failed on the network (${cache.error}).`);
   }
   log(`Arms ${armsInfo.identical ? 'identical (A/A control)' : `differ in ${armsInfo.changedFiles.length} file(s); watching ${armsInfo.watched.join(', ') || 'nothing'}`}`);
 
@@ -521,9 +552,11 @@ async function main() {
   // Reused runs keep their recorded cost but were paid for by the eval that made them.
   const spend = {
     runsUsd: newRunsUsd(runs),
-    judgeUsd: [judgments, ...Object.values(otherJudgeSets)].flat().reduce((sum, judgment) => sum + (judgment.costUsd ?? 0), 0)
+    judgeUsd: [judgments, ...Object.values(otherJudgeSets)].flat().reduce((sum, judgment) => sum + (judgment.costUsd ?? 0), 0),
+    // Runs cut off by the provider or redone: spent, but with no record (persisted in results/discarded.json).
+    discardedUsd: readDiscarded(outDir).usd
   };
-  const spent = () => spend.runsUsd + spend.judgeUsd;
+  const spent = () => spend.runsUsd + spend.judgeUsd + spend.discardedUsd;
 
   let stopReason = null;
   // Set when the provider, not a task, ended a run or judgment: nothing is recorded for it.
@@ -613,7 +646,9 @@ async function main() {
   log(`${pending.length} run(s) pending, ${runs.length} already done, $${spent().toFixed(2)} spent so far`);
   // A run interrupted mid-way has no result file: its sandbox dir is stale and is redone from scratch.
   if (pending.length) removeTree(path.join(sandbox, 'runs'), sandbox);
-  await pool(pending, config.concurrency, async (job) => {
+  // `authRetry`: this is the one immediate retry of a run that hit an auth error (the provider re-reads
+  // the token on every spawn, so a refreshed login is picked up).
+  const runJob = async (job, authRetry = false) => {
     const budget = budgetAllows(config, { spentUsd: spent(), runsDone: runs.filter((run) => !run.reusedFrom).length, runsInFlight: inFlight });
     if (!budget.ok) {
       stopReason ??= budget.reason;
@@ -636,6 +671,7 @@ async function main() {
     const tmp = path.join(runRoot, 'tmp');
     const strayMarkers = [`HOME=${runHome}`, `TMPDIR=${tmp}`];
     let releaseChecks = () => {};
+    let retryAuth = false;
     try {
       const modeName = config.arms[job.arm].mode ?? null;
       const task = taskForMode(tasksById[job.task], modeName);
@@ -670,18 +706,22 @@ async function main() {
       // Stop browsers, then anything else the run left behind (the provider already killed its process group).
       spawnSync('agent-browser', ['close'], { env: { PATH: process.env.PATH, HOME: runHome, AGENT_BROWSER_SESSION: env.AGENT_BROWSER_SESSION }, timeout: 20000 });
       const strays = killStrays({ root: runRoot, markers: strayMarkers });
-      // A run the provider cut off or refused (usage limit, overload, an error or missing result with $0
-      // and no tool calls) or that died from a signal without a result (service restart) says nothing
-      // about the task: record nothing, so --resume redoes it. This runs before the isolation check.
+      // A run the provider cut off or refused (usage limit, overload, an auth error, an error or missing
+      // result with $0 and no tool calls) or that died from a signal without a result (service restart)
+      // says nothing about the task: record nothing, so --resume redoes it, but keep its spend in
+      // results/discarded.json. This runs before the isolation check.
       const readText = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '');
       const transcriptText = readText(path.join(runDir, provider.transcriptFile));
       const failure = provider.providerFailure?.(transcriptText, readText(path.join(runDir, 'stderr.log'))) ?? null;
       const killed = !agentResult.timedOut && Boolean(agentResult.signal) && !/"type":"result"/.test(transcriptText);
       if (failure || killed) {
         const lost = collectSessions(provider.sessionRoot(runHome)).filter((session) => !session.relative.includes('/subagents/')).reduce((sum, session) => sum + (sessionCostUsd(session.text) ?? 0), 0);
-        spend.runsUsd += lost;
-        log(`DISCARDED ${job.id}: ${failure ? `${failure.kind}: ${failure.message}` : `agent died from ${agentResult.signal}`}; not recorded, --resume redoes it`);
-        if (failure) stopForProvider(failure);
+        const reason = failure ? `${failure.kind}: ${failure.message}` : `agent died from ${agentResult.signal}`;
+        spend.discardedUsd = recordDiscarded(outDir, { id: job.id, kind: failure?.kind ?? 'killed', message: reason, usd: lost }).usd;
+        retryAuth = failure?.kind === 'auth' && !authRetry;
+        log(`DISCARDED ${job.id}: ${reason}; $${lost.toFixed(2)} spent, not recorded; ${retryAuth ? 'retrying it now with a freshly read token' : '--resume redoes it'}`);
+        if (failure?.kind === 'auth' && authRetry) stopForProvider({ ...failure, message: `${failure.message} (again after re-reading the token). Log in again with \`claude\`, then --resume` });
+        else if (failure && !retryAuth) stopForProvider(failure);
         removeTree(runDir, outDir);
         return;
       }
@@ -750,8 +790,11 @@ async function main() {
       killStrays({ root: runRoot, markers: strayMarkers });
       removeTree(runRoot, sandbox);
       inFlight -= 1;
+      // In `finally`: the discard path returns from the try block.
+      if (retryAuth && !stopReason) await runJob(job, true);
     }
-  }, () => Boolean(stopReason));
+  };
+  await pool(pending, config.concurrency, runJob, () => Boolean(stopReason));
 
   if (config.judge && !reportOnly) {
     const judge = judgeProvider(config);
@@ -809,10 +852,13 @@ async function main() {
   if (providerStop) summary.providerStop = providerStop;
   summary.warnings = warnings;
   summary.history = readAudit(outDir);
+  const discarded = readDiscarded(outDir);
+  Object.assign(summary.spend, { discardedUsd: discarded.usd, discardedRuns: discarded.runs.length, totalUsd: summary.spend.totalUsd + discarded.usd });
   writeJson(path.join(outDir, 'summary.json'), summary);
   fs.writeFileSync(path.join(outDir, 'REPORT.md'), renderReport({ summary, config, armsInfo, taskSet, fixture, spend }));
   log(`Verdict: ${summary.recommendation.verdict}. Spend $${spent().toFixed(2)}. Report: ${path.join(outDir, 'REPORT.md')}`);
   if (providerStop) {
+    if (providerStop.kind === 'auth') log('The Claude login was rejected twice (token revoked or expired): log in again with `claude`, then resume.');
     log(`Stopped by the provider (${providerStop.kind}${providerStop.resets ? `, resets ${providerStop.resets}` : ''}); exit ${EXIT_PROVIDER_STOP}. Wait, then: npm run eval -- --resume ${outDir}`);
     process.exitCode = EXIT_PROVIDER_STOP;
   }
