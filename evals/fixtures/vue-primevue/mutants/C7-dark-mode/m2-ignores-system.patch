@@ -132,7 +132,7 @@ diff -ruN a/src/stores/theme.ts b/src/stores/theme.ts
 +    systemPrefersDark.value = event.matches
 +  })
 +
-+  const colorScheme = computed(() => resolveColorScheme(stored.value, systemPrefersDark.value))
++  const colorScheme = computed(() => resolveColorScheme(stored.value, false))
 +  const isDark = computed(() => colorScheme.value === 'dark')
 +
 +  watchEffect(() => {
@@ -165,6 +165,38 @@ diff -ruN a/src/style.css b/src/style.css
 +  @apply bg-surface-50 text-surface-900 antialiased dark:bg-surface-950 dark:text-surface-0;
    font-family: 'Inter', system-ui, sans-serif;
  }
+diff -ruN a/src/utils/theme.test.ts b/src/utils/theme.test.ts
+--- /dev/null
++++ b/src/utils/theme.test.ts
+@@ -0,0 +1,28 @@
++import { describe, expect, it } from 'vitest'
++import { parseColorScheme, resolveColorScheme } from './theme'
++
++describe('parseColorScheme', () => {
++  it('accepts the supported schemes', () => {
++    expect(parseColorScheme('light')).toBe('light')
++    expect(parseColorScheme('dark')).toBe('dark')
++  })
++
++  it('rejects missing or unsupported values', () => {
++    expect(parseColorScheme(null)).toBeNull()
++    expect(parseColorScheme('')).toBeNull()
++    expect(parseColorScheme('DARK')).toBeNull()
++    expect(parseColorScheme('system')).toBeNull()
++  })
++})
++
++describe('resolveColorScheme', () => {
++  it('follows the system setting when the user has not chosen', () => {
++    expect(resolveColorScheme(null, true)).toBe('dark')
++    expect(resolveColorScheme(null, false)).toBe('light')
++  })
++
++  it('prefers the stored choice over the system setting', () => {
++    expect(resolveColorScheme('light', true)).toBe('light')
++    expect(resolveColorScheme('dark', false)).toBe('dark')
++  })
++})
 diff -ruN a/src/utils/theme.ts b/src/utils/theme.ts
 --- /dev/null
 +++ b/src/utils/theme.ts
@@ -179,8 +211,8 @@ diff -ruN a/src/utils/theme.ts b/src/utils/theme.ts
 +  return value === 'light' || value === 'dark' ? value : null
 +}
 +
-+export function resolveColorScheme(stored: ColorScheme | null, _systemPrefersDark: boolean): ColorScheme {
-+  return stored ?? 'light'
++export function resolveColorScheme(stored: ColorScheme | null, systemPrefersDark: boolean): ColorScheme {
++  return stored ?? (systemPrefersDark ? 'dark' : 'light')
 +}
 diff -ruN a/src/views/DashboardView.vue b/src/views/DashboardView.vue
 --- a/src/views/DashboardView.vue

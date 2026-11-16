@@ -1,7 +1,7 @@
 diff -ruN a/src/components/UserHovercard.vue b/src/components/UserHovercard.vue
 --- /dev/null
 +++ b/src/components/UserHovercard.vue
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,83 @@
 +<script setup lang="ts">
 +import { onBeforeUnmount, ref, useId } from 'vue'
 +import UserAvatar from '@/components/UserAvatar.vue'
@@ -46,6 +46,7 @@ diff -ruN a/src/components/UserHovercard.vue b/src/components/UserHovercard.vue
 +  <div
 +    class="relative inline-flex"
 +    @mouseenter="schedule(true, OPEN_DELAY_MS)"
++    @mouseleave="schedule(true, CLOSE_DELAY_MS)"
 +    @focusin="show"
 +    @focusout="onFocusOut"
 +    @keydown.esc="hide"

@@ -6,9 +6,10 @@ diff -ruN a/src/views/ProjectsView.vue b/src/views/ProjectsView.vue
          </ul>
        </aside>
 -      <div class="grid flex-1 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+-        <ProjectCard v-for="project in visible" :key="project.id" :project="project" />
 +      <div class="@container min-w-0 flex-1">
-+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-         <ProjectCard v-for="project in visible" :key="project.id" :project="project" />
++        <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
++          <ProjectCard v-for="project in visible" :key="project.id" :project="project" />
 +        </div>
        </div>
      </div>

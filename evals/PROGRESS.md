@@ -107,3 +107,15 @@ and the run is excluded and reported.
   limit; not resumed. Next for the lead: review each agent's result, get `npm run verify` and
   `npm run eval:mutants` green, freeze tasks, then Phase 3 cost estimates and runs.
 - 05:00 UTC: the lead's session restarted and stopped C, D, E, F, G mid-work again (about 15 minutes of progress, checkpoint-committed: `poteto-spec.json` now exists; verify 166 pass, 10 fail). All five re-sent a continue message.
+- 05:12 UTC: agent F done. Component tasks K1–K5 (`components-backend`), 41 of 41 mutants killed. K6
+  (quality tooling) and K7 (bug diagnosis) not built: gaps. Lead ruling: the K1–K4 strict-lint and
+  domain-structure checks assert policy rules the prompts do not state. They stay `required` inside
+  the component set, whose purpose is "does the policy's rule get followed" in a leave-one-out
+  ablation. Comparison 1 (full vs bare) uses only tasks whose required checks are stated in the
+  prompt, so K1–K4 are left out of it; K5 qualifies.
+- 05:22 UTC: agent G delivered `poteto-spec` S1–S5 (specs shipped via task `files`, 61 of 62 mutants
+  killed, references pass all gates). Calibration: baseline scored 20/20 on S1 for $1.05, so S1 is at
+  ceiling. G resumed to calibrate S2–S5 (cap $6) and harden any task at 90% or more with further
+  spec-stated interaction requirements. Noted: Vitest's default 5 s timeout fails under machine load;
+  hidden checks and fixture gates get `--testTimeout=30000` before the freeze, and Phase 3 runs at low
+  concurrency.

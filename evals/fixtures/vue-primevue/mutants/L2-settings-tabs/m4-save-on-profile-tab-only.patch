@@ -43,7 +43,7 @@ diff -ruN a/src/views/SettingsView.vue b/src/views/SettingsView.vue
  onMounted(async () => {
    Object.assign(form, await fetchSettings())
  })
-@@ -42,54 +60,60 @@
+@@ -42,54 +60,59 @@
  <template>
    <section class="flex max-w-2xl flex-col gap-6">
      <h1 class="text-2xl font-semibold">Settings</h1>
@@ -148,7 +148,6 @@ diff -ruN a/src/views/SettingsView.vue b/src/views/SettingsView.vue
 +          </TabPanel>
 +        </TabPanels>
 +      </Tabs>
-+
      </form>
    </section>
  </template>
