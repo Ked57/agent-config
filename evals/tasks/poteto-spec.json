@@ -37,7 +37,7 @@
           "copy": {
             "hidden/spec/S1-project-archiving.test.ts": "src/__hidden__/S1-project-archiving.test.ts"
           },
-          "run": "vitest run src/__hidden__/S1-project-archiving.test.ts",
+          "run": "vitest run src/__hidden__/S1-project-archiving.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -95,7 +95,7 @@
           "copy": {
             "hidden/spec/S2-task-dependencies.test.ts": "src/__hidden__/S2-task-dependencies.test.ts"
           },
-          "run": "vitest run src/__hidden__/S2-task-dependencies.test.ts",
+          "run": "vitest run src/__hidden__/S2-task-dependencies.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -153,7 +153,7 @@
           "copy": {
             "hidden/spec/S3-audit-log.test.ts": "src/__hidden__/S3-audit-log.test.ts"
           },
-          "run": "vitest run src/__hidden__/S3-audit-log.test.ts",
+          "run": "vitest run src/__hidden__/S3-audit-log.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -211,7 +211,7 @@
           "copy": {
             "hidden/spec/S4-task-import.test.ts": "src/__hidden__/S4-task-import.test.ts"
           },
-          "run": "vitest run src/__hidden__/S4-task-import.test.ts",
+          "run": "vitest run src/__hidden__/S4-task-import.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -259,7 +259,7 @@
           "copy": {
             "hidden/spec/S5-api-keys.test.ts": "src/__hidden__/S5-api-keys.test.ts"
           },
-          "run": "vitest run src/__hidden__/S5-api-keys.test.ts",
+          "run": "vitest run src/__hidden__/S5-api-keys.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",

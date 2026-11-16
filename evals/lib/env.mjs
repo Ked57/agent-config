@@ -29,6 +29,12 @@ export function baseEnv(home, tmp = null) {
 
 export const DEFAULT_SANDBOX = '/var/tmp/agent-config-evals';
 
+/** `MemAvailable` from /proc/meminfo in MB, or null where there is none (not Linux). */
+export function memAvailableMb(meminfo = fs.existsSync('/proc/meminfo') ? fs.readFileSync('/proc/meminfo', 'utf8') : '') {
+  const kb = /^MemAvailable:\s+(\d+)\s*kB/m.exec(meminfo)?.[1];
+  return kb ? Math.floor(Number(kb) / 1024) : null;
+}
+
 /** Root of everything an agent process touches (arm homes, run homes, working copies, caches). */
 export const sandboxRoot = (env = process.env) => path.resolve(env.AGENT_CONFIG_EVALS_SANDBOX || DEFAULT_SANDBOX);
 

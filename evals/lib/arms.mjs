@@ -12,6 +12,27 @@ import { skillName } from './isolation.mjs';
 export const WORKTREE = 'WORKTREE';
 /** An arm with an empty home: Claude Code with nothing installed. */
 export const BARE = 'BARE';
+/** Written into an arm dir once its build finished: an arm dir without it is incomplete. */
+export const BUILT_MARKER = '.eval-built';
+
+/** Whether an arm's build in `armDir` is complete and its home is still there. */
+export const armBuilt = (armDir, home) => fs.existsSync(path.join(armDir, BUILT_MARKER)) && fs.existsSync(home);
+
+const pluginKey = (plugin) => `${plugin.id}@${plugin.version ?? '?'}#${plugin.gitCommitSha ?? '?'}`;
+
+/**
+ * How a rebuilt arm differs from the one an eval was started with: changed plugin versions or commits
+ * (`plugins`, as "id: old → new") and other installed files (`files`, plugin files excluded).
+ */
+export function armDrift(saved, rebuilt) {
+  const before = Object.fromEntries((saved.plugins ?? []).map((plugin) => [plugin.id, pluginKey(plugin)]));
+  const after = Object.fromEntries((rebuilt.plugins ?? []).map((plugin) => [plugin.id, pluginKey(plugin)]));
+  const plugins = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()
+    .filter((id) => before[id] !== after[id]).map((id) => `${id}: ${before[id] ?? 'absent'} → ${after[id] ?? 'absent'}`);
+  const files = [...new Set([...Object.keys(saved.hashes ?? {}), ...Object.keys(rebuilt.hashes ?? {})])].sort()
+    .filter((file) => !file.startsWith('.claude/plugins/') && saved.hashes?.[file] !== rebuilt.hashes?.[file]);
+  return { plugins, files };
+}
 
 const git = (repoRoot, args, options = {}) => {
   const result = spawnSync('git', args, { cwd: repoRoot, encoding: options.encoding ?? 'utf8', maxBuffer: 256 * 1024 * 1024, input: options.input });
@@ -288,6 +309,7 @@ export async function buildArm({ repoRoot, spec, armDir, plugins = 'install', np
   const meta = { ref: spec.ref, sha: null, add: [], remove: spec.remove, pluginMode: spec.ref === BARE ? 'none' : plugins, removedPlugins: [], home };
   if (spec.ref === BARE) {
     if (spec.add.length || spec.remove.length) throw new Error('BARE arms take no toggles');
+    fs.writeFileSync(path.join(armDir, BUILT_MARKER), new Date().toISOString());
     return { ...meta, pluginList: [], homePathFiles: [], ...inventory(home) };
   }
   if (spec.ref === WORKTREE) copyWorkingTree(repoRoot, src);
@@ -322,5 +344,7 @@ export async function buildArm({ repoRoot, spec, armDir, plugins = 'install', np
   } catch {
     throw new Error(`claude plugin list --json failed in arm ${spec.ref}: ${(list.stderr || list.stdout).slice(0, 300)}`);
   }
-  return { ...meta, pluginList, homePathFiles: filesNamingHome(home), ...inventory(home) };
+  const built = { ...meta, pluginList, homePathFiles: filesNamingHome(home), ...inventory(home) };
+  fs.writeFileSync(path.join(armDir, BUILT_MARKER), new Date().toISOString());
+  return built;
 }

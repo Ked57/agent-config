@@ -36,7 +36,7 @@
           "copy": {
             "hidden/components/plan-limits.test.ts": "src/__hidden__/plan-limits.test.ts"
           },
-          "run": "vitest run src/__hidden__/plan-limits.test.ts",
+          "run": "vitest run src/__hidden__/plan-limits.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -93,7 +93,7 @@
           "copy": {
             "hidden/components/task-filters.test.ts": "src/__hidden__/task-filters.test.ts"
           },
-          "run": "vitest run src/__hidden__/task-filters.test.ts",
+          "run": "vitest run src/__hidden__/task-filters.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -138,7 +138,7 @@
           "copy": {
             "hidden/components/task-import.test.ts": "src/__hidden__/task-import.test.ts"
           },
-          "run": "vitest run src/__hidden__/task-import.test.ts",
+          "run": "vitest run src/__hidden__/task-import.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -183,7 +183,7 @@
           "copy": {
             "hidden/components/labels.test.ts": "src/__hidden__/labels.test.ts"
           },
-          "run": "vitest run src/__hidden__/labels.test.ts",
+          "run": "vitest run src/__hidden__/labels.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -269,7 +269,7 @@
           "copy": {
             "hidden/components/token-cli.test.ts": "src/__hidden__/token-cli.test.ts"
           },
-          "run": "vitest run src/__hidden__/token-cli.test.ts",
+          "run": "vitest run src/__hidden__/token-cli.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",

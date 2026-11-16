@@ -129,3 +129,18 @@ and the run is excluded and reported.
   results in `~/agent-config-evals` survive, the sandbox does not; `--resume` must rebuild arms (A is
   adding that plus a free-memory guard); Phase 3 runs at concurrency 2 with no other heavy work.
   A lead restart is expected to kill running subagents: re-send them a continue message.
+- 05:55–09:40 UTC: second usage-limit pause (A, E, G stopped).
+- 09:45 UTC: calibration results read by the lead from the agents' result dirs. **The ceiling holds.**
+  Baseline (full agent-config, Opus 5.5 medium, 1 rep): `ts-backend-hard` with explicit prompts 85 of 85
+  hidden cases ($6.63); with prompts rewritten as invariants 84 of 84 ($5.08); `poteto-spec` S1 20 of 20
+  ($1.05), S2–S5 90 of 90 ($5.48). Calibration spend so far $18.30, outside the Phase 3 budget.
+  The only known baseline misses are on B5 (strict concurrent 2xx), where the prompt does not
+  mention concurrency: 3 of 4 saved solutions fail.
+- Lead decisions: (1) stop hardening by adding requirements; it does not work on this fixture and
+  costs usage. E and G not resumed. (2) H1, H5 and H7 prompts no longer mention simultaneous
+  requests; they state the invariant only ("never negative", "never without an admin", the lost-update
+  problem). The concurrency cases follow from "never", the same class as B5. (3) Every hidden Vitest
+  check runs with `--testTimeout=30000`. (4) A resumed for unattended resume after a wiped sandbox
+  and for usage-limit handling (a rate-limited run must not be recorded as a result).
+- 09:50 UTC: full mutant gate started in the background (`/var/tmp/repo-evals-work/gate-full.log`).
+  Next: gate green → freeze commit → Phase 3.

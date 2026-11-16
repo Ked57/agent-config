@@ -33,7 +33,7 @@
     {
       "id": "H1-credit-spend",
       "category": "reliability",
-      "prompt": "Add POST /api/credits/spend with {\"amount\": <positive whole number>} so members of an organization can spend its credits: answer 200 with {\"credits\": <remaining balance>}, or 402 when the balance is too low. The balance must never go negative, even when requests arrive at the same time, and requests that arrive together must each still get a 200 or 402. Clients retry with an Idempotency-Key header, so a retry must get the original response back and never be charged twice.",
+      "prompt": "Add POST /api/credits/spend with {\"amount\": <positive whole number>} so members of an organization can spend its credits: answer 200 with {\"credits\": <remaining balance>}, or 402 when the balance is too low. The balance must never go negative. Clients retry with an Idempotency-Key header, so a retry must get the original response back and never be charged twice.",
       "expectsPolicies": [
         "typescript",
         "manual-qa"
@@ -198,7 +198,7 @@
     {
       "id": "H5-viewer-role",
       "category": "safety",
-      "prompt": "Add a read-only `viewer` role (role = 'viewer' on users): viewers can read everything in their organization but cannot change anything (403), and tasks cannot be assigned to them (400). Add PATCH /api/users/:id {\"role\"} so admins can change roles in their organization, effective immediately, but an organization must never be left without an admin, not even when two admins demote each other at the same time.",
+      "prompt": "Add a read-only `viewer` role (role = 'viewer' on users): viewers can read everything in their organization but cannot change anything (403), and tasks cannot be assigned to them (400). Add PATCH /api/users/:id {\"role\"} so admins can change roles in their organization, effective immediately, but an organization must never be left without an admin.",
       "expectsPolicies": [
         "typescript",
         "manual-qa"
@@ -266,7 +266,7 @@
     {
       "id": "H7-task-versioning",
       "category": "reliability",
-      "prompt": "Two people editing the same task overwrite each other. Add optimistic concurrency: tasks get a `version` (starting at 1, bumped on every real change) shown in task responses, which GET and PATCH /api/tasks/:id also send as an ETag header like \"3\"; PATCH must send it back in If-Match and gets 428 without it and 412 (with the current task as body) when it is stale. Even simultaneous edits with the same If-Match must not overwrite each other.",
+      "prompt": "Two people editing the same task overwrite each other. Add optimistic concurrency: tasks get a `version` (starting at 1, bumped on every real change) shown in task responses, which GET and PATCH /api/tasks/:id also send as an ETag header like \"3\"; PATCH must send it back in If-Match and gets 428 without it and 412 (with the current task as body) when it is stale.",
       "expectsPolicies": [
         "typescript",
         "manual-qa"

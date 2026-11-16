@@ -7,12 +7,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { aggregate, compareTasks } from './lib/aggregate.mjs';
-import { buildArm, compareInventories, installedPlugins, inventory, prepareRunHome } from './lib/arms.mjs';
+import { armBuilt, armDrift, buildArm, compareInventories, installedPlugins, inventory, prepareRunHome } from './lib/arms.mjs';
 import { browserSmoke } from './lib/browser.mjs';
 import { combineEvals } from './lib/combine.mjs';
 import { scoreRun } from './lib/checks.mjs';
 import { DEFAULTS, judgeSetId, parseArgs, promptFor, resolveConfig, validateTaskSet } from './lib/config.mjs';
-import { assertSafeRoot, browserToolEnv, killStrays, removeTree, sandboxProblems, sandboxRoot } from './lib/env.mjs';
+import { assertSafeRoot, browserToolEnv, killStrays, memAvailableMb, removeTree, sandboxProblems, sandboxRoot } from './lib/env.mjs';
 import { httpSmoke } from './lib/http-smoke.mjs';
 import { copyForRun, copyTaskFiles, fixtureHash, loadFixture, moveTree, preparePristine, verifyPristine } from './lib/fixtures.mjs';
 import { initEvent, initProblems, invokedCommands, loadedInstructionFiles, removalLeftovers, sessionComponents, sessionCostUsd, strayInstructionFiles, unexplainedComponents } from './lib/isolation.mjs';
@@ -73,6 +73,8 @@ Execution
   --report-only             With --resume: re-aggregate and rewrite the report only.
   --recheck                 With --resume: re-score saved runs against the repo's current task checks
                             (hidden tests included); no agent runs, gates are not re-run.
+  --min-free-mb <n>         Wait to start an agent run while less memory is available (default: ${DEFAULTS.minFreeMb}; 0 = never).
+  --accept-arm-drift        With --resume: go on when a rebuilt arm's plugins or files differ (recorded).
   --no-strict-isolation     Keep going after a run fails the isolation check (it is excluded either way).
   --dry-run                 Build arms and fixture, print the plan, call no models.
   --name <name>             Label for the results dir and report.
@@ -287,7 +289,7 @@ async function main() {
     if (fixed.length) throw new Error(`--resume keeps the eval's arms, tasks, model and reps: drop ${fixed.join(', ')} or start a new eval`);
     migrateLegacyJudgments(outDir, config);
     const overrides = {};
-    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser', 'http', 'judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand', 'strictIsolation']) if (raw[key] !== undefined && raw[key] !== config[key]) {
+    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser', 'http', 'judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand', 'strictIsolation', 'minFreeMb']) if (raw[key] !== undefined && raw[key] !== config[key]) {
       overrides[key] = { from: config[key] ?? null, to: raw[key] };
       config[key] = raw[key];
     }
@@ -347,9 +349,23 @@ async function main() {
   let armsInfo;
   if (fs.existsSync(armsFile)) {
     armsInfo = readJson(armsFile);
+    const rebuilt = [];
     for (const arm of armIds) {
-      if (!fs.existsSync(armsInfo[arm].home)) {
-        if (agentRunsWanted && !raw.dryRun) throw new Error(`Arm ${arm}'s home ${armsInfo[arm].home} is gone (sandbox cleaned?); new runs could not match the saved ones. Start a new eval.`);
+      const armDir = path.dirname(armsInfo[arm].home);
+      if (!armBuilt(armDir, armsInfo[arm].home)) {
+        if (!agentRunsWanted || raw.dryRun) continue;
+        // The sandbox may live in a service-private tmp that is recreated empty on every restart:
+        // rebuild the arm from the same ref and toggles, and go on only if it comes out the same.
+        log(`Arm ${arm}'s build in ${armDir} is missing or incomplete; rebuilding it from ${config.arms[arm].ref}`);
+        const fresh = await buildArm({ repoRoot: REPO_ROOT, spec: config.arms[arm], armDir, plugins: config.plugins ?? 'skip', npmCache: path.join(CACHE_ROOT, 'npm-cache') });
+        const drift = armDrift(armsInfo[arm], fresh);
+        const drifted = drift.plugins.length + drift.files.length > 0;
+        const text = `Arm ${arm} rebuilt after its sandbox build went missing${drifted ? ` and differs from the original build: ${[...drift.plugins, ...(drift.files.length ? [`${drift.files.length} installed file(s) changed (${drift.files.slice(0, 5).join(', ')})`] : [])].join('; ')}` : ': identical installed files and plugin versions'}`;
+        log(text);
+        if (drifted && !raw.acceptArmDrift) throw new Error(`${text}. New runs would not match the saved ones: pass --accept-arm-drift to continue anyway (recorded in the report), or start a new eval.`);
+        warnings.push(`${text}${drifted ? ' (accepted with --accept-arm-drift)' : ''}.`);
+        rebuilt.push({ arm, drift, accepted: drifted });
+        armsInfo[arm] = { ...fresh, previousExpected: armsInfo[arm].expected ?? null };
         continue;
       }
       const changed = changedArmFiles(armsInfo[arm].hashes, inventory(armsInfo[arm].home).hashes);
@@ -357,6 +373,12 @@ async function main() {
       const message = `Arm ${arm}'s installed config changed after it was built (${changed.slice(0, 5).join(', ')})`;
       if (agentRunsWanted && !raw.dryRun) throw new Error(`${message}; new runs would not match the saved ones. Start a new eval.`);
       warnings.push(`${message}.`);
+    }
+    if (rebuilt.length) {
+      if (config.singleArm) armsInfo.B = armsInfo.A;
+      if (rebuilt.some((entry) => entry.accepted)) Object.assign(armsInfo, compareInventories(armsInfo.A, armsInfo.B));
+      writeJson(armsFile, armsInfo);
+      appendAudit(outDir, { action: 'rebuild-arms', sandbox, arms: rebuilt });
     }
   } else {
     const built = {};
@@ -374,6 +396,19 @@ async function main() {
   const provider = agentProvider(config.provider);
   if (agentRunsWanted && !raw.dryRun && armIds.some((arm) => !armsInfo[arm].expected)) {
     await probeArms({ provider, sandbox, outDir, armsInfo, armIds });
+    // A rebuilt arm must load what the original did.
+    for (const arm of armIds) {
+      const before = armsInfo[arm].previousExpected;
+      if (!before) continue;
+      const view = (expected) => JSON.stringify({ skills: expected.skills, agents: expected.agents, plugins: expected.plugins.map((plugin) => `${plugin.name}@${plugin.version}`) });
+      if (view(before) !== view(armsInfo[arm].expected)) {
+        const text = `Arm ${arm}'s rebuilt probe lists different skills, agents or plugins than the original build`;
+        if (!raw.acceptArmDrift) throw new Error(`${text}. Pass --accept-arm-drift to continue anyway, or start a new eval.`);
+        warnings.push(`${text} (accepted with --accept-arm-drift).`);
+        appendAudit(outDir, { action: 'arm-probe-drift', arm, before, after: armsInfo[arm].expected });
+      }
+      delete armsInfo[arm].previousExpected;
+    }
     if (config.singleArm) armsInfo.B = armsInfo.A;
     writeJson(armsFile, armsInfo);
   }
@@ -469,6 +504,17 @@ async function main() {
       stopReason ??= budget.reason;
       return;
     }
+    // A global OOM kills the whole service, eval included: don't start a run on a nearly full machine.
+    const minFree = config.minFreeMb ?? DEFAULTS.minFreeMb;
+    let waitLogged = 0;
+    while (minFree > 0 && !stopReason && (memAvailableMb() ?? Infinity) < minFree) {
+      if (Date.now() - waitLogged >= 60000) {
+        log(`waiting to start ${job.id}: ${memAvailableMb()} MB available, --min-free-mb ${minFree}`);
+        waitLogged = Date.now();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+    if (stopReason) return;
     inFlight += 1;
     const runRoot = path.join(sandbox, 'runs', job.id);
     const runHome = path.join(runRoot, 'home');

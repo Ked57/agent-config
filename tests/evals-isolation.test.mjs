@@ -296,3 +296,30 @@ test('stray matching is exact on env entries and segment-wise on cwd, so /var/tm
   assert.throws(() => killStrays({ root, markers: ['HOME=/var/tmp'] }), /Refusing stray marker/);
   assert.throws(() => killStrays({ root, markers: [`HOME=${root}`] }), /Refusing stray marker/);
 });
+
+test('armDrift names changed plugin versions or commits and changed installed files', async () => {
+  const { armDrift, armBuilt, BUILT_MARKER } = await import('../evals/lib/arms.mjs');
+  const saved = { plugins: [{ id: 'pstack@cursor-plugins', version: '0.15.42', gitCommitSha: 'bf0c7cd' }], hashes: { '.agents/AGENTS.md': 'a', '.claude/plugins/cache/cursor-plugins/pstack/0.15.42/x': 'p' } };
+  assert.deepEqual(armDrift(saved, saved), { plugins: [], files: [] });
+  const moved = { plugins: [{ id: 'pstack@cursor-plugins', version: '0.16.0', gitCommitSha: 'c0ffee1' }, { id: 'new@m', version: '1', gitCommitSha: 'n' }], hashes: { '.agents/AGENTS.md': 'b', '.claude/plugins/cache/cursor-plugins/pstack/0.16.0/x': 'q' } };
+  assert.deepEqual(armDrift(saved, moved), {
+    plugins: ['new@m: absent → new@m@1#n', 'pstack@cursor-plugins: pstack@cursor-plugins@0.15.42#bf0c7cd → pstack@cursor-plugins@0.16.0#c0ffee1'],
+    files: ['.agents/AGENTS.md']
+  });
+  const scratch = temp();
+  const armDir = path.join(scratch, 'arms', 'A');
+  fs.mkdirSync(path.join(armDir, 'home'), { recursive: true });
+  assert.equal(armBuilt(armDir, path.join(armDir, 'home')), false, 'a build without its marker is incomplete');
+  fs.writeFileSync(path.join(armDir, BUILT_MARKER), 'now');
+  assert.equal(armBuilt(armDir, path.join(armDir, 'home')), true);
+  fs.rmSync(path.join(armDir, 'home'), { recursive: true });
+  assert.equal(armBuilt(armDir, path.join(armDir, 'home')), false);
+  fs.rmSync(scratch, { recursive: true, force: true });
+});
+
+test('memAvailableMb reads MemAvailable from /proc/meminfo', async () => {
+  const { memAvailableMb } = await import('../evals/lib/env.mjs');
+  assert.equal(memAvailableMb('MemTotal:        7864320 kB\nMemFree:  100 kB\nMemAvailable:    1536000 kB\n'), 1500);
+  assert.equal(memAvailableMb(''), null);
+  assert.equal(resolveConfig({ b: 'main' }, { name: 't', fixture: 'f', categories: { c: {} }, tasks: [{ id: 'T', category: 'c', prompt: 'p' }] }).minFreeMb, 1500);
+});

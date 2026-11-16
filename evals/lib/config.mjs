@@ -25,12 +25,14 @@ export const DEFAULTS = Object.freeze({
   // Non-bare arms install the ref's external plugins; 'skip' keeps installs offline.
   plugins: 'install',
   // Stop the eval at the first run whose session loaded something the arm did not install.
-  strictIsolation: true
+  strictIsolation: true,
+  // Wait before starting an agent run while less memory than this is available (0: never wait).
+  minFreeMb: 1500
 });
 
 const LIST_FLAGS = new Set(['a-add', 'a-remove', 'b-add', 'b-remove', 'env', 'watch', 'only']);
-const BOOLEAN_FLAGS = new Set(['smoke', 'browser', 'http', 'no-judge', 'dry-run', 'report-only', 'rejudge', 'recheck', 'single-arm', 'strict-isolation', 'no-strict-isolation', 'help']);
-const NUMBER_FLAGS = new Set(['reps', 'concurrency', 'timeout-min', 'judge-reps', 'judge-controls', 'max-usd', 'max-runs']);
+const BOOLEAN_FLAGS = new Set(['smoke', 'browser', 'http', 'no-judge', 'dry-run', 'report-only', 'rejudge', 'recheck', 'single-arm', 'strict-isolation', 'no-strict-isolation', 'accept-arm-drift', 'help']);
+const NUMBER_FLAGS = new Set(['min-free-mb', 'reps', 'concurrency', 'timeout-min', 'judge-reps', 'judge-controls', 'max-usd', 'max-runs']);
 const STRING_FLAGS = new Set(['a', 'b', 'tasks', 'provider', 'model', 'effort', 'judge-provider', 'judge-model', 'judge-effort', 'judge-command', 'out', 'resume', 'name', 'plugins', 'a-prefix', 'b-prefix']);
 
 const camel = (flag) => flag.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());

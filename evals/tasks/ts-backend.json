@@ -58,7 +58,7 @@
           "copy": {
             "hidden/comments.test.ts": "src/__hidden__/comments.test.ts"
           },
-          "run": "vitest run src/__hidden__/comments.test.ts",
+          "run": "vitest run src/__hidden__/comments.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -99,7 +99,7 @@
           "copy": {
             "hidden/pagination.test.ts": "src/__hidden__/pagination.test.ts"
           },
-          "run": "vitest run src/__hidden__/pagination.test.ts",
+          "run": "vitest run src/__hidden__/pagination.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -131,7 +131,7 @@
           "copy": {
             "hidden/query-count.test.ts": "src/__hidden__/query-count.test.ts"
           },
-          "run": "vitest run src/__hidden__/query-count.test.ts",
+          "run": "vitest run src/__hidden__/query-count.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -165,7 +165,7 @@
           "copy": {
             "hidden/priority-migration.test.ts": "src/__hidden__/priority-migration.test.ts"
           },
-          "run": "vitest run src/__hidden__/priority-migration.test.ts",
+          "run": "vitest run src/__hidden__/priority-migration.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -206,7 +206,7 @@
           "copy": {
             "hidden/webhook-idempotency.test.ts": "src/__hidden__/webhook-idempotency.test.ts"
           },
-          "run": "vitest run src/__hidden__/webhook-idempotency.test.ts",
+          "run": "vitest run src/__hidden__/webhook-idempotency.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -239,7 +239,7 @@
           "copy": {
             "hidden/login-rate-limit.test.ts": "src/__hidden__/login-rate-limit.test.ts"
           },
-          "run": "vitest run src/__hidden__/login-rate-limit.test.ts",
+          "run": "vitest run src/__hidden__/login-rate-limit.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -272,7 +272,7 @@
           "copy": {
             "hidden/tenant-isolation.test.ts": "src/__hidden__/tenant-isolation.test.ts"
           },
-          "run": "vitest run src/__hidden__/tenant-isolation.test.ts",
+          "run": "vitest run src/__hidden__/tenant-isolation.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -304,7 +304,7 @@
           "copy": {
             "hidden/error-shape.test.ts": "src/__hidden__/error-shape.test.ts"
           },
-          "run": "vitest run src/__hidden__/error-shape.test.ts",
+          "run": "vitest run src/__hidden__/error-shape.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -327,7 +327,7 @@
           "copy": {
             "hidden/background-notifications.test.ts": "src/__hidden__/background-notifications.test.ts"
           },
-          "run": "vitest run src/__hidden__/background-notifications.test.ts",
+          "run": "vitest run src/__hidden__/background-notifications.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -340,7 +340,7 @@
           "copy": {
             "hidden/background-delivery.test.ts": "src/__hidden__/background-delivery.test.ts"
           },
-          "run": "vitest run src/__hidden__/background-delivery.test.ts",
+          "run": "vitest run src/__hidden__/background-delivery.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -363,7 +363,7 @@
           "copy": {
             "hidden/task-update-rules.test.ts": "src/__hidden__/task-update-rules.test.ts"
           },
-          "run": "vitest run src/__hidden__/task-update-rules.test.ts",
+          "run": "vitest run src/__hidden__/task-update-rules.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -417,7 +417,7 @@
           "copy": {
             "hidden/config-validation.test.ts": "src/__hidden__/config-validation.test.ts"
           },
-          "run": "vitest run src/__hidden__/config-validation.test.ts",
+          "run": "vitest run src/__hidden__/config-validation.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
@@ -453,7 +453,7 @@
           "copy": {
             "hidden/parse-duration.test.ts": "src/__hidden__/parse-duration.test.ts"
           },
-          "run": "vitest run src/__hidden__/parse-duration.test.ts",
+          "run": "vitest run src/__hidden__/parse-duration.test.ts --testTimeout=30000",
           "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",

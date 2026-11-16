@@ -86,6 +86,35 @@ export function parseTranscript(text) {
 
 export const PROBE_MODEL = 'claude-haiku-5-5';
 
+const LIMIT_TEXT = /session limit|usage limit|rate[ _-]?limit|usage_limit|\b429\b|too many requests/i;
+const TRANSIENT_TEXT = /overloaded|api_error|internal server error|\b50[0-9]\b|service unavailable/i;
+
+/**
+ * Whether a session ended because of the provider, not the task: a usage or rate limit (429, "You've
+ * hit your session limit · resets 9:40am (UTC)") or a transient API failure (overloaded, 5xx).
+ * `output` is the stream-json transcript or a `--output-format json` envelope; `stderr` is checked
+ * when there is no result. Returns `{ kind: 'usage-limit' | 'transient', message, resets }` or null.
+ */
+export function providerFailure(output = '', stderr = '') {
+  let result = null;
+  for (const line of output.split('\n')) {
+    try {
+      const event = JSON.parse(line);
+      if (event?.type === 'result') result = event;
+    } catch {
+      // not JSON
+    }
+  }
+  const classify = (text, status) => {
+    const limited = status === 429 || LIMIT_TEXT.test(text);
+    if (!limited && !(status >= 500 || TRANSIENT_TEXT.test(text))) return null;
+    const message = text.trim().split('\n')[0].slice(0, 300);
+    return { kind: limited ? 'usage-limit' : 'transient', message, resets: /resets\s+([^\n·]+?)\s*$/im.exec(text)?.[1] ?? null };
+  };
+  if (result) return result.is_error ? classify([result.api_error, result.result, result.error].filter(Boolean).join('\n'), result.api_error_status ?? null) : null;
+  return stderr ? classify(stderr, null) : null;
+}
+
 const runProcess = ({ args, cwd, env, stdoutFile, stderrFile, stdin, timeoutMs }) => new Promise((resolve) => {
   const started = Date.now();
   const out = stdoutFile ? fs.openSync(stdoutFile, 'w') : 'pipe';
@@ -99,13 +128,13 @@ const runProcess = ({ args, cwd, env, stdoutFile, stderrFile, stdin, timeoutMs }
     timedOut = true;
     try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already gone */ }
   }, timeoutMs);
-  const finish = (code) => {
+  const finish = (code, signal = null) => {
     clearTimeout(timer);
     // The agent's own children (dev servers, watchers) share its process group: stop them with it.
     try { process.kill(-child.pid, 'SIGKILL'); } catch { /* group already empty */ }
     if (typeof out === 'number') fs.closeSync(out);
     if (typeof err === 'number') fs.closeSync(err);
-    resolve({ exitCode: code, timedOut, wallMs: Date.now() - started, stdout });
+    resolve({ exitCode: code, signal, timedOut, wallMs: Date.now() - started, stdout });
   };
   child.on('error', () => finish(-1));
   child.on('exit', finish);
@@ -114,6 +143,7 @@ const runProcess = ({ args, cwd, env, stdoutFile, stderrFile, stdin, timeoutMs }
 export const claudeProvider = {
   name: 'claude',
   parseTranscript,
+  providerFailure,
   transcriptFile: 'transcript.jsonl',
 
   /** Where Claude Code keeps session logs for a config home (one jsonl per session, subagents below). */
@@ -152,6 +182,8 @@ export const claudeProvider = {
     } finally {
       fs.rmSync(cwd, { recursive: true, force: true });
     }
+    const failure = providerFailure(stdout);
+    if (failure) throw Object.assign(new Error(`judge call stopped by the provider (${failure.kind}): ${failure.message}`), { providerFailure: failure });
     if (exitCode !== 0) throw new Error(`claude judge exited ${exitCode}: ${stdout.slice(0, 300)}`);
     const envelope = JSON.parse(stdout);
     return { text: envelope.result ?? '', costUsd: envelope.total_cost_usd ?? 0 };
