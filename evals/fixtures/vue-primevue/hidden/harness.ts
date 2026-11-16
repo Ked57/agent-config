@@ -1,6 +1,8 @@
 // Shared harness for the hidden Vue acceptance tests. It boots the app through the project's own
 // src/main.ts (so services, directives and theme options the agent registered there are live),
 // on a fresh module graph per test, in jsdom with the browser APIs jsdom lacks stubbed.
+import fs from 'node:fs'
+import path from 'node:path'
 import { vi } from 'vitest'
 
 type AnyApp = { unmount(): void; config: { globalProperties: Record<string, unknown> } }
@@ -177,6 +179,18 @@ function installDialogAndPopover() {
     const action = invoker.getAttribute('popovertargetaction') ?? 'toggle'
     setPopover(target, action === 'show' ? true : action === 'hide' ? false : !target.hasAttribute(POPOVER_OPEN))
   })
+  // Exclusive accordions: opening a <details name="x"> closes the others with that name.
+  document.addEventListener(
+    'toggle',
+    (event) => {
+      const details = event.target
+      if (!(details instanceof HTMLDetailsElement) || !details.open || !details.getAttribute('name')) return
+      for (const other of document.querySelectorAll<HTMLDetailsElement>('details[name]')) {
+        if (other !== details && other.open && other.getAttribute('name') === details.getAttribute('name')) other.open = false
+      }
+    },
+    true,
+  )
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || event.defaultPrevented) return
     const modal = [...document.querySelectorAll<HTMLDialogElement & { __modal?: boolean }>('dialog[open]')].findLast((dialog) => dialog.__modal)
@@ -197,7 +211,10 @@ export function installBrowserStubs() {
   env.observers.length = 0
   env.mediaListeners.clear()
   env.clipboardWrites.length = 0
-  window.matchMedia = ((query: string) => mediaQueryList(query)) as unknown as typeof window.matchMedia
+  // Set on both: inline scripts and modules may read the bare global rather than window.
+  const matchMedia = ((query: string) => mediaQueryList(query)) as unknown as typeof window.matchMedia
+  window.matchMedia = matchMedia
+  globalThis.matchMedia = matchMedia
   globalThis.IntersectionObserver = StubIntersectionObserver as unknown as typeof IntersectionObserver
   globalThis.ResizeObserver = class {
     observe() {}
@@ -235,11 +252,38 @@ export interface MountOptions {
   api?: (actual: ApiModule) => Partial<ApiModule>
 }
 
+/**
+ * Copies the project's index.html <html> attributes and <head> into the test document and runs its
+ * inline classic scripts (pre-paint theme scripts, for example), as the browser would before main.ts.
+ */
+function loadIndexHtml() {
+  const file = path.resolve(process.cwd(), 'index.html')
+  const page = new DOMParser().parseFromString(fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '', 'text/html')
+  for (const attribute of [...page.documentElement.attributes]) document.documentElement.setAttribute(attribute.name, attribute.value)
+  document.head.innerHTML = ''
+  const inline: string[] = []
+  for (const node of [...page.head.children]) {
+    if (node.tagName === 'SCRIPT') {
+      const type = node.getAttribute('type')
+      if (!node.hasAttribute('src') && (!type || type === 'text/javascript')) inline.push(node.textContent ?? '')
+      continue
+    }
+    document.head.append(document.importNode(node, true))
+  }
+  for (const code of inline) {
+    try {
+      ;(0, eval)(code)
+    } catch {
+      // A failing pre-paint script fails in the browser too; main.ts still runs.
+    }
+  }
+}
+
 /** Boots src/main.ts at `path` on a fresh module graph and waits for the first route. */
 export async function mountApp(path = '/', options: MountOptions = {}): Promise<MountedApp> {
   unmountApp()
   installBrowserStubs()
-  document.head.querySelectorAll('style').forEach((node) => node.remove())
+  loadIndexHtml()
   document.body.innerHTML = '<div id="app"></div>'
   window.history.replaceState({}, '', path)
   vi.resetModules()
@@ -296,13 +340,15 @@ export function shownText(element: Element | null | undefined) {
 export function isShown(element: Element | null | undefined): boolean {
   for (let node = element ?? null; node && node !== document.documentElement; node = node.parentElement) {
     if (!(node instanceof HTMLElement)) continue
-    if (node.hidden || node.getAttribute('aria-hidden') === 'true') return false
+    if (node.hidden) return false
     // No stylesheet loads in jsdom, so Tailwind's hiding utilities are read from the class list.
     if (node.classList.contains('hidden') || node.classList.contains('invisible')) return false
     if (node.hasAttribute('popover') && !node.hasAttribute(POPOVER_OPEN)) return false
     if (node instanceof HTMLDialogElement && !node.open) return false
     const style = window.getComputedStyle(node)
-    if (style.display === 'none' || style.visibility === 'hidden') return false
+    // jsdom's UA sheet hides [popover] via the real :popover-open, which the stub cannot set.
+    if (style.display === 'none' && !node.hasAttribute('popover')) return false
+    if (style.visibility === 'hidden') return false
     if (node instanceof HTMLDetailsElement && node !== element && !node.open && !node.querySelector(':scope > summary')?.contains(element ?? null)) return false
   }
   return Boolean(element?.isConnected)

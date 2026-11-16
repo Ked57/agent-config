@@ -120,3 +120,12 @@ export function moveTree(from, to) {
     fs.rmSync(from, { recursive: true, force: true });
   }
 }
+
+/** Copies a task's `files` (`{ "fixture-relative source": "app-relative target" }`) into a worked copy. */
+export function copyTaskFiles(fixture, files = {}, destination) {
+  for (const [from, to] of Object.entries(files)) {
+    const target = path.join(destination, to);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.cpSync(path.join(fixture.dir, from), target, { recursive: true });
+  }
+}

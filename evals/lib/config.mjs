@@ -167,6 +167,10 @@ export const slug = (value) => String(value).replace(/[^A-Za-z0-9._-]+/g, '_').r
 
 const CHECK_TYPES = new Set(['pattern', 'changed', 'command']);
 
+/** A `{ "fixture-relative source": "app-relative target" }` map with no absolute or `..` paths. */
+const relativeMap = (map) => Boolean(map) && typeof map === 'object' && !Array.isArray(map)
+  && Object.entries(map).every(([from, to]) => typeof to === 'string' && from && to && !from.startsWith('/') && !to.startsWith('/') && !`${from}/${to}`.split('/').includes('..'));
+
 /** Returns a list of human-readable problems with a task set; empty when valid. */
 export function validateTaskSet(taskSet) {
   const errors = [];
@@ -199,9 +203,11 @@ export function validateTaskSet(taskSet) {
       && Object.entries(task.promptPrefix).every(([arm, prefix]) => ['A', 'B'].includes(arm) && typeof prefix === 'string'))) {
       errors.push(`${where}: promptPrefix must map A and/or B to a string`);
     }
-    if (task?.expectsPolicies !== undefined && !(Array.isArray(task.expectsPolicies) && task.expectsPolicies.every((p) => typeof p === 'string'))) {
-      errors.push(`${where}: expectsPolicies must be a string array`);
+    for (const key of ['expectsPolicies', 'expectsComponents']) {
+      if (task?.[key] !== undefined && !(Array.isArray(task[key]) && task[key].every((p) => typeof p === 'string'))) errors.push(`${where}: ${key} must be a string array`);
     }
+    if (task?.expectsPolicies !== undefined && task?.expectsComponents !== undefined) errors.push(`${where}: use expectsComponents or its alias expectsPolicies, not both`);
+    if (task?.files !== undefined && !relativeMap(task.files)) errors.push(`${where}: files must map fixture-relative paths to app-relative paths`);
     const checkIds = new Set();
     for (const [checkIndex, check] of (task?.checks ?? []).entries()) {
       const cwhere = `${where}.checks[${checkIndex}]`;
@@ -219,7 +225,8 @@ export function validateTaskSet(taskSet) {
       if (check?.type === 'command') {
         if (typeof check.run !== 'string' || !check.run.trim()) errors.push(`${cwhere}: run is required`);
         if (check.expect !== undefined && !['pass', 'fail'].includes(check.expect)) errors.push(`${cwhere}: expect must be pass or fail`);
-        if (check.copy !== undefined && !(check.copy && typeof check.copy === 'object' && Object.entries(check.copy).every(([from, to]) => typeof to === 'string' && !from.startsWith('/') && !to.startsWith('/') && !`${from}/${to}`.split('/').includes('..')))) {
+        if (check.reporter !== undefined && check.reporter !== 'vitest-json') errors.push(`${cwhere}: reporter must be vitest-json`);
+        if (check.copy !== undefined && !relativeMap(check.copy)) {
           errors.push(`${cwhere}: copy must map fixture-relative paths to app-relative paths`);
         }
       }

@@ -71,11 +71,20 @@ export function changedArmFiles(built = {}, current = {}) {
   return [...new Set([...Object.keys(built), ...Object.keys(current)])].sort().filter((file) => built[file] !== current[file]);
 }
 
-/** Checks whose pass/fail differs between two result lists (added and removed checks included). */
+/**
+ * Checks whose pass/fail or score differs between two result lists (added and removed checks
+ * included). A score change (a vitest-json check going from 0.5 to 0.75) adds `scoreFrom`/`scoreTo`.
+ */
 export function flippedChecks(before = [], after = []) {
-  const was = Object.fromEntries(before.filter(Boolean).map((check) => [check.id, check.pass]));
-  const now = Object.fromEntries(after.filter(Boolean).map((check) => [check.id, check.pass]));
-  return [...new Set([...Object.keys(was), ...Object.keys(now)])].sort()
-    .filter((id) => was[id] !== now[id])
-    .map((id) => ({ check: id, from: was[id] ?? null, to: now[id] ?? null }));
+  const was = Object.fromEntries(before.filter(Boolean).map((check) => [check.id, check]));
+  const now = Object.fromEntries(after.filter(Boolean).map((check) => [check.id, check]));
+  return [...new Set([...Object.keys(was), ...Object.keys(now)])].sort().flatMap((id) => {
+    const from = was[id]?.pass ?? null;
+    const to = now[id]?.pass ?? null;
+    const scoreFrom = was[id]?.score ?? null;
+    const scoreTo = now[id]?.score ?? null;
+    const scoreChanged = (scoreFrom !== null || scoreTo !== null) && scoreFrom !== scoreTo;
+    if (from === to && !scoreChanged) return [];
+    return [{ check: id, from, to, ...(scoreChanged ? { scoreFrom, scoreTo } : {}) }];
+  });
 }

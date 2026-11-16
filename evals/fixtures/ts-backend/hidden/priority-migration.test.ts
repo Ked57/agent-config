@@ -11,7 +11,7 @@ import { createDb } from "../db/client";
 import { migrationsFolder } from "../db/migrate";
 import { createTestContext, SEED_TOKENS } from "../test/helpers";
 
-describe("hidden: priority migration", () => {
+describe("hidden: priority migration", { timeout: 30_000 }, () => {
   it("backfills priority from is_urgent and drops the old column", async () => {
     const journalPath = join(migrationsFolder, "meta", "_journal.json");
     const journal = JSON.parse(readFileSync(journalPath, "utf8")) as { entries: unknown[] };

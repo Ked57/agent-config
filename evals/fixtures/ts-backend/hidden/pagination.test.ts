@@ -23,7 +23,7 @@ async function setup() {
   return context;
 }
 
-describe("hidden: task pagination and filters", () => {
+describe("hidden: task pagination and filters", { timeout: 30_000 }, () => {
   it("pages through every task exactly once in creation order", async () => {
     const { request } = await setup();
     const seen: string[] = [];
@@ -93,6 +93,20 @@ describe("hidden: task pagination and filters", () => {
     expect(second.nextCursor).toBeNull();
     const both = (await (await request("GET", "/api/projects/prj_app/tasks?status=done&assigneeId=usr_bob&limit=2", { token: SEED_TOKENS.acmeAdmin })).json()) as Page;
     expect(both.items.map((item) => item.id)).toEqual(["tsk_bulk_00", "tsk_bulk_15"]);
+  });
+
+  // The page holding the last task is the last page, even when it is full.
+  it("returns a null nextCursor on a full last page", async () => {
+    const { request } = await setup();
+    let cursor: string | null = null;
+    const sizes: number[] = [];
+    do {
+      const query: string = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+      const page = (await (await request("GET", `/api/projects/prj_app/tasks?status=done&limit=5${query}`, { token: SEED_TOKENS.acmeAdmin })).json()) as Page;
+      sizes.push(page.items.length);
+      cursor = page.nextCursor;
+    } while (cursor && sizes.length < 10);
+    expect(sizes).toEqual([5, 5, 5]);
   });
 
   it("orders by creation time, not id, and loses no task that shares a timestamp", async () => {

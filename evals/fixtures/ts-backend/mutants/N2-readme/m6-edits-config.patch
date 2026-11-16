@@ -1,0 +1,296 @@
+diff -ruN a/.prettierignore b/.prettierignore
+--- a/.prettierignore
++++ b/.prettierignore
+@@ -2,3 +2,4 @@
+ data
+ drizzle/meta
+ bun.lock
++README.md
+diff -ruN a/README.md b/README.md
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,284 @@
++# tasks-api
++
++A multi-tenant task tracking API built with [Bun](https://bun.sh),
++[Elysia](https://elysiajs.com) and [Drizzle ORM](https://orm.drizzle.team) on
++SQLite (libSQL). Organizations own users, projects and tasks; every
++authenticated request is scoped to the caller's organization.
++
++## Running locally
++
++Requires Bun 1.4.3 (pinned in `package.json` under `packageManager`).
++
++```sh
++# 1. Install dependencies
++bun install
++
++# 2. Configure the environment (Bun loads .env automatically)
++cp .env.example .env
++
++# 3. Create the database and apply migrations
++mkdir -p data          # libSQL will not create the parent directory
++bun run db:migrate
++
++# 4. Load demo data (see "Seed data" below)
++bun run db:seed
++
++# 5. Start the dev server with file watching
++bun run dev
++```
++
++The API listens on `http://localhost:4000` by default. Check it with:
++
++```sh
++curl http://localhost:4000/api/health
++# {"status":"ok"}
++```
++
++The server also applies pending migrations on startup, so step 3 is mainly
++needed before seeding.
++
++The seed script inserts fixed IDs and fails if run against a database that is
++already seeded. To start over, delete the database file and repeat steps 3–4:
++
++```sh
++rm data/dev.db && bun run db:migrate && bun run db:seed
++```
++
++### Other scripts
++
++| Script                 | Purpose                                                |
++| ---------------------- | ------------------------------------------------------ |
++| `bun run start`        | Start the server without file watching                 |
++| `bun run build`        | Bundle `src/index.ts` into `dist/`                     |
++| `bun run test`         | Run the Vitest suite                                   |
++| `bun run typecheck`    | Type-check with `tsc --noEmit`                         |
++| `bun run lint`         | Run ESLint                                             |
++| `bun run format:check` | Check formatting with Prettier (`format:fix` to write) |
++| `bun run db:generate`  | Generate a new migration from `src/db/schema.ts`       |
++
++Migrations live in `drizzle/`.
++
++## Environment variables
++
++| Variable          | Default            | Description                                                                                                               |
++| ----------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
++| `PORT`            | `4000`             | HTTP port for the server.                                                                                                 |
++| `DATABASE_URL`    | `file:data/dev.db` | libSQL connection URL. Used by the server, the migrate/seed scripts and `drizzle-kit`.                                    |
++| `WEBHOOK_SECRET`  | _(none)_           | Shared secret expected in the `x-webhook-secret` header of billing webhooks. If unset, every webhook request is rejected. |
++| `TOKEN_TTL_HOURS` | `24`               | Lifetime of API tokens issued by `POST /api/auth/token`.                                                                  |
++| `LOG_LEVEL`       | `info`             | One of `debug`, `info`, `warn`, `error`, `silent`. Logs are JSON lines on stdout/stderr.                                  |
++
++Tests set `LOG_LEVEL=silent`, `WEBHOOK_SECRET=test-webhook-secret` and
++`TOKEN_TTL_HOURS=24` unless they are already defined (`src/test/setup.ts`).
++
++## Seed data
++
++`bun run db:seed` creates two organizations. All users share the password
++`password123`, and each has a long-lived bearer token for local use.
++
++| User               | Organization          | Role   | Token                    |
++| ------------------ | --------------------- | ------ | ------------------------ |
++| `ada@acme.test`    | Acme (`org_acme`)     | admin  | `dev-acme-admin-token`   |
++| `bob@acme.test`    | Acme (`org_acme`)     | member | `dev-acme-member-token`  |
++| `gina@globex.test` | Globex (`org_globex`) | admin  | `dev-globex-admin-token` |
++
++Acme has the projects `prj_web`, `prj_app` and `prj_billing`; Globex has
++`prj_infra`. Tasks `tsk_1` to `tsk_6` are spread across them.
++
++These tokens are for development only. Never seed them into a production
++database.
++
++## Authentication
++
++Routes marked **auth** need an `Authorization: Bearer <token>` header. Get a
++token from `POST /api/auth/token`, or use a seed token:
++
++```sh
++curl -H "Authorization: Bearer dev-acme-admin-token" http://localhost:4000/api/me
++```
++
++A missing header returns `401` with
++`{"code":"unauthenticated","message":"missing bearer token"}`. An unknown or
++expired token returns `401` with the plain-text body `Unauthorized`.
++
++## Endpoints
++
++All paths are prefixed with `/api`. Request bodies are JSON. Requests that
++fail schema validation return `422` with Elysia's validation error body.
++Unknown routes return `404`.
++
++| Method   | Path                      | Auth           | Description                         |
++| -------- | ------------------------- | -------------- | ----------------------------------- |
++| `GET`    | `/api/health`             | none           | Liveness check                      |
++| `POST`   | `/api/auth/token`         | none           | Exchange email/password for a token |
++| `GET`    | `/api/me`                 | auth           | Current user                        |
++| `GET`    | `/api/projects`           | auth           | List the organization's projects    |
++| `POST`   | `/api/projects`           | auth           | Create a project                    |
++| `GET`    | `/api/projects/:id`       | auth           | Get a project                       |
++| `GET`    | `/api/projects/:id/tasks` | auth           | List a project's tasks              |
++| `POST`   | `/api/projects/:id/tasks` | auth           | Create a task in a project          |
++| `GET`    | `/api/tasks/:id`          | auth           | Get a task                          |
++| `PATCH`  | `/api/tasks/:id`          | auth           | Update a task                       |
++| `DELETE` | `/api/tasks/:id`          | auth (admin)   | Delete a task                       |
++| `POST`   | `/api/webhooks/billing`   | webhook secret | Billing provider webhook            |
++
++### `GET /api/health`
++
++Returns `{"status":"ok"}`.
++
++### `POST /api/auth/token`
++
++```json
++{ "email": "ada@acme.test", "password": "password123" }
++```
++
++The email is matched case-insensitively. Returns
++`{"token": "...", "expiresAt": "<ISO timestamp>"}`. The token expires after
++`TOKEN_TTL_HOURS`. Wrong credentials return `401`
++`{"error":"invalid email or password"}`.
++
++### `GET /api/me`
++
++Returns `id`, `orgId`, `role` (`admin` or `member`), `email` and `name` for the
++token's user.
++
++### `GET /api/projects`
++
++Lists the caller's organization's projects, sorted by name. Each item has a
++task count per status:
++
++```json
++{
++  "items": [
++    {
++      "id": "prj_web",
++      "name": "Website relaunch",
++      "description": "New marketing site",
++      "createdAt": "2026-10-01T09:00:00.000Z",
++      "taskCounts": { "todo": 1, "in_progress": 1, "done": 1 }
++    }
++  ]
++}
++```
++
++### `POST /api/projects`
++
++| Field         | Type   | Rules                  |
++| ------------- | ------ | ---------------------- |
++| `name`        | string | required, 1–100 chars  |
++| `description` | string | optional, ≤ 2000 chars |
++
++Returns `201` with the stored project row (`id`, `orgId`, `name`,
++`description`, `createdAt`).
++
++### `GET /api/projects/:id`
++
++Returns the project row. Returns `404` (plain text `Project not found`) if the
++project doesn't exist or belongs to another organization.
++
++### `GET /api/projects/:id/tasks`
++
++Returns `{"items": [Task, ...]}`, sorted by creation time. Same `404` rule as
++above.
++
++A **Task** looks like this:
++
++```json
++{
++  "id": "tsk_3",
++  "projectId": "prj_web",
++  "title": "Fix broken signup link",
++  "description": null,
++  "status": "todo",
++  "isUrgent": true,
++  "assigneeId": "usr_ada",
++  "dueDate": null,
++  "createdAt": "2026-10-01T09:03:00.000Z",
++  "updatedAt": "2026-10-01T09:03:00.000Z"
++}
++```
++
++`status` is one of `todo`, `in_progress` or `done`. `dueDate` is a
++`YYYY-MM-DD` string.
++
++### `POST /api/projects/:id/tasks`
++
++| Field         | Type    | Rules                                |
++| ------------- | ------- | ------------------------------------ |
++| `title`       | string  | required, 1–200 chars                |
++| `description` | string  | optional, ≤ 5000 chars               |
++| `isUrgent`    | boolean | optional, defaults to `false`        |
++| `assigneeId`  | string  | optional, must be a user in your org |
++| `dueDate`     | string  | optional, `YYYY-MM-DD`               |
++
++New tasks start as `todo`. Returns `201` with the Task. If `assigneeId` is not
++a member of the caller's organization the response is `400`. When a task is
++created with an assignee, that user gets an assignment email. Locally the
++mailer only logs a `mail.sent` line.
++
++### `GET /api/tasks/:id`
++
++Returns the Task, or `404` `{"error":"task not found"}`.
++
++### `PATCH /api/tasks/:id`
++
++Every field is optional. Only the fields you send are changed.
++
++| Field         | Type           | Rules                                        |
++| ------------- | -------------- | -------------------------------------------- |
++| `title`       | string         | ≤ 200 chars; trimmed, must not be blank      |
++| `description` | string \| null | ≤ 5000 chars                                 |
++| `status`      | enum           | `todo`, `in_progress` or `done`; see below   |
++| `isUrgent`    | boolean        |                                              |
++| `assigneeId`  | string \| null | must be a user in your org; `null` unassigns |
++| `dueDate`     | string \| null | `YYYY-MM-DD`; `null` clears                  |
++
++Allowed status transitions:
++
++| From          | To                   |
++| ------------- | -------------------- |
++| `todo`        | `in_progress`        |
++| `in_progress` | `todo`, `done`       |
++| `done`        | `todo` (admins only) |
++
++Errors:
++
++- `404` the task doesn't exist in the caller's organization.
++- `400` blank title, or an assignee outside the organization.
++- `403` a non-admin tries to reopen a `done` task.
++- `409` the status transition isn't allowed; the task would be marked `done`
++  with no assignee; or a due date is set on a `done` task.
++
++Returns the updated Task. When the assignee changes to a new user, that user
++gets an assignment email.
++
++### `DELETE /api/tasks/:id`
++
++Admins only. Non-admins get `403` (plain text `Forbidden`). Returns `204` on
++success, or `404` `{"error":"task not found"}` if the task doesn't exist in
++the caller's organization.
++
++### `POST /api/webhooks/billing`
++
++Called by the billing provider. Doesn't use a bearer token: the
++`x-webhook-secret` header must equal `WEBHOOK_SECRET`, otherwise the response
++is `401` (plain text `invalid webhook secret`).
++
++```json
++{
++  "id": "evt_123",
++  "type": "payment.succeeded",
++  "data": { "orgId": "org_acme", "credits": 50 }
++}
++```
++
++For `payment.succeeded`, `data.credits` (a non-negative integer, default `0`)
++is added to the organization's credit balance. Other event types are accepted
++and ignored. Always returns `{"received":true}` once authenticated and valid.
++
++```sh
++curl -X POST http://localhost:4000/api/webhooks/billing \
++  -H "Content-Type: application/json" \
++  -H "x-webhook-secret: change-me" \
++  -d '{"id":"evt_123","type":"payment.succeeded","data":{"orgId":"org_acme","credits":50}}'
++```

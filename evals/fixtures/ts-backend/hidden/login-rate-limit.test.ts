@@ -9,7 +9,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("hidden: login rate limiting", () => {
+describe("hidden: login rate limiting", { timeout: 30_000 }, () => {
   it("locks an email after 5 failures with 429 and Retry-After", async () => {
     const { request } = await createTestContext();
     for (let attempt = 0; attempt < 5; attempt += 1) {

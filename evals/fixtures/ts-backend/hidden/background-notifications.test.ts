@@ -5,7 +5,7 @@ import { createTestContext, SEED_TOKENS } from "../test/helpers";
 
 afterEach(() => setMailTransport(async () => undefined));
 
-describe("hidden: notifications do not fail requests", () => {
+describe("hidden: notifications do not fail requests", { timeout: 30_000 }, () => {
   it("creates and reassigns tasks while the mailer is down", async () => {
     setMailTransport(async () => {
       throw new Error("mail provider unavailable");

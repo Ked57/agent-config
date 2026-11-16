@@ -49,8 +49,10 @@ environment to those commands, so they all land in the template home. This needs
 over git, npm) and takes about a minute per arm. `--plugins skip` sets
 `AGENT_CONFIG_EXTERNAL_PLUGINS=skip` for an offline install without them. The ref's installer decides:
 an older ref with no `external-plugins.mjs` installs no plugins either way. `arms.json` records per
-arm the policies, skills, Claude Code plugins (id, version, the skills and agents each ships, plus
-`claude plugin list --json`), and the arm's probe (below).
+arm the policies, skills, Claude Code plugins (id, version, `gitCommitSha`, the skills and agents each
+ships, plus `claude plugin list --json`), and the arm's probe (below). Plugin versions are not pinned:
+both arms are built back to back so they fetch the same upstream state, and a difference shows up as a
+watched `plugin:<name>`.
 
 **Toggles** edit the extracted tree before the install, or the installed home after it:
 
@@ -98,8 +100,10 @@ those as project config whatever `HOME` says. (Earlier evals ran under the resul
 live `~/.claude/skills` and `~/.claude/CLAUDE.md` in both arms. Their saved runs can still be reported,
 rechecked and rejudged, not extended.)
 
-**Each run** copies its arm's template home (`cp -a`) and rewrites the template's absolute path to
-the run home in every file that names it (the CLAUDE.md import, `installed_plugins.json`,
+**Each run** copies the part of its arm's template home that Claude Code reads (`cp -a` of `.claude`,
+`.agents`, `.agent-config` and `.cursor/plugins/local`, about 200 MB and 1.5 s; the Codex and Cursor
+copies stay in the template) and rewrites the template's absolute path to the run home in every file
+that names it (the CLAUDE.md import, `installed_plugins.json`,
 `known_marketplaces.json`, the install lock). The agent runs with cwd = its `app`, `HOME` and
 `CLAUDE_CONFIG_DIR` in the run home, `TMPDIR`/`TMP`/`TEMP` in the run's `tmp`, and a scrubbed
 environment: only `PATH` and the locale pass through, plus auth, telemetry switches and `--env`.
@@ -131,8 +135,9 @@ copied to `<results>/runs/<id>/session/`, and the run's home and tmp are deleted
 - Every arm build snapshots your live config and aborts if anything changed: `~/.claude/CLAUDE.md`,
   `settings.json`, `skills/`, `agents/`, `plugins/installed_plugins.json` and `known_marketplaces.json`,
   `~/.agents/**`, `~/.agent-config/**`, `~/.codex/AGENTS.md` and `config.toml`, and the top level of
-  `~/.claude/plugins` (and its `marketplaces` and `cache`), `~/.cursor` (`plugins`, `plugins/local`,
-  `skills`) and `~/.codex/plugins`. Plugin caches are not walked.
+  `~/.claude/plugins` (and its `marketplaces` and `cache`), `~/.cursor/plugins` (and `plugins/local`),
+  `~/.cursor/skills`, `~/.cursor/agents`, `~/.codex/plugins` and `~/.codex/skills`. Plugin caches are
+  not walked, and Cursor and Codex session state is not watched.
 
 **What is not isolated.**
 
@@ -141,8 +146,10 @@ copied to `<results>/runs/<id>/session/`, and the run's home and tmp are deleted
   this eval by relative path (`../../../arms/B/home`). The checks above show what a session *loaded*,
   not everything it *read*; reads show in the transcript's tool calls. Don't point a task set at a
   fixture holding anything you care about.
-- The network, and ports: concurrent runs share localhost. SSH (used by `git` during plugin installs)
-  reads keys from your real home, which OpenSSH finds through the password database, not `HOME`.
+- The network, and ports: concurrent runs share localhost.
+- Known, accepted read-only dependency: `claude plugin marketplace add` clones marketplaces over git
+  SSH, and OpenSSH reads your live `~/.ssh` key and `known_hosts` (it finds them through the password
+  database, not `HOME`). Nothing is written there; installs that need it fail without a key.
 - `agent-browser` (used by the `manual-qa` skill) is pointed at the Chrome under your
   `~/.agent-browser` (read-only use) with a per-run session and `--no-sandbox`. Override with
   `--env AGENT_BROWSER_ARGS=`.
@@ -264,6 +271,9 @@ test.
   when a test file fails to load, no test runs, no report is written or the command times out. Failed
   test names go into `detail`. `pass` still needs exit 0 and every test passing. `expect` is ignored.
 - Every check result carries a `score`: the Vitest fraction above, otherwise 1 for a pass and 0 for a fail.
+- A task's `files` (`{ "fixture-relative source": "app-relative target" }`, e.g. a spec document) are
+  copied into the worked copy before the agent starts, and into the base the diff is taken against, so
+  they never count as the agent's change.
 - Checks default to `level: "required"`. `info` checks are scored and reported but don't count.
 - `expectsComponents` (or the older `expectsPolicies`) lists the components a task should fire:
   policy and skill names, and plugins as `plugin:<name>`. A watched component firing on a task that

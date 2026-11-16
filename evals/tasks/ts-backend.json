@@ -59,6 +59,7 @@
             "hidden/comments.test.ts": "src/__hidden__/comments.test.ts"
           },
           "run": "vitest run src/__hidden__/comments.test.ts",
+          "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
           "timeoutSec": 180
@@ -86,7 +87,7 @@
     {
       "id": "B2-task-pagination",
       "category": "api",
-      "prompt": "GET /api/projects/:id/tasks returns every task at once, which is getting slow for big projects. Add cursor pagination (?limit, default 20, max 100, and ?cursor taken from the previous page's nextCursor) and filters ?status= and ?assigneeId=. Keep ordering by creation time and respond with {items, nextCursor}, where nextCursor is null on the last page.",
+      "prompt": "GET /api/projects/:id/tasks returns every task at once, which is getting slow for big projects. Add cursor pagination (?limit, default 20, max 100, and ?cursor taken from the previous page's nextCursor) and filters ?status= and ?assigneeId=. Keep ordering by creation time and respond with {items, nextCursor}, where nextCursor is null once there are no more tasks.",
       "expectsPolicies": [
         "typescript"
       ],
@@ -99,6 +100,7 @@
             "hidden/pagination.test.ts": "src/__hidden__/pagination.test.ts"
           },
           "run": "vitest run src/__hidden__/pagination.test.ts",
+          "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
           "timeoutSec": 180
@@ -130,6 +132,7 @@
             "hidden/query-count.test.ts": "src/__hidden__/query-count.test.ts"
           },
           "run": "vitest run src/__hidden__/query-count.test.ts",
+          "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
           "timeoutSec": 180
@@ -163,6 +166,7 @@
             "hidden/priority-migration.test.ts": "src/__hidden__/priority-migration.test.ts"
           },
           "run": "vitest run src/__hidden__/priority-migration.test.ts",
+          "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
           "timeoutSec": 180
@@ -197,12 +201,13 @@
       "checks": [
         {
           "id": "acceptance",
-          "label": "Hidden idempotency tests pass (sequential and concurrent)",
+          "label": "Hidden idempotency tests pass (retry, concurrent duplicates, restart)",
           "type": "command",
           "copy": {
             "hidden/webhook-idempotency.test.ts": "src/__hidden__/webhook-idempotency.test.ts"
           },
           "run": "vitest run src/__hidden__/webhook-idempotency.test.ts",
+          "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
           "timeoutSec": 180
@@ -222,7 +227,7 @@
     {
       "id": "B6-login-rate-limit",
       "category": "reliability",
-      "prompt": "POST /api/auth/token can be brute-forced. After 5 failed login attempts for the same email within 15 minutes, reject further attempts for that email with 429 and a Retry-After header (in seconds) until the window has passed. Other emails must not be affected.",
+      "prompt": "POST /api/auth/token can be brute-forced. After 5 failed login attempts for the same email (in any letter case) within 15 minutes, reject further attempts for that email with 429 and a Retry-After header (in seconds) until the window has passed. Other emails must not be affected.",
       "expectsPolicies": [
         "typescript"
       ],
@@ -235,6 +240,7 @@
             "hidden/login-rate-limit.test.ts": "src/__hidden__/login-rate-limit.test.ts"
           },
           "run": "vitest run src/__hidden__/login-rate-limit.test.ts",
+          "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
           "timeoutSec": 180
@@ -267,6 +273,7 @@
             "hidden/tenant-isolation.test.ts": "src/__hidden__/tenant-isolation.test.ts"
           },
           "run": "vitest run src/__hidden__/tenant-isolation.test.ts",
+          "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
           "timeoutSec": 180
@@ -298,6 +305,7 @@
             "hidden/error-shape.test.ts": "src/__hidden__/error-shape.test.ts"
           },
           "run": "vitest run src/__hidden__/error-shape.test.ts",
+          "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
           "timeoutSec": 180
@@ -307,7 +315,7 @@
     {
       "id": "B9-background-notifications",
       "category": "reliability",
-      "prompt": "Assigning a task sends the notification email inside the request, so when the mail provider is down, creating or updating a task fails with a 500. Send these notifications from a background job in the same process instead, retried with exponential backoff starting at about a second (up to 5 attempts), so the API request succeeds even when the mailer is failing.",
+      "prompt": "Assigning a task sends the notification email inside the request, so when the mail provider is down, creating or updating a task fails with a 500. Send these notifications from a background job in the same process instead (started by createApp, so our tests that build the app with it exercise the job too), retried with exponential backoff starting at about a second (up to 5 attempts), so the API request succeeds even when the mailer is failing.",
       "expectsPolicies": [
         "typescript"
       ],
@@ -320,20 +328,22 @@
             "hidden/background-notifications.test.ts": "src/__hidden__/background-notifications.test.ts"
           },
           "run": "vitest run src/__hidden__/background-notifications.test.ts",
+          "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
           "timeoutSec": 180
         },
         {
           "id": "delivery",
-          "label": "Hidden test: delivered after a transient failure (info)",
+          "label": "Hidden test: delivered once, retried with backoff, 5 attempts",
           "type": "command",
           "copy": {
             "hidden/background-delivery.test.ts": "src/__hidden__/background-delivery.test.ts"
           },
           "run": "vitest run src/__hidden__/background-delivery.test.ts",
+          "reporter": "vitest-json",
           "expect": "pass",
-          "level": "info",
+          "level": "required",
           "timeoutSec": 180
         }
       ]
@@ -354,6 +364,7 @@
             "hidden/task-update-rules.test.ts": "src/__hidden__/task-update-rules.test.ts"
           },
           "run": "vitest run src/__hidden__/task-update-rules.test.ts",
+          "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
           "timeoutSec": 180
@@ -375,7 +386,18 @@
           "files": [
             "src/routes/tasks.ts"
           ],
-          "pattern": "in_progress: \\[\"todo\", \"done\"\\]",
+          "pattern": "in_progress\"?\\s*:\\s*\\[",
+          "expect": "absent"
+        },
+        {
+          "id": "route-http-only",
+          "label": "Route no longer updates tasks or sends notifications",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "src/routes/tasks.ts"
+          ],
+          "pattern": "notifyTaskAssigned|\\.update\\(tasks\\)",
           "expect": "absent"
         }
       ]
@@ -396,6 +418,7 @@
             "hidden/config-validation.test.ts": "src/__hidden__/config-validation.test.ts"
           },
           "run": "vitest run src/__hidden__/config-validation.test.ts",
+          "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
           "timeoutSec": 180
@@ -431,6 +454,7 @@
             "hidden/parse-duration.test.ts": "src/__hidden__/parse-duration.test.ts"
           },
           "run": "vitest run src/__hidden__/parse-duration.test.ts",
+          "reporter": "vitest-json",
           "expect": "pass",
           "level": "required",
           "timeoutSec": 180
@@ -465,25 +489,55 @@
         },
         {
           "id": "docs-only",
-          "label": "No code changes",
+          "label": "No code or config changes",
           "type": "changed",
           "files": [
             "src/**",
             "scripts/**",
             "drizzle/**",
-            "package.json"
+            "package.json",
+            "tsconfig.json",
+            "*.config.*",
+            ".env.example",
+            ".gitignore",
+            ".prettierignore"
           ],
           "expect": "none"
         },
         {
-          "id": "endpoints-documented",
-          "label": "Documents the webhook and auth endpoints",
+          "id": "readme-setup",
+          "label": "README gives the bun install, migrate, seed and dev-server commands",
           "type": "pattern",
           "in": "final",
           "files": [
             "README.md"
           ],
-          "pattern": "^(?=[\\s\\S]*/api/webhooks/billing)(?=[\\s\\S]*/api/auth/token)",
+          "comments": true,
+          "pattern": "^(?=[\\s\\S]*\\bbun install\\b)(?=[\\s\\S]*\\bmigrate\\b)(?=[\\s\\S]*\\bseed\\b)(?=[\\s\\S]*\\bbun (run )?(dev|start)\\b)",
+          "expect": "present"
+        },
+        {
+          "id": "readme-env",
+          "label": "README lists the five environment variables",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "README.md"
+          ],
+          "comments": true,
+          "pattern": "^(?=[\\s\\S]*\\bPORT\\b)(?=[\\s\\S]*\\bDATABASE_URL\\b)(?=[\\s\\S]*\\bWEBHOOK_SECRET\\b)(?=[\\s\\S]*\\bTOKEN_TTL_HOURS\\b)(?=[\\s\\S]*\\bLOG_LEVEL\\b)",
+          "expect": "present"
+        },
+        {
+          "id": "readme-endpoints",
+          "label": "README documents the main endpoints",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "README.md"
+          ],
+          "comments": true,
+          "pattern": "^(?=[\\s\\S]*/api/health)(?=[\\s\\S]*/api/auth/token)(?=[\\s\\S]*/api/me)(?=[\\s\\S]*/api/projects/[:{<]?\\w+[}>]?/tasks)(?=[\\s\\S]*/api/tasks/[:{<]?\\w+[}>]?)(?=[\\s\\S]*/api/webhooks/billing)",
           "expect": "present"
         }
       ]

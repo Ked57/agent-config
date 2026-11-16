@@ -66,4 +66,6 @@ test('resume helpers name frozen flags, changed arm files and flipped checks', (
     flippedChecks([{ id: 'x', pass: true }, { id: 'y', pass: false }], [{ id: 'x', pass: false }, { id: 'y', pass: false }, { id: 'z', pass: true }]),
     [{ check: 'x', from: true, to: false }, { check: 'z', from: null, to: true }]
   );
+  assert.deepEqual(flippedChecks([{ id: 'h', pass: false, score: 0.5 }], [{ id: 'h', pass: false, score: 0.75 }]), [{ check: 'h', from: false, to: false, scoreFrom: 0.5, scoreTo: 0.75 }]);
+  assert.deepEqual(flippedChecks([{ id: 'h', pass: true, score: 1 }], [{ id: 'h', pass: true, score: 1 }]), []);
 });

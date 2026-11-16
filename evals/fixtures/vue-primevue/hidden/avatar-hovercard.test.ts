@@ -29,13 +29,22 @@ function shownNodeWith(value: string): Element | null {
   return null
 }
 
-/** The smallest element showing both of Ada's card-only fields (email and location), or null. */
+// The list's own link to Ada, captured before any card opens, marks where the card must stop.
+let listLink: HTMLElement | null = null
+
+/**
+ * The card: the smallest element showing Ada's card-only fields (email and location), widened until it
+ * also shows her name and title but never so far that it takes in the list row's own name link.
+ */
 function shownCard(): HTMLElement | null {
   const email = shownNodeWith(ADA.email)
   const location = email && shownNodeWith(ADA.location)
   if (!email || !location) return null
   let card: Element | null = email
   while (card && !card.contains(location)) card = card.parentElement
+  while (card?.parentElement && !(shownText(card).includes(ADA.name) && shownText(card).includes(ADA.title)) && !card.parentElement.contains(listLink)) {
+    card = card.parentElement
+  }
   return card as HTMLElement | null
 }
 
@@ -49,6 +58,8 @@ function expectCardFields(card: HTMLElement) {
 async function openUsers() {
   await mountApp('/users')
   await waitFor(() => expect(adaRow()).toBeTruthy())
+  listLink = within(adaRow() as HTMLElement).getAllByRole('link').find((link) => isShown(link) && text(link).includes(ADA.name)) ?? null
+  expect(listLink, "the list row still links Ada's name").toBeTruthy()
   expect(shownCard(), 'no card before any interaction').toBeNull()
 }
 
@@ -91,9 +102,8 @@ describe('C1 avatar hovercard on the users list', () => {
     await openUsers()
     await tabToAdaAvatar()
     await waitFor(() => shownCard())
-    const outside = within(adaRow() as HTMLElement).queryByRole('link', { name: ADA.name }) ?? (document.querySelector('input') as HTMLElement)
     // Move focus somewhere that is not the trigger or the card.
-    outside.focus()
+    ;(listLink as HTMLElement).focus()
     if (shownCard()) await userEvent.tab()
     await waitFor(() => shownCard() === null || null)
   })

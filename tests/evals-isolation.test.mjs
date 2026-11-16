@@ -25,11 +25,14 @@ function fakeArmHome(home) {
   write(path.join(home, '.claude', 'skills', 'manual-qa', 'SKILL.md'), 'qa');
   write(path.join(home, '.claude', 'CLAUDE.md'), `@${home}/.agents/AGENTS.md\n`);
   write(path.join(home, '.agents', 'AGENTS.md'), 'policy');
+  write(path.join(home, '.codex', 'plugins', 'cache', 'big.bin'), 'codex only');
+  write(path.join(home, '.cursor', 'skills', 'tdd', 'SKILL.md'), 'cursor only');
+  write(path.join(home, '.cursor', 'plugins', 'local', 'pstack', 'skills', 'poteto-mode', 'SKILL.md'), 'cursor pstack');
   const installPath = path.join(home, '.claude', 'plugins', 'cache', 'cursor-plugins', 'pstack', '0.15.42');
   write(path.join(installPath, 'skills', 'poteto-mode', 'SKILL.md'), 'mode');
   write(path.join(installPath, 'agents', 'poteto-agent.md'), 'agent');
   write(path.join(installPath, 'node_modules', 'x', 'index.js'), 'ignored');
-  write(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'pstack@cursor-plugins': [{ scope: 'user', installPath, version: '0.15.42', installedAt: 'now' }] } }));
+  write(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'pstack@cursor-plugins': [{ scope: 'user', installPath, version: '0.15.42', installedAt: 'now', gitCommitSha: 'bf0c7cd' }] } }));
   return installPath;
 }
 
@@ -75,6 +78,8 @@ test('prepareRunHome copies the template and points its own path at the run home
   assert.equal(fs.readFileSync(path.join(home, '.claude', 'CLAUDE.md'), 'utf8'), `@${home}/.agents/AGENTS.md\n`);
   assert.equal(installedPlugins(home).pstack.installPath, path.join(home, '.claude', 'plugins', 'cache', 'cursor-plugins', 'pstack', '0.15.42'));
   assert.equal(fs.readFileSync(path.join(template, '.claude', 'CLAUDE.md'), 'utf8'), `@${template}/.agents/AGENTS.md\n`, 'template untouched');
+  assert.ok(!fs.existsSync(path.join(home, '.codex')) && !fs.existsSync(path.join(home, '.cursor', 'skills')), 'Codex and Cursor-only copies stay in the template');
+  assert.ok(fs.existsSync(path.join(home, '.cursor', 'plugins', 'local', 'pstack', 'skills', 'poteto-mode', 'SKILL.md')));
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -85,7 +90,7 @@ test('inventory lists plugins with their skills and agents, and a changed plugin
   fakeArmHome(a);
   fakeArmHome(b);
   const left = inventory(a);
-  assert.deepEqual(left.plugins, [{ id: 'pstack@cursor-plugins', name: 'pstack', version: '0.15.42', skills: ['poteto-mode'], agents: ['poteto-agent'] }]);
+  assert.deepEqual(left.plugins, [{ id: 'pstack@cursor-plugins', name: 'pstack', version: '0.15.42', gitCommitSha: 'bf0c7cd', skills: ['poteto-mode'], agents: ['poteto-agent'] }]);
   assert.ok(!Object.keys(left.hashes).some((file) => file.includes('node_modules')));
   assert.ok(!Object.keys(left.hashes).includes('.claude/plugins/installed_plugins.json'), 'install timestamps must not make identical arms differ');
   assert.equal(compareInventories(left, inventory(b)).identical, true, 'home paths are normalised');
@@ -108,14 +113,14 @@ test('initProblems names every way a run can differ from its arm', () => {
   const home = '/s/runs/r1/home';
   const app = '/s/runs/r1/app';
   const leaky = init(home, '/home/u/evals/app', {
-    skills: ['debug', 'simplify', 'manual-qa', 'pstack:poteto-mode', 'step-ssh'],
+    skills: ['debug', 'simplify', 'manual-qa', 'pstack:poteto-mode', 'step-ssh', 'vault-run', 'paseo', 'paseo-handoff'],
     agents: ['Explore', 'general-purpose'],
     plugins: [{ name: 'pstack', path: '/home/u/.claude/plugins/cache/cursor-plugins/pstack/0.16.0', source: 'pstack@cursor-plugins', version: '0.16.0' }, { name: 'cc-plugin-agents-md', path: 'builtin' }],
     mcp_servers: [{ name: 'paseo', status: 'connected' }],
     memory_paths: { auto: '/home/u/.claude/projects/x/memory/' }
   });
   const problems = initProblems({ expected, init: leaky, runHome: home, app });
-  for (const pattern of [/unexpected skills: step-ssh/, /unexpected plugins: pstack@0\.16\.0/, /missing plugins: pstack@0\.15\.42/, /missing agents: pstack:poteto-agent/, /MCP servers loaded: paseo/, /cwd \/home\/u\/evals\/app/, /memory path .* outside the run home/, /plugin pstack loaded from \/home\/u/]) {
+  for (const pattern of [/unexpected skills: paseo, paseo-handoff, step-ssh, vault-run/, /unexpected plugins: pstack@0\.16\.0/, /missing plugins: pstack@0\.15\.42/, /missing agents: pstack:poteto-agent/, /MCP servers loaded: paseo/, /cwd \/home\/u\/evals\/app/, /memory path .* outside the run home/, /plugin pstack loaded from \/home\/u/]) {
     assert.ok(problems.some((problem) => pattern.test(problem)), `${pattern} in ${problems.join(' | ')}`);
   }
   assert.deepEqual(initProblems({ expected, init: null, runHome: home, app }), ['no init event in the transcript']);
@@ -239,4 +244,16 @@ test('a plugin skill is found by its front matter name, not only its directory',
   const components = { skills: ['taste-skill:design-taste-frontend'], agents: [], plugins: [{ name: 'taste-skill', path: '~/.claude/plugins/cache/taste-skill/taste-skill/2.5.1' }] };
   assert.deepEqual(unexplainedComponents({ components, builtins: BUILTINS, home, installed: { 'taste-skill': installPath } }), []);
   fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('validateTaskSet checks task files, the vitest-json reporter and the expectsComponents alias', () => {
+  const base = { name: 't', fixture: 'f', categories: { c: {} } };
+  const task = (extra) => validateTaskSet({ ...base, tasks: [{ id: 'T', category: 'c', prompt: 'p', ...extra }] });
+  assert.deepEqual(task({ files: { 'specs/x.md': 'docs/SPEC.md' }, expectsComponents: ['plugin:pstack'] }), []);
+  assert.match(task({ files: { '../x': 'a' } }).join(), /files must map/);
+  assert.match(task({ files: { x: '/abs' } }).join(), /files must map/);
+  assert.match(task({ expectsComponents: 'x' }).join(), /expectsComponents must be a string array/);
+  assert.match(task({ expectsComponents: ['a'], expectsPolicies: ['a'] }).join(), /not both/);
+  assert.deepEqual(task({ checks: [{ id: 'h', type: 'command', run: 'vitest run', reporter: 'vitest-json' }] }), []);
+  assert.match(task({ checks: [{ id: 'h', type: 'command', run: 'vitest run', reporter: 'junit' }] }).join(), /reporter must be vitest-json/);
 });

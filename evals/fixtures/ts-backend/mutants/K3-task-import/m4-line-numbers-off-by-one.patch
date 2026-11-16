@@ -1,0 +1,163 @@
+diff -ruN a/src/lib/task-csv.test.ts b/src/lib/task-csv.test.ts
+--- /dev/null
++++ b/src/lib/task-csv.test.ts
+@@ -0,0 +1,19 @@
++import { describe, expect, it } from "vitest";
++
++import { parseTaskCsv } from "./task-csv";
++
++describe("parseTaskCsv", () => {
++  it("parses rows and reports bad lines", () => {
++    const result = parseTaskCsv(
++      "title,assignee_email,due_date\nA,,2026-01-02\nB,x@y.test\n\n,,\nC,,2026-02-30\n",
++    );
++    expect(result?.rows).toEqual([
++      { line: 2, title: "A", assigneeEmail: null, dueDate: "2026-01-02" },
++    ]);
++    expect(result?.errors.map((error) => error.line)).toEqual([3, 5, 6]);
++  });
++
++  it("rejects a wrong header", () => {
++    expect(parseTaskCsv("name,email\nA,b")).toBeNull();
++  });
++});
+diff -ruN a/src/lib/task-csv.ts b/src/lib/task-csv.ts
+--- /dev/null
++++ b/src/lib/task-csv.ts
+@@ -0,0 +1,62 @@
++export interface CsvTaskRow {
++  line: number;
++  title: string;
++  assigneeEmail: string | null;
++  dueDate: string | null;
++}
++
++export interface CsvRowError {
++  line: number;
++  message: string;
++}
++
++export const csvHeader = "title,assignee_email,due_date";
++const datePattern = /^\d{4}-\d{2}-\d{2}$/;
++
++/** Splits the import CSV into rows and per-line errors. Returns null when the header is wrong. */
++export function parseTaskCsv(
++  csv: string,
++): { rows: CsvTaskRow[]; errors: CsvRowError[] } | null {
++  const lines = csv.split("\n").map((line) => line.replace(/\r$/, ""));
++  const [header, ...body] = lines;
++  if (header === undefined || header.trim() !== csvHeader) return null;
++  const rows: CsvTaskRow[] = [];
++  const errors: CsvRowError[] = [];
++  body.forEach((text, index) => {
++    const line = index + 1;
++    if (text.trim() === "") return;
++    const cells = text.split(",");
++    const [title, email, due] = cells;
++    if (
++      cells.length !== 3 ||
++      title === undefined ||
++      email === undefined ||
++      due === undefined
++    ) {
++      errors.push({ line, message: `expected 3 columns, got ${cells.length}` });
++      return;
++    }
++    if (title.trim() === "") {
++      errors.push({ line, message: "title is empty" });
++      return;
++    }
++    const dueDate = due.trim();
++    if (dueDate !== "" && !isCalendarDate(dueDate)) {
++      errors.push({ line, message: `invalid due date: ${dueDate}` });
++      return;
++    }
++    rows.push({
++      line,
++      title: title.trim(),
++      assigneeEmail: email.trim() === "" ? null : email.trim().toLowerCase(),
++      dueDate: dueDate === "" ? null : dueDate,
++    });
++  });
++  return { rows, errors };
++}
++
++function isCalendarDate(value: string): boolean {
++  if (!datePattern.test(value)) return false;
++  const date = new Date(`${value}T00:00:00Z`);
++  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
++}
+diff -ruN a/src/routes/projects.ts b/src/routes/projects.ts
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -4,6 +4,7 @@
+ import type { Db } from "../db/client";
+ import { projects, tasks, users } from "../db/schema";
+ import { newId } from "../lib/ids";
++import { parseTaskCsv, type CsvRowError } from "../lib/task-csv";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+@@ -149,4 +150,62 @@
+           dueDate: t.Optional(t.String({ format: "date" })),
+         }),
+       },
++    )
++    .post(
++      "/:id/tasks/import",
++      async ({ params, body, user, status }) => {
++        const project = await db
++          .select()
++          .from(projects)
++          .where(
++            and(eq(projects.id, params.id), eq(projects.orgId, user.orgId)),
++          )
++          .get();
++        if (!project) return status(404, "Project not found");
++        const parsed = parseTaskCsv(body.csv);
++        if (!parsed) {
++          return status(400, {
++            code: "invalid_csv",
++            message: "the first line must be title,assignee_email,due_date",
++          });
++        }
++        const members = await db
++          .select({ id: users.id, email: users.email })
++          .from(users)
++          .where(eq(users.orgId, user.orgId));
++        const memberIds = new Map(
++          members.map((member) => [member.email.toLowerCase(), member.id]),
++        );
++        const errors: CsvRowError[] = [...parsed.errors];
++        const values: Array<typeof tasks.$inferInsert> = [];
++        for (const row of parsed.rows) {
++          let assigneeId: string | null = null;
++          if (row.assigneeEmail !== null) {
++            const id = memberIds.get(row.assigneeEmail);
++            if (id === undefined) {
++              errors.push({
++                line: row.line,
++                message: `${row.assigneeEmail} is not a member of your organization`,
++              });
++              continue;
++            }
++            assigneeId = id;
++          }
++          values.push({
++            id: newId("tsk"),
++            orgId: user.orgId,
++            projectId: project.id,
++            title: row.title,
++            assigneeId,
++            dueDate: row.dueDate,
++          });
++        }
++        if (values.length > 0) await db.insert(tasks).values(values);
++        errors.sort((left, right) => left.line - right.line);
++        return { created: values.length, errors };
++      },
++      {
++        requireAuth: true,
++        body: t.Object({ csv: t.String({ maxLength: 1_000_000 }) }),
++      },
+     );

@@ -1,0 +1,110 @@
+diff -ruN a/README.md b/README.md
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,106 @@
++# tasks-api
++
++A multi-tenant task tracking API built with [Bun](https://bun.sh),
++[Elysia](https://elysiajs.com) and [Drizzle ORM](https://orm.drizzle.team) on
++SQLite (libSQL). Organizations own users, projects and tasks; every
++authenticated request is scoped to the caller's organization.
++
++## Running locally
++
++Requires Bun 1.4.3 (pinned in `package.json` under `packageManager`).
++
++```sh
++# 1. Install dependencies
++bun install
++
++# 2. Configure the environment (Bun loads .env automatically)
++cp .env.example .env
++
++# 3. Create the database and apply migrations
++mkdir -p data          # libSQL will not create the parent directory
++bun run db:migrate
++
++# 4. Load demo data (see "Seed data" below)
++bun run db:seed
++
++# 5. Start the dev server with file watching
++bun run dev
++```
++
++The API listens on `http://localhost:4000` by default. Check it with:
++
++```sh
++curl http://localhost:4000/api/health
++# {"status":"ok"}
++```
++
++The server also applies pending migrations on startup, so step 3 is mainly
++needed before seeding.
++
++The seed script inserts fixed IDs and fails if run against a database that is
++already seeded. To start over, delete the database file and repeat steps 3–4:
++
++```sh
++rm data/dev.db && bun run db:migrate && bun run db:seed
++```
++
++### Other scripts
++
++| Script                 | Purpose                                                |
++| ---------------------- | ------------------------------------------------------ |
++| `bun run start`        | Start the server without file watching                 |
++| `bun run build`        | Bundle `src/index.ts` into `dist/`                     |
++| `bun run test`         | Run the Vitest suite                                   |
++| `bun run typecheck`    | Type-check with `tsc --noEmit`                         |
++| `bun run lint`         | Run ESLint                                             |
++| `bun run format:check` | Check formatting with Prettier (`format:fix` to write) |
++| `bun run db:generate`  | Generate a new migration from `src/db/schema.ts`       |
++
++Migrations live in `drizzle/`.
++
++## Environment variables
++
++| Variable          | Default            | Description                                                                                                               |
++| ----------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
++| `PORT`            | `4000`             | HTTP port for the server.                                                                                                 |
++| `DATABASE_URL`    | `file:data/dev.db` | libSQL connection URL. Used by the server, the migrate/seed scripts and `drizzle-kit`.                                    |
++| `WEBHOOK_SECRET`  | _(none)_           | Shared secret expected in the `x-webhook-secret` header of billing webhooks. If unset, every webhook request is rejected. |
++| `TOKEN_TTL_HOURS` | `24`               | Lifetime of API tokens issued by `POST /api/auth/token`.                                                                  |
++| `LOG_LEVEL`       | `info`             | One of `debug`, `info`, `warn`, `error`, `silent`. Logs are JSON lines on stdout/stderr.                                  |
++
++Tests set `LOG_LEVEL=silent`, `WEBHOOK_SECRET=test-webhook-secret` and
++`TOKEN_TTL_HOURS=24` unless they are already defined (`src/test/setup.ts`).
++
++## Seed data
++
++`bun run db:seed` creates two organizations. All users share the password
++`password123`, and each has a long-lived bearer token for local use.
++
++| User               | Organization          | Role   | Token                    |
++| ------------------ | --------------------- | ------ | ------------------------ |
++| `ada@acme.test`    | Acme (`org_acme`)     | admin  | `dev-acme-admin-token`   |
++| `bob@acme.test`    | Acme (`org_acme`)     | member | `dev-acme-member-token`  |
++| `gina@globex.test` | Globex (`org_globex`) | admin  | `dev-globex-admin-token` |
++
++Acme has the projects `prj_web`, `prj_app` and `prj_billing`; Globex has
++`prj_infra`. Tasks `tsk_1` to `tsk_6` are spread across them.
++
++These tokens are for development only. Never seed them into a production
++database.
++
++## Authentication
++
++Routes marked **auth** need an `Authorization: Bearer <token>` header. Get a
++token from `POST /api/auth/token`, or use a seed token:
++
++```sh
++curl -H "Authorization: Bearer dev-acme-admin-token" http://localhost:4000/api/me
++```
++
++A missing header returns `401` with
++`{"code":"unauthenticated","message":"missing bearer token"}`. An unknown or
++expired token returns `401` with the plain-text body `Unauthorized`.
++
++## API
++
++See the route files under `src/routes/` for the available endpoints.

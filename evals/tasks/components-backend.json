@@ -3,10 +3,18 @@
   "description": "Backend tasks where one agent-config component (a policy rule or a skill) should change the outcome, each scored by hidden tests or a deterministic check (see evals/INVENTORY.md, section 6).",
   "fixture": "ts-backend",
   "categories": {
-    "policy": { "label": "Policy rules (typescript, domain-module)" },
-    "skill": { "label": "Skills (manual-qa, quality tooling, diagnosis)" }
+    "policy": {
+      "label": "Policy rules (typescript, domain-module)"
+    },
+    "skill": {
+      "label": "Skills (manual-qa, quality tooling, diagnosis)"
+    }
   },
-  "smoke": ["K1-plan-limits", "K5-token-cli", "K7-done-without-assignee"],
+  "smoke": [
+    "K1-plan-limits",
+    "K5-token-cli",
+    "K7-done-without-assignee"
+  ],
   "featurePatterns": {
     "satisfies": "\\bsatisfies\\b",
     "neverCheck": ":\\s*never\\b",
@@ -22,13 +30,17 @@
       "id": "K1-plan-limits",
       "category": "policy",
       "prompt": "Free organizations are getting a project limit: the free plan allows 2 projects and the pro plan 50. When an organization is already at its limit, POST /api/projects should return 403 with {\"code\": \"plan_limit\", \"message\": \"...\"} and create nothing. Also add GET /api/organization (any signed-in user), returning the caller's organization as {\"plan\": ..., \"projectLimit\": ..., \"projectCount\": ...}. We're adding an enterprise plan soon, so set the limits up in a way that whoever adds a new plan can't forget to give it a limit. Add tests.",
-      "expectsPolicies": ["typescript"],
+      "expectsPolicies": [
+        "typescript"
+      ],
       "checks": [
         {
           "id": "acceptance",
           "label": "Hidden plan-limit tests pass",
           "type": "command",
-          "copy": { "hidden/components/plan-limits.test.ts": "src/__hidden__/plan-limits.test.ts" },
+          "copy": {
+            "hidden/components/plan-limits.test.ts": "src/__hidden__/plan-limits.test.ts"
+          },
           "run": "vitest run src/__hidden__/plan-limits.test.ts",
           "reporter": "vitest-json",
           "expect": "pass",
@@ -39,7 +51,9 @@
           "id": "plan-exhaustive",
           "label": "Adding a plan variant breaks the build until it gets a limit (typescript.md: exhaustive unions)",
           "type": "command",
-          "copy": { "hidden/components/add-variant.mjs": ".eval-hidden/add-variant.mjs" },
+          "copy": {
+            "hidden/components/add-variant.mjs": ".eval-hidden/add-variant.mjs"
+          },
           "run": "node .eval-hidden/add-variant.mjs '\\[\\s*\"free\",\\s*\"pro\",?\\s*\\]' '[\"free\", \"pro\", \"enterprise\"]' '\"free\"\\s*\\|\\s*\"pro\"(?!\\s*\\|)' '\"free\" | \"pro\" | \"enterprise\"'",
           "expect": "pass",
           "level": "required",
@@ -49,7 +63,9 @@
           "id": "strict-types",
           "label": "No type assertions, non-null assertions, any, floating promises or non-exhaustive switches in production code (typescript.md)",
           "type": "command",
-          "copy": { "hidden/components/strict.eslint.config.js": ".eval-hidden/strict.eslint.config.js" },
+          "copy": {
+            "hidden/components/strict.eslint.config.js": ".eval-hidden/strict.eslint.config.js"
+          },
           "run": "eslint -c .eval-hidden/strict.eslint.config.js src scripts",
           "expect": "pass",
           "level": "required",
@@ -59,7 +75,99 @@
           "id": "tests-added",
           "label": "Adds or changes a test",
           "type": "changed",
-          "files": ["src/**/*.test.ts"],
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "K2-task-filters",
+      "category": "policy",
+      "prompt": "GET /api/projects/:id/tasks needs filters in the query string: status (todo, in_progress or done; repeat it to match several, as in ?status=todo&status=done), assignee (a user id, or none for unassigned tasks), dueBefore (a date as YYYY-MM-DD; only tasks due strictly before it) and urgent (true or false). Filters combine with AND, and without filters the endpoint returns every task as it does today. Reject any invalid filter value or unknown query parameter with 400 and {\"code\": \"invalid_query\", \"message\": \"...\"} instead of ignoring it. Add tests.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden task-filter tests pass",
+          "type": "command",
+          "copy": {
+            "hidden/components/task-filters.test.ts": "src/__hidden__/task-filters.test.ts"
+          },
+          "run": "vitest run src/__hidden__/task-filters.test.ts",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "strict-types",
+          "label": "No type assertions, non-null assertions, any, floating promises or non-exhaustive switches in production code (typescript.md)",
+          "type": "command",
+          "copy": {
+            "hidden/components/strict.eslint.config.js": ".eval-hidden/strict.eslint.config.js"
+          },
+          "run": "eslint -c .eval-hidden/strict.eslint.config.js src scripts",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or changes a test",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "K3-task-import",
+      "category": "policy",
+      "prompt": "Add a bulk task import: POST /api/projects/:id/tasks/import with a JSON body {\"csv\": \"...\"}. The first line must be the header title,assignee_email,due_date and every following line is one task (assignee_email and due_date may be empty; titles never contain commas, so no quoting). Import the valid rows and skip the invalid ones, answering 200 with {\"created\": <count>, \"errors\": [{\"line\": <line number in the csv, the header is line 1>, \"message\": \"...\"}]}. A row is invalid when it doesn't have exactly 3 columns, has an empty title, names an assignee who isn't a member of the organization, or has a due date that isn't a YYYY-MM-DD date. Blank lines are ignored. A missing or wrong header is a 400 with {\"code\": \"invalid_csv\", \"message\": \"...\"}. Add tests.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden CSV-import tests pass",
+          "type": "command",
+          "copy": {
+            "hidden/components/task-import.test.ts": "src/__hidden__/task-import.test.ts"
+          },
+          "run": "vitest run src/__hidden__/task-import.test.ts",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "strict-types",
+          "label": "No type assertions, non-null assertions, any, floating promises or non-exhaustive switches in production code (typescript.md)",
+          "type": "command",
+          "copy": {
+            "hidden/components/strict.eslint.config.js": ".eval-hidden/strict.eslint.config.js"
+          },
+          "run": "eslint -c .eval-hidden/strict.eslint.config.js src scripts",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or changes a test",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
           "expect": "any",
           "level": "info"
         }

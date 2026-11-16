@@ -17,7 +17,7 @@ interface TaskBody {
   updatedAt: string;
 }
 
-describe("hidden: task update rules are unchanged", () => {
+describe("hidden: task update rules are unchanged", { timeout: 30_000 }, () => {
   it("enforces transitions, roles and assignment rules", async () => {
     const { request } = await createTestContext();
     expect((await request("PATCH", "/api/tasks/tsk_4", patch({ status: "done" }))).status).toBe(409);

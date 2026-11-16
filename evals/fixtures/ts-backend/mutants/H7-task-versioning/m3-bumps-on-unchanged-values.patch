@@ -1,0 +1,216 @@
+diff --git a/drizzle/0001_task_version.sql b/drizzle/0001_task_version.sql
+new file mode 100644
+index 0000000..c1c0392
+--- /dev/null
++++ b/drizzle/0001_task_version.sql
+@@ -0,0 +1 @@
++ALTER TABLE `tasks` ADD `version` integer DEFAULT 1 NOT NULL;
+diff --git a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+index 711e2b9..45e9803 100644
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794774883005,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794774883006,
++      "tag": "0001_task_version",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 6a14aa4..0594960 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -80,6 +80,8 @@ export const tasks = sqliteTable(
+       onDelete: "set null",
+     }),
+     dueDate: text("due_date"),
++    // Optimistic concurrency: bumped by every PATCH that changes something.
++    version: integer("version").notNull().default(1),
+     createdAt: createdAt(),
+     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+       .notNull()
+diff --git a/src/routes/serializers.ts b/src/routes/serializers.ts
+index f62bf85..2f9682a 100644
+--- a/src/routes/serializers.ts
++++ b/src/routes/serializers.ts
+@@ -1,5 +1,8 @@
+ import type { Task } from "../db/schema";
+ 
++/** ETag for a task: its version in quotes. */
++export const taskEtag = (task: Pick<Task, "version">) => `"${task.version}"`;
++
+ export function toTaskResponse(task: Task) {
+   return {
+     id: task.id,
+@@ -10,6 +13,7 @@ export function toTaskResponse(task: Task) {
+     isUrgent: task.isUrgent,
+     assigneeId: task.assigneeId,
+     dueDate: task.dueDate,
++    version: task.version,
+     createdAt: task.createdAt.toISOString(),
+     updatedAt: task.updatedAt.toISOString(),
+   };
+diff --git a/src/routes/tasks.test.ts b/src/routes/tasks.test.ts
+index cd58f43..2920ce0 100644
+--- a/src/routes/tasks.test.ts
++++ b/src/routes/tasks.test.ts
+@@ -38,21 +38,25 @@ describe("tasks", () => {
+     const { request } = await createTestContext();
+     const skip = await request("PATCH", "/api/tasks/tsk_4", {
+       token: SEED_TOKENS.acmeMember,
++      headers: { "if-match": '"1"' },
+       body: { status: "done" },
+     });
+     expect(skip.status).toBe(409);
+     const start = await request("PATCH", "/api/tasks/tsk_3", {
+       token: SEED_TOKENS.acmeMember,
++      headers: { "if-match": '"1"' },
+       body: { status: "in_progress" },
+     });
+     expect(start.status).toBe(200);
+     const reopen = await request("PATCH", "/api/tasks/tsk_1", {
+       token: SEED_TOKENS.acmeMember,
++      headers: { "if-match": '"1"' },
+       body: { status: "todo" },
+     });
+     expect(reopen.status).toBe(403);
+     const adminReopen = await request("PATCH", "/api/tasks/tsk_1", {
+       token: SEED_TOKENS.acmeAdmin,
++      headers: { "if-match": '"1"' },
+       body: { status: "todo" },
+     });
+     expect(adminReopen.status).toBe(200);
+@@ -64,6 +68,7 @@ describe("tasks", () => {
+     const { request } = await createTestContext();
+     const response = await request("PATCH", "/api/tasks/tsk_4", {
+       token: SEED_TOKENS.acmeAdmin,
++      headers: { "if-match": '"1"' },
+       body: { assigneeId: "usr_ada" },
+     });
+     expect(response.status).toBe(200);
+@@ -87,4 +92,26 @@ describe("tasks", () => {
+       ).status,
+     ).toBe(204);
+   });
++
++  it("rejects edits based on an outdated version", async () => {
++    const { request } = await createTestContext();
++    const first = await request("PATCH", "/api/tasks/tsk_4", {
++      token: SEED_TOKENS.acmeAdmin,
++      headers: { "if-match": '"1"' },
++      body: { title: "First" },
++    });
++    expect(first.headers.get("etag")).toBe('"2"');
++    const stale = await request("PATCH", "/api/tasks/tsk_4", {
++      token: SEED_TOKENS.acmeAdmin,
++      headers: { "if-match": '"1"' },
++      body: { title: "Second" },
++    });
++    expect(stale.status).toBe(412);
++    expect(await stale.json()).toMatchObject({ title: "First", version: 2 });
++    const missing = await request("PATCH", "/api/tasks/tsk_4", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { title: "Third" },
++    });
++    expect(missing.status).toBe(428);
++  });
+ });
+diff --git a/src/routes/tasks.ts b/src/routes/tasks.ts
+index c62bf5d..8b4c6f7 100644
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -1,37 +1,45 @@
+-import { and, eq } from "drizzle-orm";
++import { and, eq, sql } from "drizzle-orm";
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+ import { tasks, users, type TaskStatus } from "../db/schema";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+-import { toTaskResponse } from "./serializers";
++import { taskEtag, toTaskResponse } from "./serializers";
+ 
+ export const taskRoutes = (db: Db) =>
+   new Elysia({ prefix: "/api/tasks" })
+     .use(authGuard(db))
+     .get(
+       "/:id",
+-      async ({ params, status }) => {
++      async ({ params, set, status }) => {
+         const task = await db
+           .select()
+           .from(tasks)
+           .where(eq(tasks.id, params.id))
+           .get();
+         if (!task) return status(404, { error: "task not found" });
++        set.headers.etag = taskEtag(task);
+         return toTaskResponse(task);
+       },
+       { requireAuth: true },
+     )
+     .patch(
+       "/:id",
+-      async ({ params, body, user, status }) => {
++      async ({ params, body, headers, user, set, status }) => {
++        const ifMatch = headers["if-match"];
++        if (ifMatch === undefined)
++          return status(428, { error: "send If-Match with the task's ETag" });
+         const task = await db
+           .select()
+           .from(tasks)
+           .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
+           .get();
+         if (!task) return status(404, { error: "task not found" });
++        if (ifMatch !== taskEtag(task)) {
++          set.headers.etag = taskEtag(task);
++          return status(412, toTaskResponse(task));
++        }
+ 
+         const changes: Partial<typeof tasks.$inferInsert> = {};
+ 
+@@ -100,16 +108,32 @@ export const taskRoutes = (db: Db) =>
+           changes.dueDate = body.dueDate;
+         }
+ 
+-        if (Object.keys(changes).length === 0) return toTaskResponse(task);
++        // Fields set to their current value are not changes and must not bump the version.
++        if (Object.keys(changes).length === 0) {
++          set.headers.etag = taskEtag(task);
++          return toTaskResponse(task);
++        }
+         changes.updatedAt = new Date();
+ 
++        // The version check is part of the UPDATE, so of several PATCHes sent with the same
++        // If-Match exactly one can win; the others see no row and get 412.
+         const [updated] = await db
+           .update(tasks)
+-          .set(changes)
+-          .where(eq(tasks.id, task.id))
++          .set({ ...changes, version: sql`${tasks.version} + 1` })
++          .where(and(eq(tasks.id, task.id), eq(tasks.version, task.version)))
+           .returning();
+-        if (!updated) throw new Error("update returned no row");
++        if (!updated) {
++          const current = await db
++            .select()
++            .from(tasks)
++            .where(eq(tasks.id, task.id))
++            .get();
++          if (!current) return status(404, { error: "task not found" });
++          set.headers.etag = taskEtag(current);
++          return status(412, toTaskResponse(current));
++        }
+         if (newAssignee) await notifyTaskAssigned(db, updated, newAssignee);
++        set.headers.etag = taskEtag(updated);
+         return toTaskResponse(updated);
+       },
+       {

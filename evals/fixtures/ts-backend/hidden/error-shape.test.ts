@@ -18,7 +18,7 @@ async function expectError(response: Response, status: number, code?: string) {
 const admin = { token: SEED_TOKENS.acmeAdmin };
 const member = { token: SEED_TOKENS.acmeMember };
 
-describe("hidden: structured error responses", () => {
+describe("hidden: structured error responses", { timeout: 30_000 }, () => {
   it("400 validation_error for a schema violation", async () => {
     const { request } = await createTestContext();
     await expectError(await request("POST", "/api/projects", { ...admin, body: { name: "" } }), 400, "validation_error");

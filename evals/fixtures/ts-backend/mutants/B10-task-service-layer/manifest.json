@@ -63,6 +63,12 @@
       "expect": "killed"
     },
     {
+      "file": "m11-route-still-updates.patch",
+      "wrong": "the service only checks the rules; the route still writes the update and sends the email",
+      "violates": "so the route only deals with HTTP (parsing input and mapping results to status codes)",
+      "expect": "killed"
+    },
+    {
       "file": "m10-renotify-same-assignee.patch",
       "wrong": "re-sending the current assignee sends another email",
       "violates": "Behaviour must not change.",

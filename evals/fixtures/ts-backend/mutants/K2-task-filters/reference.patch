@@ -1,0 +1,123 @@
+diff -ruN a/src/routes/projects.ts b/src/routes/projects.ts
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -1,13 +1,24 @@
+-import { and, asc, count, eq } from "drizzle-orm";
++import {
++  and,
++  asc,
++  count,
++  eq,
++  inArray,
++  isNull,
++  lt,
++  type SQL,
++} from "drizzle-orm";
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { projects, tasks, users } from "../db/schema";
++import { projects, taskStatuses, tasks, users } from "../db/schema";
+ import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+ 
++const taskFilterKeys = new Set(["status", "assignee", "dueBefore", "urgent"]);
++
+ export const projectRoutes = (db: Db) =>
+   new Elysia({ prefix: "/api/projects" })
+     .use(authGuard(db))
+@@ -79,7 +90,16 @@
+     )
+     .get(
+       "/:id/tasks",
+-      async ({ params, user, status }) => {
++      async ({ params, query, request, user, status }) => {
++        const unknown = [...new URL(request.url).searchParams.keys()].filter(
++          (key) => !taskFilterKeys.has(key),
++        );
++        if (unknown.length > 0) {
++          return status(400, {
++            code: "invalid_query",
++            message: `unknown filter: ${unknown.join(", ")}`,
++          });
++        }
+         const project = await db
+           .select()
+           .from(projects)
+@@ -88,14 +108,45 @@
+           )
+           .get();
+         if (!project) return status(404, "Project not found");
++        const filters: SQL[] = [eq(tasks.projectId, project.id)];
++        if (query.status) filters.push(inArray(tasks.status, query.status));
++        if (query.assignee === "none") filters.push(isNull(tasks.assigneeId));
++        else if (query.assignee)
++          filters.push(eq(tasks.assigneeId, query.assignee));
++        if (query.dueBefore) filters.push(lt(tasks.dueDate, query.dueBefore));
++        if (query.urgent !== undefined)
++          filters.push(eq(tasks.isUrgent, query.urgent));
+         const rows = await db
+           .select()
+           .from(tasks)
+-          .where(eq(tasks.projectId, project.id))
++          .where(and(...filters))
+           .orderBy(asc(tasks.createdAt));
+         return { items: rows.map(toTaskResponse) };
+       },
+-      { requireAuth: true },
++      {
++        requireAuth: true,
++        query: t.Object(
++          {
++            status: t.Optional(t.ArrayQuery(t.UnionEnum(taskStatuses))),
++            assignee: t.Optional(t.String({ minLength: 1 })),
++            dueBefore: t.Optional(
++              t.String({
++                format: "date",
++                pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
++              }),
++            ),
++            urgent: t.Optional(t.Boolean()),
++          },
++          { additionalProperties: false },
++        ),
++        error({ code, status }) {
++          if (code === "VALIDATION")
++            return status(400, {
++              code: "invalid_query",
++              message: "invalid task filter",
++            });
++        },
++      },
+     )
+     .post(
+       "/:id/tasks",
+diff -ruN a/src/routes/task-filters.test.ts b/src/routes/task-filters.test.ts
+--- /dev/null
++++ b/src/routes/task-filters.test.ts
+@@ -0,0 +1,23 @@
++import { describe, expect, it } from "vitest";
++
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++
++describe("task filters", () => {
++  it("filters by status and rejects unknown values", async () => {
++    const { request } = await createTestContext();
++    const token = SEED_TOKENS.acmeAdmin;
++    const ok = await request(
++      "GET",
++      "/api/projects/prj_web/tasks?status=todo&status=done",
++      { token },
++    );
++    const body = (await ok.json()) as { items: Array<{ id: string }> };
++    expect(body.items.map((task) => task.id)).toEqual(["tsk_1", "tsk_3"]);
++    for (const query of ["status=DONE", "urgent=yes", "sort=name"]) {
++      const bad = await request("GET", `/api/projects/prj_web/tasks?${query}`, {
++        token,
++      });
++      expect(bad.status).toBe(400);
++    }
++  });
++});

@@ -6,7 +6,7 @@ import { createTestContext, SEED_TOKENS } from "../test/helpers";
 const isTimestamp = (value: unknown) =>
   (typeof value === "string" || typeof value === "number") && value !== "" && !Number.isNaN(new Date(value).getTime());
 
-describe("hidden: task comments", () => {
+describe("hidden: task comments", { timeout: 30_000 }, () => {
   it("creates comments and lists them oldest first", async () => {
     const { request } = await createTestContext();
     const first = await request("POST", "/api/tasks/tsk_2/comments", { token: SEED_TOKENS.acmeAdmin, body: { body: "First!" } });

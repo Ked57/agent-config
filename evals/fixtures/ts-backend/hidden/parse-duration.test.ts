@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseDuration } from "../lib/duration";
 
-describe("hidden: parseDuration", () => {
+describe("hidden: parseDuration", { timeout: 30_000 }, () => {
   it("converts compound durations to milliseconds", () => {
     expect(parseDuration("90s")).toBe(90_000);
     expect(parseDuration("15m")).toBe(900_000);

@@ -8,7 +8,7 @@ const headers = { "x-webhook-secret": "test-webhook-secret" };
 const event = (id: string, credits = 50) => ({ id, type: "payment.succeeded", data: { orgId: "org_globex", credits } });
 const acknowledged = (response: Response) => response.status >= 200 && response.status < 300;
 
-describe("hidden: idempotent billing webhooks", () => {
+describe("hidden: idempotent billing webhooks", { timeout: 30_000 }, () => {
   it("applies a retried event once and still acknowledges it", async () => {
     const { request, db } = await createTestContext();
     const first = await request("POST", "/api/webhooks/billing", { body: event("evt_a"), headers });

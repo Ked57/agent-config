@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createTestContext, SEED_TOKENS } from "../test/helpers";
 
-describe("hidden: tenant isolation on tasks", () => {
+describe("hidden: tenant isolation on tasks", { timeout: 30_000 }, () => {
   it("hides other organizations' tasks on every task endpoint", async () => {
     const { request } = await createTestContext();
     expect((await request("GET", "/api/tasks/tsk_1", { token: SEED_TOKENS.globexAdmin })).status).toBe(404);

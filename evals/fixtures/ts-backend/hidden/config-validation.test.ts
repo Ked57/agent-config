@@ -21,6 +21,16 @@ function start(env: Record<string, string>, waitMs: number) {
   });
 }
 
+// Bun prints the source lines around an uncaught throw (`12 |   process.env.PORT`), a caret line
+// and stack frames. Only the error text itself counts as naming a variable.
+const errorText = (output: string) =>
+  output
+    .split("\n")
+    .filter((line) => !/^\s*\d+\s*\|/.test(line) && !/^\s*\^+\s*$/.test(line) && !/^\s*at\s/.test(line))
+    .join("\n");
+const VARIABLES = ["PORT", "DATABASE_URL", "WEBHOOK_SECRET", "TOKEN_TTL_HOURS", "LOG_LEVEL"];
+const names = (text: string, name: string) => new RegExp(`\\b${name}\\b`).test(text);
+
 const database = () => `file:${join(tmpdir(), `config-${randomUUID()}.db`)}`;
 const randomPort = () => String(20000 + Math.floor(Math.random() * 20000));
 
@@ -30,15 +40,16 @@ function envWith(overrides: Record<string, string | undefined>): Record<string, 
   return Object.fromEntries(Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined));
 }
 
-describe("hidden: configuration validated at startup", () => {
+describe("hidden: configuration validated at startup", { timeout: 30_000 }, () => {
   it("refuses to start and names every bad variable", { timeout: 20_000 }, async () => {
     const result = await start({ DATABASE_URL: database(), PORT: "not-a-port", TOKEN_TTL_HOURS: "-3" }, 10_000);
     result.child.kill();
     expect(result.code).not.toBe(0);
     expect(result.code).not.toBeNull();
-    expect(result.output).toContain("PORT");
-    expect(result.output).toContain("WEBHOOK_SECRET");
-    expect(result.output).toContain("TOKEN_TTL_HOURS");
+    const text = errorText(result.output);
+    expect(names(text, "PORT")).toBe(true);
+    expect(names(text, "WEBHOOK_SECRET")).toBe(true);
+    expect(names(text, "TOKEN_TTL_HOURS")).toBe(true);
   });
 
   // One bad variable at a time, everything else valid: each rule the prompt states must on its
@@ -55,7 +66,10 @@ describe("hidden: configuration validated at startup", () => {
     result.child.kill();
     expect(result.code).not.toBe(0);
     expect(result.code).not.toBeNull();
-    expect(result.output).toContain(name);
+    const text = errorText(result.output);
+    expect(names(text, name)).toBe(true);
+    // A generic message that lists every variable whatever is wrong does not say which one is.
+    expect(VARIABLES.filter((other) => other !== name).every((other) => names(text, other))).toBe(false);
   });
 
   it("starts with a valid configuration", { timeout: 20_000 }, async () => {

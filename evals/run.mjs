@@ -9,10 +9,11 @@ import { fileURLToPath } from 'node:url';
 import { aggregate } from './lib/aggregate.mjs';
 import { buildArm, compareInventories, installedPlugins, inventory, prepareRunHome } from './lib/arms.mjs';
 import { browserSmoke } from './lib/browser.mjs';
+import { scoreRun } from './lib/checks.mjs';
 import { DEFAULTS, judgeSetId, parseArgs, promptFor, resolveConfig, validateTaskSet } from './lib/config.mjs';
 import { browserToolEnv, killStrays, sandboxProblems, sandboxRoot } from './lib/env.mjs';
 import { httpSmoke } from './lib/http-smoke.mjs';
-import { copyForRun, fixtureHash, loadFixture, moveTree, preparePristine, verifyPristine } from './lib/fixtures.mjs';
+import { copyForRun, copyTaskFiles, fixtureHash, loadFixture, moveTree, preparePristine, verifyPristine } from './lib/fixtures.mjs';
 import { initEvent, initProblems, invokedCommands, loadedInstructionFiles, removalLeftovers, sessionComponents, sessionCostUsd, strayInstructionFiles, unexplainedComponents } from './lib/isolation.mjs';
 import { buildJudgePrompt, judgePair } from './lib/judge.mjs';
 import { measureRun, recheckRun } from './lib/measure.mjs';
@@ -192,6 +193,7 @@ async function probeArms({ provider, sandbox, outDir, armsInfo, armIds }) {
     info.probe = { instructions: probe.instructions, costUsd: probe.costUsd, claudeCodeVersion: probe.init.claude_code_version ?? null };
     fs.rmSync(probe.dir, { recursive: true, force: true });
   }
+  fs.rmSync(probeRoot, { recursive: true, force: true });
 }
 
 async function pool(items, concurrency, worker, shouldStop) {
@@ -304,7 +306,7 @@ async function main() {
   // A bare --report-only must report the judge set the last report used, even if config.json says otherwise.
   const judgeFlagPassed = ['judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand'].some((key) => raw[key] !== undefined);
   const lastSummary = fs.existsSync(path.join(outDir, 'summary.json')) ? readJson(path.join(outDir, 'summary.json')) : null;
-  const lastJudgeSet = lastSummary?.cost?.judgeSet ?? lastSummary?.judgeSet ?? null;
+  const lastJudgeSet = lastSummary?.spend?.judgeSet ?? lastSummary?.cost?.judgeSet ?? null;
   if (reportOnly && !judgeFlagPassed && lastJudgeSet && lastJudgeSet !== activeJudgeSet && fs.existsSync(path.join(judgeRoot, lastJudgeSet))) {
     warnings.push(`config.json names judge set \`${activeJudgeSet}\`, the last report used \`${lastJudgeSet}\`: kept \`${lastJudgeSet}\`. Pass --judge-model to switch.`);
     activeJudgeSet = lastJudgeSet;
@@ -360,6 +362,7 @@ async function main() {
       const before = run.checks ?? [];
       run.checksOriginal ??= before;
       run.checks = recheckRun({ fixture, app: path.join(runDir, 'app'), runDir, task });
+      Object.assign(run, scoreRun(run));
       const flipped = flippedChecks(before, run.checks);
       flips.push(...flipped.map((flip) => ({ run: run.id, ...flip })));
       run.rechecks = [...(run.rechecks ?? []), { at, fixtureHash: currentFixtureHash, flipped }];
@@ -403,6 +406,7 @@ async function main() {
       fs.mkdirSync(tmp, { recursive: true });
       prepareRunHome({ template: arm.home, home: runHome, files: arm.homePathFiles });
       copyForRun(fixture, pristine, app);
+      if (task.files) copyTaskFiles(fixture, task.files, app);
       const prompt = promptFor(task, job.arm, config.arms[job.arm]);
       log(`start ${job.id}`);
       const env = { ...browserToolEnv(job.id), ...config.env };
@@ -421,7 +425,15 @@ async function main() {
       // Stop browsers, then anything else the run left behind (the provider already killed its process group).
       spawnSync('agent-browser', ['close'], { env: { PATH: process.env.PATH, HOME: runHome, AGENT_BROWSER_SESSION: env.AGENT_BROWSER_SESSION }, timeout: 20000 });
       const strays = killStrays({ root: runRoot, markers: strayMarkers });
-      const record = measureRun({ job, fixture, pristine, runDir, app, taskSet, task, provider, armsInfo, agentResult });
+      // Task files (e.g. a spec) are part of the starting point: the diff is taken against a base that
+      // has them too (built after the agent exited, so it could not touch it).
+      let base = pristine;
+      if (task.files) {
+        base = path.join(runRoot, 'base');
+        copyForRun(fixture, pristine, base);
+        copyTaskFiles(fixture, task.files, base);
+      }
+      const record = measureRun({ job, fixture, pristine: base, runDir, app, taskSet, task, provider, armsInfo, agentResult, prompt });
       record.fixtureHash = currentFixtureHash;
       record.prompt = prompt;
       if (strays.length) record.strays = strays;
@@ -436,6 +448,8 @@ async function main() {
       if (!record.isolation.ok) {
         record.status = 'isolation';
         record.error = `isolation: ${record.isolation.problems.join('; ')}`;
+        Object.assign(record, scoreRun(record));
+        log(`ISOLATION ${job.id}: ${record.isolation.problems.join('; ')}`);
         if (config.strictIsolation ?? true) stopReason ??= `${job.id} failed the isolation check (${record.isolation.problems[0]})`;
       }
       // A run that wrote through a hard link has changed node_modules for every later run: stop there.
@@ -490,9 +504,10 @@ async function main() {
       try {
         const verdict = await judgePair({
           sides: pair.sides,
+          dimensions: fixture.judgeDimensions,
           repeats: config.judgeReps,
           ask: (prompt) => judge.ask({ home: judgeHome, prompt, model: config.judgeModel, effort: config.judgeEffort }),
-          buildPrompt: (order) => buildJudgePrompt({ context: fixture.judgeContext, task: tasksById[pair.task].prompt, patch1: patchOf(runsBySide[order[0]]), patch2: patchOf(runsBySide[order[1]]) })
+          buildPrompt: (order) => buildJudgePrompt({ context: fixture.judgeContext, dimensions: fixture.judgeDimensions, task: tasksById[pair.task].prompt, patch1: patchOf(runsBySide[order[0]]), patch2: patchOf(runsBySide[order[1]]) })
         });
         const record = { id: pair.id, kind: pair.kind, task: pair.task, reps: pair.reps, sides: pair.sides, runs: [pair.left.id, pair.right.id], patches: [currentPatch(pair.left.id), currentPatch(pair.right.id)], judge: { set: activeJudgeSet, provider: config.judgeProvider, model: config.judgeProvider === 'command' ? null : config.judgeModel, effort: config.judgeEffort }, ...verdict };
         writeJson(path.join(judgeDir, `${pair.id}.json`), record);
@@ -514,13 +529,11 @@ async function main() {
       if (changedConfig.length) warnings.push(`Arm ${arm}'s installed config was modified during the eval (${changedConfig.slice(0, 5).join(', ')}).`);
     }
   }
-  const isolationFailures = runs.filter((run) => run.status === 'isolation');
-  if (isolationFailures.length) warnings.push(`${isolationFailures.length} run(s) failed the isolation check and are excluded from the results: ${isolationFailures.map((run) => `${run.id} (${run.isolation?.problems?.[0] ?? run.error})`).join('; ')}.`);
   for (const warning of warnings) log(`WARNING: ${warning}`);
   if (stopReason) log(`Stopped early: ${stopReason}. Resume with: npm run eval -- --resume ${outDir}`);
 
-  // Runs that loaded something the arm did not install measured a different setup: leave them out.
-  const summary = aggregate({ config, taskSet, armsInfo, runs: runs.filter((run) => run.status !== 'isolation'), judgments, activeJudgeSet, otherJudgeSets });
+  // aggregate() leaves out runs with status "isolation" and names them in its warnings.
+  const summary = aggregate({ config, taskSet, armsInfo, runs, judgments, activeJudgeSet, otherJudgeSets });
   summary.stoppedEarly = stopReason;
   summary.warnings = warnings;
   summary.history = readAudit(outDir);

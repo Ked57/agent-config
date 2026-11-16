@@ -30,6 +30,12 @@
       "wrong": "projects are no longer ordered by name",
       "violates": "without changing the response",
       "expect": "killed"
+    },
+    {
+      "file": "m5-org-totals-for-every-project.patch",
+      "wrong": "one grouped query per organization: every project gets the organization's totals",
+      "violates": "without changing the response",
+      "expect": "killed"
     }
   ]
 }

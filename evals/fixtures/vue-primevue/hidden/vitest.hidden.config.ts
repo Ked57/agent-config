@@ -2,7 +2,7 @@
 // app's own Vite config (plugins and aliases, including any the agent added) so .vue files compile,
 // and keeps the agent's vitest.config.ts (environment, setup files) out of the hidden run.
 import { defineConfig, mergeConfig } from 'vitest/config'
-import viteConfig from './vite.config'
+import viteConfig from './vite.config.ts'
 
 export default mergeConfig(
   viteConfig,

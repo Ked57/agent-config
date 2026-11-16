@@ -133,7 +133,13 @@ describe("hidden: logout and sliding token expiry", { timeout: 30_000 }, () => {
   it("does not bring a revoked token back, even with requests racing the logout", async () => {
     const { request } = await createTestContext();
     const token = await login(request);
-    const responses = await Promise.all([request("POST", "/api/auth/logout", { token }), ...Array.from({ length: 5 }, () => me(request, token))]);
+    // Requests that were already being authenticated while the logout ran must not undo it.
+    // Each request starts a few microtasks later than the previous one, so some overlap every step of the logout.
+    const delayed = async (hops: number) => {
+      for (let hop = 0; hop < hops; hop += 1) await null;
+      return me(request, token);
+    };
+    const responses = await Promise.all([request("POST", "/api/auth/logout", { token }), ...Array.from({ length: 80 }, (_, hops) => delayed(hops))]);
     expect(responses[0]?.status).toBe(204);
     for (let index = 0; index < 3; index += 1) expect((await me(request, token)).status).toBe(401);
   });

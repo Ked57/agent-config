@@ -4,6 +4,10 @@
     {
       "file": "reference-shakeout-A-r1.patch",
       "source": "validation-ts-backend-shakeout A r1"
+    },
+    {
+      "file": "reference-uncaught-throw.patch",
+      "source": "hand-written: shakeout A r1 with the configuration error thrown uncaught, so Bun prints its source excerpt"
     }
   ],
   "mutants": [
@@ -41,8 +45,7 @@
       "file": "m6-generic-usage-message.patch",
       "wrong": "the error lists all five variable names whatever is wrong",
       "violates": "a clear error that names every invalid or missing variable",
-      "expect": "survives",
-      "why": "pending: needs a check that valid variables are not named"
+      "expect": "killed"
     },
     {
       "file": "m7-port-default-3000.patch",
@@ -55,8 +58,7 @@
       "file": "m8-unnamed-error-source-dump.patch",
       "wrong": "throws \"Invalid configuration\" without names; the names only appear in Bun's source excerpt",
       "violates": "a clear error that names every invalid or missing variable",
-      "expect": "survives",
-      "why": "pending: needs output filtering of Bun's source excerpt"
+      "expect": "killed"
     }
   ]
 }

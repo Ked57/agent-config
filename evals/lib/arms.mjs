@@ -82,7 +82,7 @@ function applyAdd(repoRoot, src, toggle) {
  */
 export function liveConfigSnapshot(home = os.homedir()) {
   const deep = ['.claude/CLAUDE.md', '.claude/settings.json', '.claude/skills', '.claude/agents', '.claude/plugins/installed_plugins.json', '.claude/plugins/known_marketplaces.json', '.agents', '.codex/AGENTS.md', '.codex/config.toml', '.agent-config', '.cursor/agents'];
-  const shallow = ['.claude/plugins', '.claude/plugins/marketplaces', '.claude/plugins/cache', '.cursor', '.cursor/plugins', '.cursor/plugins/local', '.cursor/skills', '.codex/plugins', '.codex/skills'];
+  const shallow = ['.claude/plugins', '.claude/plugins/marketplaces', '.claude/plugins/cache', '.cursor/plugins', '.cursor/plugins/local', '.cursor/skills', '.codex/plugins', '.codex/skills'];
   const snapshot = {};
   const stamp = (stat) => (stat.isDirectory() ? `dir:${stat.mtimeMs}` : `${stat.size}:${stat.mtimeMs}`);
   const visit = (file, relative, recurse) => {
@@ -113,7 +113,7 @@ export function installedPlugins(home) {
   const plugins = {};
   for (const [id, installs] of Object.entries(JSON.parse(fs.readFileSync(file, 'utf8')).plugins ?? {})) {
     const install = [installs].flat().find((entry) => entry?.scope === 'user') ?? [installs].flat()[0];
-    if (install?.installPath) plugins[id.split('@')[0]] = { id, version: install.version ?? null, installPath: install.installPath };
+    if (install?.installPath) plugins[id.split('@')[0]] = { id, version: install.version ?? null, gitCommitSha: install.gitCommitSha ?? null, installPath: install.installPath };
   }
   return plugins;
 }
@@ -161,6 +161,7 @@ export function inventory(home) {
       id: plugin.id,
       name,
       version: plugin.version,
+      gitCommitSha: plugin.gitCommitSha,
       skills: [...new Set(own.filter((file) => /(?:^|\/)skills\/[^/]+\/SKILL\.md$/.test(file)).map((file) => skillName(fs.readFileSync(path.join(plugin.installPath, file), 'utf8'), path.dirname(file))))].sort(),
       agents: [...new Set(own.map((file) => /(?:^|\/)agents\/([^/]+)\.md$/.exec(file)?.[1]).filter(Boolean))].sort()
     };
@@ -195,15 +196,29 @@ export function filesNamingHome(home) {
 }
 
 /**
- * Copies an arm's template home to a run's home (`cp -a`, so modes and symlinks survive) and rewrites
- * the template's absolute path to the run home's in `files` (from `filesNamingHome`), so CLAUDE.md
- * imports and plugin install paths point into the run's own copy.
+ * What a Claude Code run reads from its home. The Codex and Cursor copies (`.codex/plugins`,
+ * `.cursor/skills`, about 360 MB) and the installers' caches stay in the template; the local Cursor
+ * pstack copy comes along because poteto-agent searches `~/.cursor/plugins/` when its parent gives no
+ * SKILL.md path.
+ */
+export const RUN_HOME_PATHS = ['.claude', '.agents', '.agent-config', '.cursor/plugins/local'];
+
+/**
+ * Copies the Claude-relevant part of an arm's template home (`RUN_HOME_PATHS`) to a run's home
+ * (`cp -a`, so modes and symlinks survive) and rewrites the template's absolute path to the run
+ * home's in `files` (from `filesNamingHome`), so CLAUDE.md imports and plugin install paths point
+ * into the run's own copy.
  */
 export function prepareRunHome({ template, home, files = [] }) {
   fs.rmSync(home, { recursive: true, force: true });
-  fs.mkdirSync(path.dirname(home), { recursive: true });
-  const copy = spawnSync('cp', ['-a', template, home], { encoding: 'utf8' });
-  if (copy.status !== 0) throw new Error(`copying the arm home failed: ${copy.stderr}`);
+  fs.mkdirSync(home, { recursive: true });
+  for (const relative of RUN_HOME_PATHS) {
+    const source = path.join(template, relative);
+    if (!fs.existsSync(source)) continue;
+    fs.mkdirSync(path.dirname(path.join(home, relative)), { recursive: true });
+    const copy = spawnSync('cp', ['-a', source, path.join(home, relative)], { encoding: 'utf8' });
+    if (copy.status !== 0) throw new Error(`copying the arm home failed: ${copy.stderr}`);
+  }
   for (const relative of files) {
     const file = path.join(home, relative);
     if (fs.existsSync(file)) fs.writeFileSync(file, fs.readFileSync(file, 'utf8').split(template).join(home));
