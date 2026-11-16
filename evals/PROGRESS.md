@@ -99,3 +99,10 @@ and the run is excluded and reported.
   `pstack:poteto-agent`; nothing from the live home loads when cwd is outside the home tree.
 - 00:25 UTC: agent B done (stats.mjs, aggregate, report, judge; verify 121 pass). Inventory written. B's `run.mjs` requests and the inventory's findings (absolute CLAUDE.md import, 550 MB template home, unpinned plugin versions) relayed to agent A. Agents A, C, D, E, F, G still running; their files are checkpoint-committed mid-change.
 - 00:30 UTC: agent A done (sandbox under `/var/tmp/agent-config-evals`, per-run home copy, arm probes, `evals/lib/isolation.mjs`, `BARE`, `plugin:` removal, prefixes, task `files`). Lead re-read the init events of its real run: bare arm 19 built-in skills, WORKTREE arm 120 skills with taste-skill 2.5.1, mattpocock-skills 1.3.2, pstack 0.15.42, no live-home skills. One verify test fails at this checkpoint (`tests/evals.test.mjs:374` reading `ts-backend.json`, which agent C is editing). Still running: C, D, E, F (component tasks), G.
+- 00:55–04:40 UTC: usage limit. Agents C, D, E, F, G stopped mid-work; their files were checkpoint-committed.
+- 04:45 UTC: limit reset. C, D, E, F, G resumed by message from their saved progress (same briefs).
+  At resume: `ts-backend-hard.json` (H1–H8 mutant dirs exist), `components-backend.json`, Vue mutants and
+  `evals/mutants.mjs` exist but are unverified; `poteto-spec.json` not yet written (G was on S5 tests);
+  15 verify tests fail (task sets and mutant gate mid-change). Agent A's report was complete before the
+  limit; not resumed. Next for the lead: review each agent's result, get `npm run verify` and
+  `npm run eval:mutants` green, freeze tasks, then Phase 3 cost estimates and runs.

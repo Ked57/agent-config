@@ -382,9 +382,10 @@ test('the ts-backend task set and fixture are valid and every hidden test file e
       for (const from of Object.keys(check.copy)) assert.ok(fs.existsSync(path.join(root, 'evals/fixtures/ts-backend', from)), `${task.id}: missing ${from}`);
     }
   }
-  const readme = taskSet.tasks.find((task) => task.id === 'N2-readme').checks.find((check) => check.id === 'endpoints-documented');
-  assert.ok(new RegExp(readme.pattern, 'm').test('POST /api/auth/token\n...\nPOST /api/webhooks/billing'));
-  assert.ok(!new RegExp(readme.pattern, 'm').test('POST /api/auth/token only'));
+  const readme = taskSet.tasks.find((task) => task.id === 'N2-readme').checks.find((check) => check.id === 'readme-endpoints');
+  const endpoints = ['GET /api/health', 'POST /api/auth/token', 'GET /api/me', 'GET /api/projects/{id}/tasks', 'PATCH /api/tasks/:id', 'POST /api/webhooks/billing'];
+  assert.ok(new RegExp(readme.pattern, 'm').test(endpoints.join('\n...\n')));
+  assert.ok(!new RegExp(readme.pattern, 'm').test(endpoints.slice(1).join('\n')));
 });
 
 test('validateTaskSet checks command checks', () => {
