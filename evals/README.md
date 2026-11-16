@@ -297,7 +297,7 @@ at least 80%. Run the gate after changing any hidden test, check or prompt.
 
 **Score gate.** A task whose checks are continuous (`json-score`) rarely fails outright, so its manifest
 can judge by score instead: `"scoreGate": { "referenceMin": 0.9, "untouchedMax": 0.2, "mutantMaxDrop": 0.05 }`.
-A score is the mean of the task's required check scores. Every reference must score at least
+A score is the (weighted) mean of the task's required check scores. Every reference must score at least
 `referenceMin`, the untouched fixture at most `untouchedMax`, and a mutant counts as killed (a known-failing
 solution as failing) when it scores at least `mutantMaxDrop` below the lowest reference. The 80% kill-rate
 rule applies to that count. The gate table prints the scores of the references, the untouched fixture and
@@ -359,6 +359,8 @@ test.
   when a test file fails to load, no test runs, no report is written or the command times out. Failed
   test names go into `detail`. `pass` still needs exit 0 and every test passing. `expect` is ignored.
 - Every check result carries a `score`: the Vitest fraction or the JSON score above, otherwise 1 for a pass and 0 for a fail.
+- `"weight"` (a positive number, default 1) weights a required check in the run score; the run score is the
+  weighted mean of the required check scores (`vue-design` weighs visual 0.4, layout 0.3, behaviour 0.2, a11y 0.1).
 - A task's `files` (`{ "fixture-relative source": "app-relative target" }`, e.g. a spec document) are
   copied into the worked copy before the agent starts, and into the base the diff is taken against, so
   they never count as the agent's change.
@@ -421,7 +423,7 @@ attached as files in the other.
 
 ## What gets measured
 
-The **primary metric** is the run score: the mean `score` of the task's required checks (hidden
+The **primary metric** is the run score: the mean `score` of the task's required checks, weighted by their `weight` (default 1) (hidden
 tests scored by test case where the check uses the Vitest reporter), or 0 when a fixture gate failed or
 the run did not finish. Each run also records `allPass` (every required check and gate passed). Tasks
 with no required checks have no score and are left out of the primary metric; the report counts them.

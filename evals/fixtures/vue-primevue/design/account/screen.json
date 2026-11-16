@@ -1,0 +1,115 @@
+{
+  "screen": "account",
+  "task": "D2-account-settings",
+  "title": "Account settings",
+  "route": "/account",
+  "figma": { "fileKey": "Ac7Rk2Wm9QzT4pLx8NvB3s", "fileName": "Acme-Console-Account-Settings", "pageName": "Account settings" },
+  "frames": [
+    { "id": "desktop", "nodeId": "22-2", "name": "Account settings / Desktop", "label": "desktop", "viewport": { "width": 1440, "height": 900 } },
+    { "id": "mobile", "nodeId": "22-3", "name": "Account settings / Mobile", "label": "mobile", "viewport": { "width": 390, "height": 844 } },
+    {
+      "id": "desktop-unsaved", "nodeId": "22-4", "name": "Account settings / Desktop / Unsaved changes", "label": "state: a field edited, not saved yet",
+      "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "fill": { "role": "textbox", "name": "Job title", "value": "Head of product design" } }]
+    },
+    {
+      "id": "desktop-errors", "nodeId": "22-5", "name": "Account settings / Desktop / Validation errors", "label": "state: saved with an empty first name and an invalid email",
+      "viewport": { "width": 1440, "height": 900 },
+      "steps": [
+        { "fill": { "role": "textbox", "name": "First name", "value": "" } },
+        { "fill": { "role": "textbox", "name": "Email", "value": "maria.kowalski@" } },
+        { "click": { "role": "button", "name": "Save changes" } }
+      ]
+    }
+  ],
+  "layout": {
+    "desktop": [
+      { "id": "title", "role": "heading", "name": "Account settings", "level": 1 },
+      { "id": "subtitle", "text": "Manage your profile", "contains": true },
+      { "id": "profile-title", "role": "heading", "name": "Profile", "level": 2 },
+      { "id": "profile-desc", "text": "Your name and photo", "contains": true },
+      { "id": "avatar", "text": "MK" },
+      { "id": "photo-hint", "text": "JPG or PNG, at most 1 MB." },
+      { "id": "change-photo", "role": "button", "name": "Change photo" },
+      { "id": "first-name-label", "text": "First name" },
+      { "id": "first-name", "role": "textbox", "name": "First name" },
+      { "id": "last-name", "role": "textbox", "name": "Last name" },
+      { "id": "email", "role": "textbox", "name": "Email" },
+      { "id": "verified", "text": "Verified" },
+      { "id": "job-title", "role": "textbox", "name": "Job title" },
+      { "id": "time-zone", "role": "combobox", "name": "Time zone" },
+      { "id": "bio-counter", "text": "/160", "contains": true },
+      { "id": "notifications-title", "role": "heading", "name": "Notifications", "level": 2 },
+      { "id": "col-event", "text": "Event" },
+      { "id": "col-sms", "text": "SMS" },
+      { "id": "row-mentions", "text": "Mentions" },
+      { "id": "row-mentions-desc", "text": "Someone mentions you with @" },
+      { "id": "required", "text": "Required" },
+      { "id": "switch-mentions-sms", "role": "switch", "name": "Mentions: SMS" },
+      { "id": "danger-title", "role": "heading", "name": "Danger zone", "level": 2 },
+      { "id": "transfer", "role": "button", "name": "Transfer" },
+      { "id": "delete", "role": "button", "name": "Delete account" }
+    ],
+    "mobile": [
+      { "id": "title", "role": "heading", "name": "Account settings", "level": 1 },
+      { "id": "profile-title", "role": "heading", "name": "Profile", "level": 2 },
+      { "id": "avatar", "text": "MK" },
+      { "id": "change-photo", "role": "button", "name": "Change photo" },
+      { "id": "first-name", "role": "textbox", "name": "First name" },
+      { "id": "last-name", "role": "textbox", "name": "Last name" },
+      { "id": "email", "role": "textbox", "name": "Email" },
+      { "id": "notifications-title", "role": "heading", "name": "Notifications", "level": 2 },
+      { "id": "row-mentions", "text": "Mentions" },
+      { "id": "switch-mentions-sms", "role": "switch", "name": "Mentions: SMS" },
+      { "id": "danger-title", "role": "heading", "name": "Danger zone", "level": 2 },
+      { "id": "delete", "role": "button", "name": "Delete account" }
+    ],
+    "desktop-unsaved": [
+      { "id": "job-title", "role": "textbox", "name": "Job title" },
+      { "id": "bar-text", "text": "You have unsaved changes" },
+      { "id": "discard", "role": "button", "name": "Discard" },
+      { "id": "save", "role": "button", "name": "Save changes" },
+      { "id": "delete", "role": "button", "name": "Delete account" }
+    ],
+    "desktop-errors": [
+      { "id": "summary", "text": "Fix 2 fields", "contains": true },
+      { "id": "first-name", "role": "textbox", "name": "First name" },
+      { "id": "error-first-name", "text": "First name is required." },
+      { "id": "last-name", "role": "textbox", "name": "Last name" },
+      { "id": "email", "role": "textbox", "name": "Email" },
+      { "id": "error-email", "text": "Enter a valid email address." },
+      { "id": "job-title", "role": "textbox", "name": "Job title" },
+      { "id": "save", "role": "button", "name": "Save changes" }
+    ]
+  },
+  "behaviour": [
+    { "id": "clean-form-has-no-bar", "frame": "desktop", "expect": [{ "hiddenText": "You have unsaved changes" }] },
+    { "id": "edit-shows-unsaved-bar", "frame": "desktop-unsaved", "expect": [{ "visibleText": "You have unsaved changes" }] },
+    {
+      "id": "save-validates", "frame": "desktop-errors",
+      "expect": [{ "visibleText": "First name is required." }, { "visibleText": "Enter a valid email address." }, { "visibleText": "Fix 2 fields", "contains": true }, { "hiddenText": "Last name is required." }]
+    },
+    {
+      "id": "discard-reverts", "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "fill": { "role": "textbox", "name": "Job title", "value": "Head of product design" } }, { "click": { "role": "button", "name": "Discard" } }],
+      "expect": [{ "hiddenText": "You have unsaved changes" }]
+    },
+    {
+      "id": "fix-and-save", "viewport": { "width": 1440, "height": 900 },
+      "steps": [
+        { "fill": { "role": "textbox", "name": "First name", "value": "" } },
+        { "click": { "role": "button", "name": "Save changes" } },
+        { "fill": { "role": "textbox", "name": "First name", "value": "Marta" } },
+        { "click": { "role": "button", "name": "Save changes" } }
+      ],
+      "expect": [{ "hiddenText": "First name is required." }, { "hiddenText": "You have unsaved changes" }, { "visibleText": "Marta Kowalski" }]
+    },
+    {
+      "id": "switch-marks-unsaved", "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "switch", "name": "Mentions: SMS" } }],
+      "expect": [{ "visibleText": "You have unsaved changes" }]
+    },
+    { "id": "desktop-name-fields-side-by-side", "frame": "desktop", "expect": [{ "sameRow": ["First name", "Last name"] }] },
+    { "id": "mobile-stacks-without-overflow", "frame": "mobile", "expect": [{ "noHorizontalOverflow": true }, { "stacked": ["First name", "Last name"] }] }
+  ]
+}

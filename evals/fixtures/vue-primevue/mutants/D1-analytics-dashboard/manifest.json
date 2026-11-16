@@ -1,6 +1,6 @@
 {
   "task": "D1-analytics-dashboard",
-  "scoreGate": { "referenceMin": 0.95, "untouchedMax": 0.1, "mutantMaxDrop": 0.015 },
+  "scoreGate": { "referenceMin": 0.95, "untouchedMax": 0.1, "mutantMaxDrop": 0.05 },
   "references": [
     { "file": "reference.patch", "source": "hand-built reference design (R3a); the mockups, layout.json and baselines are exported from it" }
   ],

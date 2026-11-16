@@ -17,26 +17,37 @@ design/
 
 ## Metric
 
-A task scores the mean of four `json-score` checks (`visual`, `layout`, `behaviour`, `a11y`), each in 0..1.
+A task scores the weighted mean of four `json-score` checks, each in 0..1 (`weight` on the check):
+**combined = 0.4 visual + 0.3 layout + 0.2 behaviour + 0.1 a11y.**
 Fixture gates (lint, typecheck, test, build) zero the run as for every task. One render pass (cached by a hash
 of the app, scorer and screen data) serves all four checks. Every frame opens in a fresh Chromium context:
 the frame's viewport at deviceScaleFactor 1, `?query`, fixed clock (2026-11-16T12:00Z), UTC, en-US, reduced
 motion, animations, transitions and the caret off, fonts and a quiet DOM awaited, viewport grown to the page
-height (a full-page screenshot would otherwise resize it and close open overlays), then the frame's state steps.
+height (a full-page screenshot would otherwise resize it and close open overlays), then the frame's state steps,
+then the viewport is grown again if the state made the page taller (sticky and fixed bars end up at the page end).
 A frame whose steps fail scores 0 on visual, layout and a11y, and its behaviour tests fail.
 
+Visual and layout judge at design-review precision (tolerances in `scorer/visual.mjs` `VISUAL` and
+`scorer/layout.mjs` `LAYOUT`, tuned on D1: the reference 1.0, everything 8 px off ≈ 0.26 visual, a weak
+real solution ≈ 0.75 combined, a lazy one ≈ 0.45). `ramp(e; a, b)` is 1 for an error `e ≤ a`, linear to 0 at `b`.
+
 - **visual** (per frame, mean over all frames, equal weights): render and mockup are laid on the mockup's width
-  and the taller height (padded with the page background). Every 32 px tile with content in either image is
-  matched to its best position in the other within ±24 px horizontally and ±48 px vertically, then scored as
-  mean SSIM over 8 × 8 luminance windows there, discounted by the move (half credit at 64 px). The colour term
-  is 1 − mean ΔE76/20 of aligned 8 px blocks that are not background. `sim = (ssim + colour) / 2 × heightRatio`,
-  and `score = clamp((sim − base) / (1 − base))`, where `base` is the untouched fixture's `sim` for that frame
+  and the taller height (padded with the page background). Every 32 px tile with content in either image
+  (luminance variance > 4, or a flat tile whose colour is > 3 ΔE76 from the page background) is matched to
+  its best position in the other within ±8 px horizontally and ±16 px vertically. Tile credit =
+  structure × colour × shift, where structure = `ramp` of mean SSIM over 8 × 8 luminance windows (0 at 0.80,
+  full at 0.97), colour = 1 − `ramp`(worst ΔE76 of the aligned 8 px sub-blocks; full ≤ 2, 0 at 8) and shift =
+  1 at ≤ 2 px, down to ½ at 16 px. `sim` = mean tile credit × heightRatio, and
+  `score = clamp((sim − base) / (1 − base))`, where `base` is the untouched fixture's `sim` for that frame
   (`baselines.json`), so "nothing built" scores 0 and the mockup itself 1.
 - **layout** (per frame, mean over frames): key elements from `screen.json` `layout`, located by ARIA role and
-  accessible name or by visible text, against the reference's boxes in `layout.json`. Element credit is the
-  mean of position (top-left within 16 px, linearly to 0 at 48 px), size (within max(16 px, 5%), to 0 at 3×)
-  and type (font size within 1 px, to 0 at 3 px; weight 100 off = half). Frame score = 0.8 × mean element
-  credit (missing = 0) + 0.2 × reading-order agreement × share found.
+  accessible name or by visible text, against the reference's elements in `layout.json`. Element credit =
+  mean(position, size) × style. Position = `ramp`(worse of |dx|, |dy| of the top-left corner; 4 px, 24 px);
+  size = the worse of width and height, `ramp`((|error| − 2 px) / reference; 4 %, 15 %). Style is the
+  product of: font size `ramp`(0, 2 px), weight `ramp`(0, 300), line height `ramp`(1, 6 px), text colour,
+  background (first opaque one up the tree) and border colour each `ramp`(ΔE76; 3, 15) (a border on one side
+  only = 0), corner radius `ramp`(1, 6 px) and padding `ramp`(Σ|error| of the four sides; 2, 12 px). Frame score
+  = 0.8 × mean element credit (missing = 0) + 0.2 × reading-order agreement × share found.
 - **behaviour**: Playwright expectations in `screen.json` `behaviour` (visible / hidden text, one row, stacked,
   no horizontal overflow), on a frame's state or their own steps. Score = passed / total.
 - **a11y**: axe-core 4.14 (WCAG 2.0/2.1 A and AA rules) on every frame's state. Frame score = (1 − Σ penalty per
@@ -45,7 +56,8 @@ A frame whose steps fail scores 0 on visual, layout and a11y, and its behaviour 
 
 State steps and locators are implementation-agnostic: `{ "click": { "role": "button", "name": "Row actions",
 "nth": 0 } }`, `{ "choose": { "control": "Date range", "option": "Last 7 days" } }` (works with a native select,
-a combobox or listbox that opens options, or a segmented control), `{ "text": "…" }` locators match whole
+a combobox or listbox that opens options, or a segmented control), `{ "fill": { "role": "textbox", "name": "Email",
+"value": "" } }` (replaces a text field's value), `{ "text": "…" }` locators match whole
 visible text (`"contains": true` for substrings), accessible names match from the start, case-insensitively.
 When a name is not visible in the design, the task prompt states it in one neutral line.
 

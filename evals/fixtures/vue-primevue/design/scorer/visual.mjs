@@ -3,22 +3,19 @@
 // Plain SSIM punishes a section that sits 8 px lower as hard as a missing one, because every window
 // after the shift compares misaligned pixels. So the comparison is tile-wise and shift-tolerant: each
 // 32 px tile with content (in either image) is matched to the best spot in the other image within a
-// search window, scored there (SSIM over 8 x 8 windows plus an aligned colour term), and discounted by
-// how far it had to move.
+// small search window and judged there at design-review precision: its credit is the product of a
+// structure credit (SSIM over 8 x 8 windows), a colour credit (worst aligned 8 px sub-block ΔE) and a
+// shift credit (how far it had to move).
 
 const TILE = 32;
-// Tunable terms (see ../README.md "Metric" for the values and why).
+// Tolerances (see ../README.md "Metric"; tuned on the D1 mutants and a real solution).
 export const VISUAL = {
-  searchX: 24, // px searched left and right
-  searchY: 48, // px searched up and down (vertical drift accumulates down a page)
-  shiftFull: 64, // a tile moved this far keeps half its credit (linear from 1 at 0 px)
-  deltaFull: 20, // ΔE at which a colour sub-block counts as completely wrong
-  colourWeight: 1, // weight of the colour term against the structure term (1)
-  power: 1, // normalised score is raised to this power
-  mode: 'mean', // 'mean': (ssim + w colour) / (1 + w); 'tile': mean per-tile credit (structure x colour x shift)
-  ssimRamp: [0.8, 0.97], // tile mode: tile SSIM giving no credit, full credit
-  deltaRamp: [3, 12], // tile mode: worst sub-block ΔE giving full credit, no credit
-  shiftRamp: [2, 16] // tile mode: shift (px) with full credit, and where it is down to half credit
+  searchX: 8, // px searched left and right
+  searchY: 16, // px searched up and down
+  ssimRamp: [0.8, 0.97], // tile SSIM giving no credit, full credit
+  deltaRamp: [2, 8], // worst sub-block ΔE76 giving full credit, no credit
+  shiftRamp: [2, 16], // shift (px) with full credit, and where it is down to half credit
+  flatColour: 3 // a flat tile still counts when its mean colour is this ΔE76 from the page background
 };
 const rampUp = (value, [zero, full]) => Math.min(1, Math.max(0, (value - zero) / (full - zero)));
 const COARSE = 4; // coarse search step, refined to 1 px around the best coarse offset
@@ -119,7 +116,7 @@ const meanLab = (P, x, y) => {
   return lab(boxSum(P.red, P.stride, x, y, SUB, SUB) / n, boxSum(P.green, P.stride, x, y, SUB, SUB) / n, boxSum(P.blue, P.stride, x, y, SUB, SUB) / n);
 };
 
-/** Scores A's content tile at (x, y) against its best match in B: `{ structure, colourSum, colourCount }`. */
+/** Scores A's content tile at (x, y) against its best match in B: `{ structureCredit, colourCredit, credit }`. */
 function scoreTile(A, x, y, B, background) {
   const { dx, dy } = bestOffset(A, x, y, B);
   const bx = x + dx;
@@ -132,35 +129,28 @@ function scoreTile(A, x, y, B, background) {
       windows += 1;
     }
   }
-  const structure = Math.min(1, Math.max(0, total / windows)) * (1 - 0.5 * Math.min(1, Math.hypot(dx, dy) / VISUAL.shiftFull));
-  let colourSum = 0;
-  let colourCount = 0;
   let worst = 0;
   for (let sy = 0; sy < TILE; sy += SUB) {
     for (let sx = 0; sx < TILE; sx += SUB) {
       const a = meanLab(A, x + sx, y + sy);
       const b = meanLab(B, bx + sx, by + sy);
       if (deltaE(a, background) <= CONTENT_DELTA && deltaE(b, background) <= CONTENT_DELTA) continue;
-      colourSum += Math.min(deltaE(a, b) / VISUAL.deltaFull, 1);
       worst = Math.max(worst, deltaE(a, b));
-      colourCount += 1;
     }
   }
-  const shift = Math.hypot(dx, dy);
-  const ssim = Math.min(1, Math.max(0, total / windows));
-  const structureCredit = rampUp(ssim, VISUAL.ssimRamp);
+  const structureCredit = rampUp(total / windows, VISUAL.ssimRamp);
   const colourCredit = 1 - rampUp(worst, VISUAL.deltaRamp);
-  const shiftCredit = 1 - 0.5 * rampUp(shift, VISUAL.shiftRamp);
-  return { structure, colourSum, colourCount, structureCredit, colourCredit, credit: structureCredit * colourCredit * shiftCredit };
+  const shiftCredit = 1 - 0.5 * rampUp(Math.hypot(dx, dy), VISUAL.shiftRamp);
+  return { structureCredit, colourCredit, credit: structureCredit * colourCredit * shiftCredit };
 }
 
 /**
  * Raw similarity of `render` to `mockup` (pngjs images). Both are laid on a canvas of the mockup's
  * width and the taller height, filled with the mockup's background (its bottom-left pixel); `masks`
  * (`[x, y, width, height]` in mockup pixels) are painted with the background in both. Every 32 px tile
- * with content in either image is matched in the other (see the file comment). `ssim` is the mean tile
- * structure score, `colour` is 1 - the mean ΔE / 20 of aligned 8 px sub-blocks that are not background,
- * and `sim = (ssim + colour) / 2 x heightRatio` (shorter page height / taller page height).
+ * with content (luminance variance, or a colour away from the page background) in either image is
+ * matched in the other (see the file comment). `sim` = mean tile credit x heightRatio (shorter page
+ * height / taller page height); `ssim` and `colour` are the mean structure and colour credits (diagnostics).
  */
 export function similarity(mockup, render, masks = []) {
   const bg = [...mockup.data.subarray(((mockup.height - 1) * mockup.width) * 4, ((mockup.height - 1) * mockup.width) * 4 + 4)];
@@ -178,10 +168,7 @@ export function similarity(mockup, render, masks = []) {
   const A = prepare(a);
   const B = prepare(b);
   const background = lab(bg[0], bg[1], bg[2]);
-  let structure = 0;
   let tiles = 0;
-  let colourSum = 0;
-  let colourCount = 0;
   let credit = 0;
   let structureCredit = 0;
   let colourCredit = 0;
@@ -190,24 +177,20 @@ export function similarity(mockup, render, masks = []) {
       for (let x = 0; x + TILE <= mockup.width; x += TILE) {
         const n = TILE * TILE;
         const mean = boxSum(from.sum, from.stride, x, y, TILE, TILE) / n;
-        if (boxSum(from.square, from.stride, x, y, TILE, TILE) / n - mean * mean <= FLAT) continue;
+        const flat = boxSum(from.square, from.stride, x, y, TILE, TILE) / n - mean * mean <= FLAT;
+        // A flat tile counts too when it is coloured (a filled area, a tinted band), not page background.
+        if (flat && (deltaE(lab(boxSum(from.red, from.stride, x, y, TILE, TILE) / n, boxSum(from.green, from.stride, x, y, TILE, TILE) / n, boxSum(from.blue, from.stride, x, y, TILE, TILE) / n), background) <= VISUAL.flatColour)) continue;
         const tile = scoreTile(from, x, y, to, background);
-        structure += tile.structure;
         tiles += 1;
-        colourSum += tile.colourSum;
-        colourCount += tile.colourCount;
         credit += tile.credit;
         structureCredit += tile.structureCredit;
         colourCredit += tile.colourCredit;
       }
     }
   }
-  const ssim = tiles ? structure / tiles : 1;
-  const colour = colourCount ? 1 - colourSum / colourCount : 1;
   const heightRatio = Math.min(mockup.height, render.height) / Math.max(mockup.height, render.height);
-  if (VISUAL.mode === 'tile') return { sim: (tiles ? credit / tiles : 1) * heightRatio, ssim: tiles ? structureCredit / tiles : 1, colour: tiles ? colourCredit / tiles : 1, heightRatio };
-  return { sim: ((ssim + VISUAL.colourWeight * colour) / (1 + VISUAL.colourWeight)) * heightRatio, ssim, colour, heightRatio };
+  return { sim: (tiles ? credit / tiles : 1) * heightRatio, ssim: tiles ? structureCredit / tiles : 1, colour: tiles ? colourCredit / tiles : 1, heightRatio };
 }
 
 /** Baseline-normalised score: 0 at the untouched app's similarity (`base`), 1 at identical. */
-export const normalise = (sim, base) => Math.min(1, Math.max(0, (sim - base) / (1 - base))) ** VISUAL.power;
+export const normalise = (sim, base) => Math.min(1, Math.max(0, (sim - base) / (1 - base)));

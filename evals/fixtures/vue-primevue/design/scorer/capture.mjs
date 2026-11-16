@@ -133,11 +133,15 @@ async function choose(page, { control, option }) {
   throw new Error(`no control labelled "${control}"`);
 }
 
-/** Runs state steps: `{ click: { role, name, nth } | { text } }` or `{ choose: { control, option } }`. */
+/**
+ * Runs state steps: `{ click: { role, name, nth } | { text } }`, `{ choose: { control, option } }` or
+ * `{ fill: { role, name, value } }` (types into a text field, replacing its value; "" clears it).
+ */
 export async function applySteps(page, steps = []) {
   for (const step of steps) {
     if (step.click) await locate(page, step.click).click({ timeout: 5000 });
     else if (step.choose) await choose(page, step.choose);
+    else if (step.fill) await locate(page, step.fill).fill(step.fill.value, { timeout: 5000 });
     else throw new Error(`unknown step ${JSON.stringify(step)}`);
     await settle(page);
   }
@@ -171,12 +175,19 @@ export async function openFrame(browser, base, route, frame) {
     await settle(page);
     // Grow the viewport to the page before any step: a full-page screenshot resizes the viewport, and
     // overlays (menus, select panels) close on resize, so state frames would lose their popup.
-    const height = await page.evaluate(() => document.documentElement.scrollHeight);
-    if (height > frame.viewport.height) {
-      await page.setViewportSize({ width: frame.viewport.width, height });
-      await settle(page);
-    }
+    const grow = async () => {
+      const { height } = page.viewportSize();
+      const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+      if (scrollHeight > height) {
+        await page.setViewportSize({ width: frame.viewport.width, height: scrollHeight });
+        await settle(page);
+      }
+    };
+    await grow();
     await applySteps(page, frame.steps);
+    // A state that made the page taller (validation messages, a sticky bar) is grown into again, so
+    // sticky and fixed bars sit at the end of the page as on a frame of the whole page.
+    if (frame.steps?.length) await grow();
   } catch (caught) {
     error = String(caught?.message ?? caught).split('\n')[0];
   }

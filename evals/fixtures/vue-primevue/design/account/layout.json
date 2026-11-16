@@ -1,0 +1,1447 @@
+{
+  "generatedFrom": "mutants/D2-account-settings/reference.patch",
+  "frames": {
+    "desktop": {
+      "title": {
+        "x": 160,
+        "y": 109,
+        "width": 1120,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "subtitle": {
+        "x": 160,
+        "y": 145,
+        "width": 1120,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "profile-title": {
+        "x": 160,
+        "y": 197,
+        "width": 256,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "profile-desc": {
+        "x": 160,
+        "y": 225,
+        "width": 256,
+        "height": 40,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "avatar": {
+        "x": 505,
+        "y": 240,
+        "width": 33,
+        "height": 28,
+        "fontSize": 20,
+        "fontWeight": 600,
+        "lineHeight": 28,
+        "color": [
+          6,
+          95,
+          70
+        ],
+        "background": [
+          209,
+          250,
+          229
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "photo-hint": {
+        "x": 569,
+        "y": 254,
+        "width": 470,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "change-photo": {
+        "x": 1055,
+        "y": 237,
+        "width": 116,
+        "height": 35,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 21,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          6,
+          10,
+          6,
+          10
+        ],
+        "border": [
+          226,
+          232,
+          240
+        ]
+      },
+      "first-name-label": {
+        "x": 489,
+        "y": 335,
+        "width": 375,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "first-name": {
+        "x": 489,
+        "y": 361,
+        "width": 375,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          203,
+          213,
+          225
+        ]
+      },
+      "last-name": {
+        "x": 880,
+        "y": 361,
+        "width": 375,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          203,
+          213,
+          225
+        ]
+      },
+      "email": {
+        "x": 489,
+        "y": 449,
+        "width": 766,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          203,
+          213,
+          225
+        ]
+      },
+      "verified": {
+        "x": 1201,
+        "y": 425,
+        "width": 46,
+        "height": 16,
+        "fontSize": 12,
+        "fontWeight": 700,
+        "lineHeight": 16,
+        "color": [
+          21,
+          128,
+          61
+        ],
+        "background": [
+          220,
+          252,
+          231
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "job-title": {
+        "x": 489,
+        "y": 537,
+        "width": 375,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          203,
+          213,
+          225
+        ]
+      },
+      "time-zone": {
+        "x": 881,
+        "y": 538,
+        "width": 333,
+        "height": 40,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": null
+      },
+      "bio-counter": {
+        "x": 1205,
+        "y": 719,
+        "width": 50,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "notifications-title": {
+        "x": 160,
+        "y": 829,
+        "width": 256,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "col-event": {
+        "x": 489,
+        "y": 842,
+        "width": 526,
+        "height": 16,
+        "fontSize": 12,
+        "fontWeight": 500,
+        "lineHeight": 16,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "col-sms": {
+        "x": 1175,
+        "y": 842,
+        "width": 80,
+        "height": 16,
+        "fontSize": 12,
+        "fontWeight": 500,
+        "lineHeight": 16,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "row-mentions": {
+        "x": 489,
+        "y": 960,
+        "width": 526,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "row-mentions-desc": {
+        "x": 489,
+        "y": 980,
+        "width": 526,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "required": {
+        "x": 600,
+        "y": 1181,
+        "width": 52,
+        "height": 16,
+        "fontSize": 12,
+        "fontWeight": 700,
+        "lineHeight": 16,
+        "color": [
+          71,
+          85,
+          105
+        ],
+        "background": [
+          241,
+          245,
+          249
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "switch-mentions-sms": {
+        "x": 1195,
+        "y": 968,
+        "width": 40,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 30,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "danger-title": {
+        "x": 160,
+        "y": 1301,
+        "width": 256,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          193,
+          0,
+          7
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "transfer": {
+        "x": 1165,
+        "y": 1327,
+        "width": 90,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          226,
+          232,
+          240
+        ]
+      },
+      "delete": {
+        "x": 1090,
+        "y": 1420,
+        "width": 165,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          193,
+          0,
+          7
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          193,
+          0,
+          7
+        ]
+      }
+    },
+    "mobile": {
+      "title": {
+        "x": 16,
+        "y": 309,
+        "width": 358,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "profile-title": {
+        "x": 16,
+        "y": 417,
+        "width": 358,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "avatar": {
+        "x": 57,
+        "y": 544,
+        "width": 33,
+        "height": 28,
+        "fontSize": 20,
+        "fontWeight": 600,
+        "lineHeight": 28,
+        "color": [
+          6,
+          95,
+          70
+        ],
+        "background": [
+          209,
+          250,
+          229
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "change-photo": {
+        "x": 41,
+        "y": 606,
+        "width": 116,
+        "height": 35,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 21,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          6,
+          10,
+          6,
+          10
+        ],
+        "border": [
+          226,
+          232,
+          240
+        ]
+      },
+      "first-name": {
+        "x": 41,
+        "y": 716,
+        "width": 308,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          203,
+          213,
+          225
+        ]
+      },
+      "last-name": {
+        "x": 41,
+        "y": 804,
+        "width": 308,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          203,
+          213,
+          225
+        ]
+      },
+      "email": {
+        "x": 41,
+        "y": 892,
+        "width": 308,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          203,
+          213,
+          225
+        ]
+      },
+      "notifications-title": {
+        "x": 16,
+        "y": 1360,
+        "width": 358,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "row-mentions": {
+        "x": 41,
+        "y": 1570,
+        "width": 308,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "switch-mentions-sms": {
+        "x": 253,
+        "y": 1622,
+        "width": 40,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 30,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "danger-title": {
+        "x": 16,
+        "y": 2055,
+        "width": 358,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          193,
+          0,
+          7
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "delete": {
+        "x": 41,
+        "y": 2415,
+        "width": 308,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          193,
+          0,
+          7
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          193,
+          0,
+          7
+        ]
+      }
+    },
+    "desktop-unsaved": {
+      "job-title": {
+        "x": 489,
+        "y": 537,
+        "width": 375,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          16,
+          185,
+          129
+        ]
+      },
+      "bar-text": {
+        "x": 476,
+        "y": 1538,
+        "width": 309,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          15,
+          23,
+          42
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "discard": {
+        "x": 797,
+        "y": 1530,
+        "width": 73,
+        "height": 35,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 21,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          15,
+          23,
+          42
+        ],
+        "radius": 6,
+        "padding": [
+          6,
+          10,
+          6,
+          10
+        ],
+        "border": [
+          0,
+          0,
+          0
+        ]
+      },
+      "save": {
+        "x": 882,
+        "y": 1530,
+        "width": 116,
+        "height": 35,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 21,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          6,
+          10,
+          6,
+          10
+        ],
+        "border": [
+          255,
+          255,
+          255
+        ]
+      },
+      "delete": {
+        "x": 1090,
+        "y": 1420,
+        "width": 165,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          193,
+          0,
+          7
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          193,
+          0,
+          7
+        ]
+      }
+    },
+    "desktop-errors": {
+      "summary": {
+        "x": 527,
+        "y": 343,
+        "width": 255,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 500,
+        "lineHeight": 24,
+        "color": [
+          159,
+          7,
+          18
+        ],
+        "background": [
+          254,
+          242,
+          242
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "first-name": {
+        "x": 489,
+        "y": 421,
+        "width": 375,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          248,
+          113,
+          113
+        ]
+      },
+      "error-first-name": {
+        "x": 489,
+        "y": 469,
+        "width": 375,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          231,
+          0,
+          11
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "last-name": {
+        "x": 880,
+        "y": 421,
+        "width": 375,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          203,
+          213,
+          225
+        ]
+      },
+      "email": {
+        "x": 489,
+        "y": 535,
+        "width": 766,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          248,
+          113,
+          113
+        ]
+      },
+      "error-email": {
+        "x": 489,
+        "y": 583,
+        "width": 766,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          231,
+          0,
+          11
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "job-title": {
+        "x": 489,
+        "y": 649,
+        "width": 375,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          203,
+          213,
+          225
+        ]
+      },
+      "save": {
+        "x": 882,
+        "y": 1642,
+        "width": 116,
+        "height": 35,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 21,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          6,
+          10,
+          6,
+          10
+        ],
+        "border": [
+          255,
+          255,
+          255
+        ]
+      }
+    }
+  }
+}

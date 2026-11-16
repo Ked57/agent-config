@@ -39,5 +39,40 @@
         ]
       }
     ]
+  },
+  "Ac7Rk2Wm9QzT4pLx8NvB3s": {
+    "name": "Acme-Console-Account-Settings",
+    "pages": [
+      {
+        "id": "0:1",
+        "name": "Account settings",
+        "frames": [
+          {
+            "nodeId": "22:2",
+            "name": "Account settings / Desktop",
+            "bundle": "account/desktop.json",
+            "screenshot": "account/desktop.png"
+          },
+          {
+            "nodeId": "22:3",
+            "name": "Account settings / Mobile",
+            "bundle": "account/mobile.json",
+            "screenshot": "account/mobile.png"
+          },
+          {
+            "nodeId": "22:4",
+            "name": "Account settings / Desktop / Unsaved changes",
+            "bundle": "account/desktop-unsaved.json",
+            "screenshot": "account/desktop-unsaved.png"
+          },
+          {
+            "nodeId": "22:5",
+            "name": "Account settings / Desktop / Validation errors",
+            "bundle": "account/desktop-errors.json",
+            "screenshot": "account/desktop-errors.png"
+          }
+        ]
+      }
+    ]
   }
 }

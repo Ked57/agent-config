@@ -82,20 +82,18 @@ export const LAYOUT = {
   position: [4, 24], // px of the worse of |dx|, |dy| at the top-left corner: full credit, no credit
   size: [0.04, 0.15], // relative width or height error (at least 2 px counts as full)
   fontSize: [0, 2], // px
-  fontWeight: [0, 200],
+  fontWeight: [0, 300],
   lineHeight: [1, 6], // px
   colour: [3, 15], // ΔE76 (text colour, background, border colour)
   radius: [1, 6], // px
-  padding: [2, 12], // px, summed over the four sides
-  combine: 'mean' // 'mean': element = mean(position, size, mean style); 'product': mean(position, size) x product of style credits
+  padding: [2, 12] // px, summed over the four sides
 };
 
-/** Style credit: the mean of font size, weight, line height, text colour, background, radius, padding and border colour. */
+/**
+ * Style credit: the product of the font size, weight, line height, text colour, background, radius,
+ * padding and border colour credits (an element is right only when every property is).
+ */
 function styleCredit(want, got) {
-  if (want.color === undefined) {
-    // Older layout.json without styles: font size and weight only.
-    return (ramp(Math.abs(got.fontSize - want.fontSize), ...LAYOUT.fontSize) + ramp(Math.abs(got.fontWeight - want.fontWeight), ...LAYOUT.fontWeight)) / 2;
-  }
   const parts = [
     ramp(Math.abs(got.fontSize - want.fontSize), ...LAYOUT.fontSize),
     ramp(Math.abs(got.fontWeight - want.fontWeight), ...LAYOUT.fontWeight),
@@ -106,7 +104,7 @@ function styleCredit(want, got) {
     ramp(got.padding.reduce((sum, value, index) => sum + Math.abs(value - want.padding[index]), 0), ...LAYOUT.padding),
     want.border || got.border ? (want.border && got.border ? ramp(deltaE(got.border, want.border), ...LAYOUT.colour) : 0) : 1
   ];
-  return LAYOUT.combine === 'product' ? parts.reduce((product, value) => product * value, 1) : parts.reduce((sum, value) => sum + value, 0) / parts.length;
+  return parts.reduce((product, value) => product * value, 1);
 }
 
 // Reading order: boxes that overlap vertically by at least half the shorter one share a row (left to right).
@@ -114,8 +112,8 @@ const before = (a, b) => (Math.min(a.y + a.height, b.y + b.height) - Math.max(a.
 
 /**
  * Scores measured elements against the reference's (both `{ id: element | null }`): per element, 0 when
- * missing, else the mean of position credit (top-left corner), size credit (the worse of width and
- * height) and style credit (`styleCredit`); the frame score is 0.8 x the element mean + 0.2 x the order
+ * missing, else the mean of position credit (top-left corner) and size credit (the worse of width and
+ * height), times the style credit (`styleCredit`); the frame score is 0.8 x the element mean + 0.2 x the order
  * score (share of neighbouring pairs, in reference reading order, that keep their order) x the share of
  * elements found.
  */
@@ -132,7 +130,7 @@ export function scoreLayout(reference, measured) {
     }
     const position = ramp(Math.max(Math.abs(got.x - want.x), Math.abs(got.y - want.y)), ...LAYOUT.position);
     const size = Math.min(sizeCredit(got.width, want.width), sizeCredit(got.height, want.height));
-    elements[id] = LAYOUT.combine === 'product' ? ((position + size) / 2) * styleCredit(want, got) : (position + size + styleCredit(want, got)) / 3;
+    elements[id] = ((position + size) / 2) * styleCredit(want, got);
   }
   const found = ids.filter((id) => measured[id]);
   const inOrder = [...found].sort((a, b) => before(reference[a], reference[b]));

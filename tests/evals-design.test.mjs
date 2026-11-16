@@ -158,31 +158,39 @@ const page = (shiftX = 0, shiftY = 0, colour = [16, 185, 129, 255], height = 256
   return stripe ? colour : inCard ? [255, 255, 255, 255] : [248, 250, 252, 255];
 });
 
-test('visual similarity: identical is 1, small shifts cost little, wrong colours and missing content cost more', () => {
+test('visual similarity: identical is 1, a 2 px shift is free, larger shifts cost, wrong colours or missing content cost everything', () => {
   const mockup = page();
   assert.equal(similarity(mockup, page()).sim, 1);
+  assert.equal(similarity(mockup, page(2, 0)).sim, 1);
   const shifted = similarity(mockup, page(8, 8)).sim;
   const recoloured = similarity(mockup, page(0, 0, [99, 102, 241, 255])).sim;
   const empty = similarity(mockup, image(256, 256, () => [248, 250, 252, 255])).sim;
-  assert.ok(shifted > 0.85 && shifted < 1, `shifted ${shifted}`);
-  assert.ok(recoloured < 0.95, `recoloured ${recoloured}`);
-  assert.ok(empty < shifted && empty < recoloured, `empty ${empty}`);
+  assert.ok(shifted > 0.6 && shifted < 0.9, `shifted ${shifted}`);
+  assert.ok(recoloured < 0.5, `recoloured ${recoloured}`);
+  assert.ok(empty < shifted, `empty ${empty}`);
   assert.ok(similarity(mockup, page(0, 0, undefined, 512)).heightRatio === 0.5);
   assert.equal(normalise(empty, empty), 0);
   assert.equal(normalise(1, empty), 1);
   assert.equal(normalise(0, 0.5), 0);
 });
 
-test('layout score: position, size and type credit per element, order and coverage per frame', () => {
-  const box = (x, y, extra = {}) => ({ x, y, width: 100, height: 20, fontSize: 14, fontWeight: 400, ...extra });
+test('layout score: position and size credit times style credit per element, order and coverage per frame', () => {
+  const box = (x, y, extra = {}) => ({ x, y, width: 100, height: 20, fontSize: 14, fontWeight: 400, lineHeight: 20, color: [15, 23, 42], background: [255, 255, 255], radius: 0, padding: [0, 0, 0, 0], border: null, ...extra });
   const reference = { a: box(0, 0), b: box(0, 40), c: box(200, 40) };
   assert.equal(scoreLayout(reference, reference).score, 1);
-  const near = scoreLayout(reference, { a: box(10, 0), b: box(0, 50), c: box(200, 40) });
-  assert.equal(near.score, 1);
-  const far = scoreLayout(reference, { a: box(0, 0), b: box(0, 88), c: box(200, 40) });
-  assert.ok(far.elements.b < 0.7 && far.elements.b > 0.6, `b ${far.elements.b}`);
-  const bold = scoreLayout(reference, { ...reference, a: box(0, 0, { fontWeight: 600 }) });
-  assert.ok(Math.abs(bold.elements.a - 5 / 6) < 1e-9);
+  // Within 4 px and 4 % is exact enough.
+  assert.equal(scoreLayout(reference, { a: box(4, 0), b: box(0, 43, { width: 104 }), c: box(200, 40) }).score, 1);
+  // 14 px off: half the position credit; 24 px off: none.
+  const off = scoreLayout(reference, { a: box(0, 0), b: box(0, 54), c: box(200, 64) });
+  assert.equal(off.elements.b, 0.75);
+  assert.equal(off.elements.c, 0.5);
+  // Style is multiplicative: one weight step (100) off keeps two thirds, a wrong text colour or background none.
+  const styled = scoreLayout(reference, { a: box(0, 0, { fontWeight: 500 }), b: box(0, 40, { color: [2, 132, 199] }), c: box(200, 40, { background: [209, 250, 229] }) });
+  assert.ok(Math.abs(styled.elements.a - 2 / 3) < 1e-9, `a ${styled.elements.a}`);
+  assert.equal(styled.elements.b, 0);
+  assert.equal(styled.elements.c, 0);
+  // A border the reference does not have, or a missing one, costs the whole style credit.
+  assert.equal(scoreLayout(reference, { ...reference, a: box(0, 0, { border: [226, 232, 240] }) }).elements.a, 0);
   const missing = scoreLayout(reference, { a: reference.a, b: null, c: reference.c });
   assert.equal(missing.coverage, 2 / 3);
   const swapped = scoreLayout(reference, { a: box(0, 80), b: box(0, 40), c: box(200, 40) });
