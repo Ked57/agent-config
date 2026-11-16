@@ -207,3 +207,38 @@ and the run is excluded and reported.
 - Open gaps: tasks are too easy for the primary metric (see `NEXT.md` step 0); no React fixture; C5 has
   no browser check; K6 and K7 not built; B11 m7, S4 m11 and C5 m6 mutants survive; the combined report
   does not repeat the source report's "Rechecked" line; the sandbox lives in a service-private `/var/tmp`.
+
+# Round 2 (started 2026-11-16 15:35 UTC)
+
+Brief: fix two skill bugs, stop re-running the bare arm and add arm result reuse, a `vue-design`
+mockup task set with a continuous visual score, harder backend tasks, then three comparisons.
+Rules: lead plans and reviews; **one** `claude-opus-5-5` subagent at a time; eval concurrency 1;
+budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete when the round is done).
+
+## Round 2 status
+
+| # | Item | State |
+|---|---|---|
+| R1 | `fix/skill-bugs` from `origin/main` (worktree `../fix-skill-bugs`): Halstead package in `fullstack-typescript-static`; `emil-design-eng` never loading; regression tests; cherry-pick into `feat/repo-evals` | in flight (agent R1) |
+| R2 | Suite: arm result reuse ("reused from <dir>"), no bare arm in future comparisons, `"reporter": "json-score"` for continuous checks | not started |
+| R3 | `vue-design`: about 6 mockup screens (reference → Playwright PNGs), visual similarity + DOM layout + behaviour + axe, mutants, calibration | not started |
+| R4 | Harder backend set: RacePlanr replay feasibility first (time-boxed), else legacy fixture + symptom-only bugs + implied invariants + budgets + spec conformance; mutants; calibration to 30–60% failing | not started |
+| R5.1 | Comparison: `main` vs `fix/skill-bugs` on `vue-design` | not started |
+| R5.2 | Comparison: poteto-mode on vs off on the new backend set | not started |
+| R5.3 | Comparison: `manual-qa` removed, reusing arm A of R5.2 | not started |
+| R6 | `NEXT.md`, final summary, delete heartbeat | not started |
+
+## Round 2 decisions
+
+- Order R1 → R2 → R3 → R4 → R5, one subagent at a time; the lead reviews and commits between agents.
+- A design task's run score is the mean of its required checks, each continuous in 0..1: visual
+  similarity, DOM layout, behaviour (hidden tests), accessibility (axe). Gates (typecheck, lint,
+  build) zero the score as before. Components are reported separately.
+- Mockups reach the agent as PNG files shipped into the app with task-level `files`; the agent reads
+  them with its image-capable Read tool. The reference implementation never ships.
+- Disk: saved run apps no longer keep `node_modules`; watch `df` before long evals.
+- Spend is tracked per item in the log below.
+
+## Round 2 log
+
+- 15:35 UTC: heartbeat created; R1 started.
