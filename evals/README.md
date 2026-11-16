@@ -532,6 +532,15 @@ The raw data sits alongside it:
 | `runs/<task>__<arm>__r<n>/` | `transcript.jsonl`, `diff.patch`, and the worked `app/` |
 | `config.json`, `taskset.json`, `arms.json` | what was run |
 
+**Disk use.** Per run the results dir keeps the transcript, session logs, `diff.patch`, the HTTP and
+browser artefacts and the worked `app/`. Once a run is measured, the fixture's `linkPaths`
+(`node_modules`, `public/images`) are dropped from its saved app (`prunedLinkPaths` in the run
+record): moved out of the sandbox they would become a private copy of a few hundred MB per run. A run
+whose `package.json` added dependencies (`deps.added`) keeps its own copy (`prunedLinkPaths: []`),
+because the pristine `node_modules` would not match it. `--recheck` links the missing dirs back from
+the prepared fixture cache (of the current fixture version) for each run's checks and removes them
+again. `--keep-linked` keeps them in every saved app, as before.
+
 ## Providers
 
 `lib/providers/` holds the agent providers. One implements `runAgent` (with the run's home, cwd and

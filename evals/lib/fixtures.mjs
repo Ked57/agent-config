@@ -85,7 +85,12 @@ export function copyForRun(fixture, pristine, destination) {
   const excludes = ['.eval-ready', '.eval-manifest.json', ...fixture.linkPaths].flatMap((item) => ['--exclude', `./${item}`]);
   const result = spawnSync('bash', ['-c', `tar ${excludes.map((e) => `'${e}'`).join(' ')} -cf - . | tar -xf - -C '${destination}'`], { cwd: pristine, encoding: 'utf8' });
   if (result.status !== 0) throw new Error(`copy failed: ${result.stderr}`);
-  for (const linkPath of fixture.linkPaths) {
+  linkFromPristine(fixture, pristine, destination);
+}
+
+/** Hard-links (or copies) `linkPaths` from the pristine copy into `destination`. */
+function linkFromPristine(fixture, pristine, destination, linkPaths = fixture.linkPaths) {
+  for (const linkPath of linkPaths) {
     const source = path.join(pristine, linkPath);
     if (!fs.existsSync(source)) continue;
     fs.mkdirSync(path.dirname(path.join(destination, linkPath)), { recursive: true });
@@ -97,6 +102,27 @@ export function copyForRun(fixture, pristine, destination) {
       link = spawnSync('cp', ['-a', source, target], { encoding: 'utf8' });
     }
     if (link.status !== 0) throw new Error(`copy of ${linkPath} failed: ${link.stderr.slice(0, 500)}`);
+  }
+}
+
+/** Removes the fixture's `linkPaths` from a worked copy; returns those that were there. */
+export function pruneLinkPaths(fixture, app) {
+  const pruned = fixture.linkPaths.filter((linkPath) => fs.existsSync(path.join(app, linkPath)));
+  for (const linkPath of pruned) removeTree(path.join(app, linkPath), app);
+  return pruned;
+}
+
+/**
+ * Runs `fn` in a saved app whose `linkPaths` were pruned: the missing ones are linked from the
+ * pristine copy first and removed again afterwards. An app that kept its own copy is left alone.
+ */
+export function withLinkedPaths(fixture, pristine, app, fn) {
+  const missing = fixture.linkPaths.filter((linkPath) => !fs.existsSync(path.join(app, linkPath)));
+  try {
+    if (missing.length) linkFromPristine(fixture, pristine, app, missing);
+    return fn();
+  } finally {
+    for (const linkPath of missing) removeTree(path.join(app, linkPath), app);
   }
 }
 

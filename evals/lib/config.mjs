@@ -31,7 +31,7 @@ export const DEFAULTS = Object.freeze({
 });
 
 const LIST_FLAGS = new Set(['a-add', 'a-remove', 'b-add', 'b-remove', 'env', 'watch', 'only']);
-const BOOLEAN_FLAGS = new Set(['smoke', 'browser', 'http', 'no-judge', 'dry-run', 'report-only', 'rejudge', 'recheck', 'single-arm', 'strict-isolation', 'no-strict-isolation', 'accept-arm-drift', 'help']);
+const BOOLEAN_FLAGS = new Set(['smoke', 'browser', 'http', 'no-judge', 'dry-run', 'report-only', 'rejudge', 'recheck', 'single-arm', 'strict-isolation', 'no-strict-isolation', 'accept-arm-drift', 'keep-linked', 'help']);
 const NUMBER_FLAGS = new Set(['min-free-mb', 'reps', 'concurrency', 'timeout-min', 'judge-reps', 'judge-controls', 'max-usd', 'max-runs']);
 const STRING_FLAGS = new Set(['a', 'b', 'tasks', 'provider', 'model', 'effort', 'judge-provider', 'judge-model', 'judge-effort', 'judge-command', 'out', 'resume', 'name', 'plugins', 'a-prefix', 'b-prefix']);
 

@@ -14,7 +14,7 @@ import { scoreRun } from './lib/checks.mjs';
 import { DEFAULTS, judgeSetId, parseArgs, promptFor, resolveConfig, validateTaskSet } from './lib/config.mjs';
 import { assertSafeRoot, browserToolEnv, killStrays, memAvailableMb, removeTree, sandboxProblems, sandboxRoot } from './lib/env.mjs';
 import { httpSmoke } from './lib/http-smoke.mjs';
-import { copyForRun, copyTaskFiles, fixtureHash, loadFixture, moveTree, preparePristine, verifyPristine } from './lib/fixtures.mjs';
+import { copyForRun, copyTaskFiles, fixtureHash, loadFixture, moveTree, preparePristine, pruneLinkPaths, verifyPristine, withLinkedPaths } from './lib/fixtures.mjs';
 import { initEvent, initProblems, invokedCommands, loadedInstructionFiles, removalLeftovers, sessionComponents, sessionCostUsd, strayInstructionFiles, unexplainedComponents } from './lib/isolation.mjs';
 import { buildJudgePrompt, judgePair } from './lib/judge.mjs';
 import { measureRun, recheckRun } from './lib/measure.mjs';
@@ -75,6 +75,8 @@ Execution
   --report-only             With --resume: re-aggregate and rewrite the report only.
   --recheck                 With --resume: re-score saved runs against the repo's current task checks
                             (hidden tests included); no agent runs, gates are not re-run.
+  --keep-linked             Keep the fixture's linked dirs (node_modules, ...) in every saved app. By default
+                            they are dropped unless the run added dependencies, and re-linked for --recheck.
   --min-free-mb <n>         Wait to start an agent run while less memory is available (default: ${DEFAULTS.minFreeMb}; 0 = never).
   --accept-arm-drift        With --resume: go on when a rebuilt arm's plugins or files differ (recorded).
   --no-strict-isolation     Keep going after a run fails the isolation check (it is excluded either way).
@@ -83,7 +85,16 @@ Execution
   --combine <dir> <dir> ... Pool finished evals of different task sets (same arms, plugins, model) into a
                             new results dir and report over all their tasks. No model calls.`;
 
-const log = (...parts) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...parts);
+// A failed write to a redirected log (ENOSPC, closed pipe) must not end the eval: such errors are
+// thrown or emitted later as an 'error' event on stdout, so both are swallowed.
+process.stdout.on('error', () => {});
+const log = (...parts) => {
+  try {
+    console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...parts);
+  } catch {
+    // Logging is best effort.
+  }
+};
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 const writeJson = (file, value) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -291,7 +302,7 @@ async function main() {
     if (fixed.length) throw new Error(`--resume keeps the eval's arms, tasks, model and reps: drop ${fixed.join(', ')} or start a new eval`);
     migrateLegacyJudgments(outDir, config);
     const overrides = {};
-    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser', 'http', 'judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand', 'strictIsolation', 'minFreeMb']) if (raw[key] !== undefined && raw[key] !== config[key]) {
+    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser', 'http', 'judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand', 'strictIsolation', 'minFreeMb', 'keepLinked']) if (raw[key] !== undefined && raw[key] !== config[key]) {
       overrides[key] = { from: config[key] ?? null, to: raw[key] };
       config[key] = raw[key];
     }
@@ -484,13 +495,17 @@ async function main() {
     const currentById = Object.fromEntries(current.tasks.map((task) => [task.id, task]));
     const at = new Date().toISOString();
     const flips = [];
+    const savedApp = (run) => (currentById[run.task] ? path.join(outDir, 'runs', run.id, 'app') : null);
+    const relinkNeeded = runs.some((run) => savedApp(run) && fs.existsSync(savedApp(run)) && fixture.linkPaths.some((linkPath) => !fs.existsSync(path.join(savedApp(run), linkPath))));
+    const linkSource = relinkNeeded ? preparePristine(fixture, CACHE_ROOT, log) : null;
     for (const run of runs) {
       const task = currentById[run.task];
       const runDir = path.join(outDir, 'runs', run.id);
-      if (!task || !fs.existsSync(path.join(runDir, 'app'))) continue;
+      const app = savedApp(run);
+      if (!app || !fs.existsSync(app)) continue;
       const before = run.checks ?? [];
       run.checksOriginal ??= before;
-      run.checks = recheckRun({ fixture, app: path.join(runDir, 'app'), runDir, task });
+      run.checks = withLinkedPaths(fixture, linkSource, app, () => recheckRun({ fixture, app, runDir, task }));
       Object.assign(run, scoreRun(run));
       const flipped = flippedChecks(before, run.checks);
       flips.push(...flipped.map((flip) => ({ run: run.id, ...flip })));
@@ -498,6 +513,8 @@ async function main() {
       writeJson(path.join(resultsDir, `${run.id}.json`), run);
       log(`rechecked ${run.id}: ${run.checks.filter((c) => c.level === 'required' && c.pass).length}/${run.checks.filter((c) => c.level === 'required').length} required checks pass${flipped.length ? ` (${flipped.length} changed)` : ''}`);
     }
+    const linkChanged = linkSource ? verifyPristine(fixture, linkSource) : [];
+    if (linkChanged.length) warnings.push(`${linkChanged.length} cached fixture file(s) changed during the recheck through hard links (e.g. \`${linkChanged[0]}\`); the cache is rebuilt on its next use.`);
     const previousTaskSet = sha256(JSON.stringify(taskSet));
     taskSet = { ...taskSet, tasks: taskSet.tasks.map((task) => (currentById[task.id] ? { ...task, checks: currentById[task.id].checks } : task)) };
     writeJson(path.join(outDir, 'taskset.json'), taskSet);
@@ -621,6 +638,10 @@ async function main() {
       // The worked copy joins the results (same filesystem: a rename, hard links intact) so --recheck,
       // gates and diff.patch keep working; the session logs are kept; the run's home and tmp go.
       killStrays({ root: runRoot, markers: strayMarkers });
+      // Moved into the results dir, linked dirs become a private copy per run (hundreds of MB): drop
+      // them, --recheck links them back from the pristine copy. A run that added dependencies keeps its
+      // own, since the pristine node_modules would not match its package.json.
+      record.prunedLinkPaths = config.keepLinked || record.deps?.added?.length ? [] : pruneLinkPaths(fixture, app);
       moveTree(app, path.join(runDir, 'app'));
       for (const session of sessions) {
         const target = path.join(runDir, 'session', session.relative);

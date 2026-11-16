@@ -7,7 +7,7 @@ import test from 'node:test';
 import { compareInventories, filesNamingHome, installedPlugins, inventory, prepareRunHome } from '../evals/lib/arms.mjs';
 import { parseRemove, promptFor, resolveConfig, validateTaskSet } from '../evals/lib/config.mjs';
 import { assertSafeRoot, baseEnv, isInside, isStray, killStrays, removeTree, sandboxProblems } from '../evals/lib/env.mjs';
-import { moveTree } from '../evals/lib/fixtures.mjs';
+import { copyForRun, moveTree, pruneLinkPaths, withLinkedPaths } from '../evals/lib/fixtures.mjs';
 import { initEvent, initProblems, invokedCommands, loadedInstructionFiles, removalLeftovers, sessionComponents, sessionCostUsd, skillName, strayInstructionFiles, unexplainedComponents } from '../evals/lib/isolation.mjs';
 import { fixedFlagsOnResume } from '../evals/lib/plan.mjs';
 
@@ -215,6 +215,41 @@ test('moveTree moves a directory with its hard links intact', () => {
   assert.ok(!fs.existsSync(app));
   assert.equal(fs.readFileSync(path.join(target, 'src', 'a.ts'), 'utf8'), 'a');
   assert.equal(fs.statSync(path.join(target, 'node_modules', 'lib.js')).ino, fs.statSync(path.join(root, 'cache', 'lib.js')).ino);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('pruneLinkPaths drops linked dirs from a saved app and withLinkedPaths links them back for one call', () => {
+  const root = temp();
+  const pristine = path.join(root, 'cache', 'fixture');
+  write(path.join(pristine, 'src', 'a.ts'), 'a');
+  write(path.join(pristine, 'node_modules', 'lib', 'index.js'), 'lib');
+  write(path.join(pristine, 'public', 'images', 'logo.svg'), '<svg/>');
+  const fixture = { linkPaths: ['node_modules', 'public/images'] };
+  const app = path.join(root, 'results', 'runs', 'r1', 'app');
+  const gone = () => !fs.existsSync(path.join(app, 'node_modules')) && !fs.existsSync(path.join(app, 'public', 'images'));
+  copyForRun(fixture, pristine, app);
+  assert.deepEqual(pruneLinkPaths(fixture, app), ['node_modules', 'public/images']);
+  assert.ok(gone());
+  assert.equal(fs.readFileSync(path.join(app, 'src', 'a.ts'), 'utf8'), 'a');
+  const seen = withLinkedPaths(fixture, pristine, app, () => fs.readFileSync(path.join(app, 'node_modules', 'lib', 'index.js'), 'utf8') + fs.readFileSync(path.join(app, 'public', 'images', 'logo.svg'), 'utf8'));
+  assert.equal(seen, 'lib<svg/>');
+  assert.ok(gone());
+  // Removed again when the call throws; the pristine copy is untouched.
+  assert.throws(() => withLinkedPaths(fixture, pristine, app, () => {
+    throw new Error('boom');
+  }), /boom/);
+  assert.ok(gone());
+  assert.equal(fs.readFileSync(path.join(pristine, 'node_modules', 'lib', 'index.js'), 'utf8'), 'lib');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('withLinkedPaths leaves an app that kept its own linked dirs alone', () => {
+  const root = temp();
+  const app = path.join(root, 'results', 'runs', 'r1', 'app');
+  write(path.join(app, 'node_modules', 'lib', 'index.js'), 'own');
+  const read = () => fs.readFileSync(path.join(app, 'node_modules', 'lib', 'index.js'), 'utf8');
+  assert.equal(withLinkedPaths({ linkPaths: ['node_modules'] }, null, app, read), 'own');
+  assert.equal(read(), 'own');
   fs.rmSync(root, { recursive: true, force: true });
 });
 
