@@ -144,3 +144,19 @@ and the run is excluded and reported.
   and for usage-limit handling (a rate-limited run must not be recorded as a result).
 - 09:50 UTC: full mutant gate started in the background (`/var/tmp/repo-evals-work/gate-full.log`).
   Next: gate green → freeze commit → Phase 3.
+- 10:13 UTC: full mutation gate passed (46 tasks, 478 checks, 21 min at concurrency 3). Agent A
+  finished usage-limit handling (exit code 75, nothing recorded for a rate-limited run), rebuild of a
+  wiped sandbox on `--resume`, and `--min-free-mb`. **Tasks and checks frozen at `0ca7d68`.**
+- 10:20 UTC: **Phase 3 launched.** Driver: `~/agent-config-evals/phase3/driver.sh`, log
+  `~/agent-config-evals/phase3/driver.log`. It is idempotent; if it is not running
+  (`pgrep -f phase3/driver.sh`), relaunch from the worktree with
+  `nohup setsid bash ~/agent-config-evals/phase3/driver.sh >> ~/agent-config-evals/phase3/driver.log 2>&1 &`.
+  It sleeps 20 min and resumes on a usage limit (exit code 75).
+  - Comparison 1, full vs bare: `--a BARE --b main`, 1 rep, concurrency 2, four parts then `--combine`:
+    `2026-11-16T10-20-fvb-hard` (8 tasks, cap $15), `-fvb-base` (13, cap $19), `-fvb-vue` (15, cap $13),
+    `-fvb-k5` (1, cap $2.5) → `2026-11-16T10-20-full-vs-bare`. Estimate $43 plus about $4 of judging.
+  - Comparison 2, poteto-mode: `--a main --b main --b-prefix "/pstack:poteto-mode"`, `poteto-spec` S1–S5,
+    1 rep, cap $28 → `2026-11-16T10-20-poteto-mode`. Estimate $7 off, $15–20 on.
+  - If budget remains under the $80 total, add a second rep of comparison 2 with
+    `--resume <dir> --reps 2` only if the suite supports raising reps on resume; otherwise report the shortfall.
+- After Phase 3: write `evals/NEXT.md`, update README examples if needed, final summary, delete heartbeat `e95b56f3`.
