@@ -323,3 +323,30 @@ test('memAvailableMb reads MemAvailable from /proc/meminfo', async () => {
   assert.equal(memAvailableMb(''), null);
   assert.equal(resolveConfig({ b: 'main' }, { name: 't', fixture: 'f', categories: { c: {} }, tasks: [{ id: 'T', category: 'c', prompt: 'p' }] }).minFreeMb, 1500);
 });
+
+test('rebuildDecision: same arm continues, drift stops unless accepted', async () => {
+  const { rebuildDecision } = await import('../evals/lib/arms.mjs');
+  const saved = { plugins: [{ id: 'pstack@cursor-plugins', version: '0.15.42', gitCommitSha: 'bf0c7cd' }], hashes: { '.agents/AGENTS.md': 'a' } };
+  assert.equal(rebuildDecision('B', saved, saved).action, 'continue');
+  const moved = { ...saved, plugins: [{ id: 'pstack@cursor-plugins', version: '0.16.0', gitCommitSha: 'c0ffee1' }] };
+  const stopped = rebuildDecision('B', saved, moved);
+  assert.equal(stopped.action, 'error');
+  assert.match(stopped.text, /pstack@cursor-plugins@0\.15\.42#bf0c7cd → pstack@cursor-plugins@0\.16\.0#c0ffee1/);
+  assert.equal(rebuildDecision('B', saved, moved, true).action, 'accepted');
+  assert.equal(rebuildDecision('A', saved, { ...saved, hashes: { '.agents/AGENTS.md': 'b' } }).action, 'error');
+});
+
+test('providerFailure tells a usage limit or overload from a task failure', async () => {
+  const { providerFailure } = await import('../evals/lib/providers/claude.mjs');
+  // Verbatim result event (trimmed) from a haiku run that hit the session limit on 2026-11-16.
+  const limited = '{"type":"system","subtype":"init"}\n{"is_error":true,"num_turns":1,"subtype":"success","api_error_status":429,"api_error_origin":"first_party","api_error":"usage_limit_reached","result":"You\'ve hit your session limit · resets 9:40am (UTC)","type":"result"}';
+  assert.deepEqual(providerFailure(limited), { kind: 'usage-limit', message: 'usage_limit_reached', resets: '9:40am (UTC)' });
+  const textOnly = '{"type":"result","is_error":true,"result":"You\'ve hit your session limit · resets 9:40am (UTC)"}';
+  assert.deepEqual(providerFailure(textOnly), { kind: 'usage-limit', message: "You've hit your session limit · resets 9:40am (UTC)", resets: '9:40am (UTC)' });
+  assert.equal(providerFailure('{"type":"result","is_error":true,"api_error_status":529,"result":"Overloaded"}').kind, 'transient');
+  assert.equal(providerFailure('{"type":"result","is_error":true,"result":"API Error: 500 Internal server error"}').kind, 'transient');
+  assert.equal(providerFailure('', 'Error: 429 Too Many Requests: rate_limit_error').kind, 'usage-limit');
+  assert.equal(providerFailure('{"type":"result","is_error":false,"subtype":"success","result":"Done. Added a rate limit of 429 responses."}'), null, 'a successful run talking about rate limits is not a failure');
+  assert.equal(providerFailure('{"type":"result","is_error":true,"subtype":"error_max_turns","result":""}'), null);
+  assert.equal(providerFailure('', ''), null);
+});

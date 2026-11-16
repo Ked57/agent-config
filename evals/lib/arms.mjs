@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { removeTree, TELEMETRY_OFF } from './env.mjs';
+import { changedArmFiles } from './plan.mjs';
 import { skillName } from './isolation.mjs';
 
 export const WORKTREE = 'WORKTREE';
@@ -29,9 +30,20 @@ export function armDrift(saved, rebuilt) {
   const after = Object.fromEntries((rebuilt.plugins ?? []).map((plugin) => [plugin.id, pluginKey(plugin)]));
   const plugins = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()
     .filter((id) => before[id] !== after[id]).map((id) => `${id}: ${before[id] ?? 'absent'} → ${after[id] ?? 'absent'}`);
-  const files = [...new Set([...Object.keys(saved.hashes ?? {}), ...Object.keys(rebuilt.hashes ?? {})])].sort()
-    .filter((file) => !file.startsWith('.claude/plugins/') && saved.hashes?.[file] !== rebuilt.hashes?.[file]);
+  const files = changedArmFiles(saved.hashes, rebuilt.hashes).filter((file) => !file.startsWith('.claude/plugins/'));
   return { plugins, files };
+}
+
+/**
+ * What to do with an arm rebuilt after its sandbox build went missing: `continue` when it matches the
+ * saved one, `accepted` when it drifted and `acceptDrift` is set, else `error`. `text` explains.
+ */
+export function rebuildDecision(arm, saved, rebuilt, acceptDrift = false) {
+  const drift = armDrift(saved, rebuilt);
+  const details = [...drift.plugins, ...(drift.files.length ? [`${drift.files.length} installed file(s) changed (${drift.files.slice(0, 5).join(', ')})`] : [])];
+  if (!details.length) return { action: 'continue', drift, text: `Arm ${arm} rebuilt after its sandbox build went missing: identical installed files and plugin versions` };
+  const text = `Arm ${arm} rebuilt after its sandbox build went missing and differs from the original build: ${details.join('; ')}`;
+  return { action: acceptDrift ? 'accepted' : 'error', drift, text };
 }
 
 const git = (repoRoot, args, options = {}) => {
@@ -169,6 +181,8 @@ export function inventory(home) {
     const files = fs.statSync(start).isFile() ? [start] : listFiles(start);
     for (const file of files) {
       const relative = path.relative(home, file).split(path.sep).join('/');
+      // The skills CLI's lock records install times: bookkeeping, not config, and never the same twice.
+      if (relative === '.agents/.skill-lock.json') continue;
       const content = fs.readFileSync(file, 'utf8').replaceAll(home, '~');
       hashes[relative] = crypto.createHash('sha256').update(content).digest('hex');
     }

@@ -452,8 +452,29 @@ original judge's id the first time they are resumed.
 - The queue goes rep by rep with shuffled task and arm order, so a stop leaves the arms balanced.
 - Rerunning with `--resume <dir>` skips every run or judgment with a result file. A run interrupted
   mid-way has none: its sandbox dir is wiped and the run is redone. The arms are reused from the
-  sandbox path in `config.json`; if they changed or were deleted (`/var/tmp` is cleaned eventually),
-  the resume refuses new runs. Ctrl-C finishes in-flight work and writes a partial report; a second
+  sandbox path in `config.json`.
+- **The sandbox can vanish.** The default `/var/tmp` may be a service-private tmp (systemd
+  `PrivateTmp=yes`, as for an agent daemon) that is recreated empty whenever the service restarts, for
+  example after an out-of-memory kill. Finished runs live in the results dir and are kept. On
+  `--resume`, a missing or half-built arm is rebuilt from the same ref and toggles, re-probed, and
+  compared with `arms.json`: identical installed files and plugin versions and commits → the eval goes
+  on (the report's integrity warnings and `audit.jsonl` note the rebuild); otherwise it stops, unless
+  `--accept-arm-drift` is passed, which records the drift and goes on. The fixture cache and judge home
+  are rebuilt as needed.
+- `--min-free-mb <n>` (default 1500, 0 disables): before starting an agent run, wait while
+  `MemAvailable` is lower, logging once a minute. A global out-of-memory kill takes the whole eval down.
+- **Usage limits.** A run or judgment that the provider cuts off (a result with `is_error` and a 429,
+  "You've hit your session limit · resets …", a rate or usage limit, or an overload/5xx), or an agent
+  that died from a signal without a result, is not recorded: nothing new starts, the partial report is
+  written with the reason under `summary.providerStop` (including the reset time when given), and the
+  suite exits with code **75**. Its spend is counted in that session only. To run a long eval
+  unattended:
+
+  ```sh
+  dir=~/agent-config-evals/<timestamp>-<name>   # from the first run's log
+  npm run eval -- <flags> --out "$dir"; code=$?
+  while [ "$code" = 75 ]; do sleep 1800; npm run eval -- --resume "$dir"; code=$?; done
+  ``` Ctrl-C finishes in-flight work and writes a partial report; a second
   Ctrl-C aborts.
 - `--report-only --resume <dir>` re-aggregates without calling any model. It keeps the judge set the
   last report used, even if `config.json` names another (it says so in the integrity warnings); pass

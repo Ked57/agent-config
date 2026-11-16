@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { aggregate, compareTasks } from './lib/aggregate.mjs';
-import { armBuilt, armDrift, buildArm, compareInventories, installedPlugins, inventory, prepareRunHome } from './lib/arms.mjs';
+import { armBuilt, BUILT_MARKER, buildArm, rebuildDecision, compareInventories, installedPlugins, inventory, prepareRunHome } from './lib/arms.mjs';
 import { browserSmoke } from './lib/browser.mjs';
 import { combineEvals } from './lib/combine.mjs';
 import { scoreRun } from './lib/checks.mjs';
@@ -33,6 +33,8 @@ const MAX_DIFF_CHARS = 60000;
 // Gates and hidden tests run in this process's children next to up to --concurrency agents; under
 // that load Vitest's timeouts trip. At most this many measure/smoke phases run at once.
 const CHECK_PHASES = 2;
+/** Exit code when the provider stopped the eval (usage limit, overload): wait, then --resume. */
+const EXIT_PROVIDER_STOP = 75;
 
 const USAGE = `Usage: npm run eval -- --b <ref> [options]
 
@@ -358,13 +360,13 @@ async function main() {
         // rebuild the arm from the same ref and toggles, and go on only if it comes out the same.
         log(`Arm ${arm}'s build in ${armDir} is missing or incomplete; rebuilding it from ${config.arms[arm].ref}`);
         const fresh = await buildArm({ repoRoot: REPO_ROOT, spec: config.arms[arm], armDir, plugins: config.plugins ?? 'skip', npmCache: path.join(CACHE_ROOT, 'npm-cache') });
-        const drift = armDrift(armsInfo[arm], fresh);
-        const drifted = drift.plugins.length + drift.files.length > 0;
-        const text = `Arm ${arm} rebuilt after its sandbox build went missing${drifted ? ` and differs from the original build: ${[...drift.plugins, ...(drift.files.length ? [`${drift.files.length} installed file(s) changed (${drift.files.slice(0, 5).join(', ')})`] : [])].join('; ')}` : ': identical installed files and plugin versions'}`;
-        log(text);
-        if (drifted && !raw.acceptArmDrift) throw new Error(`${text}. New runs would not match the saved ones: pass --accept-arm-drift to continue anyway (recorded in the report), or start a new eval.`);
-        warnings.push(`${text}${drifted ? ' (accepted with --accept-arm-drift)' : ''}.`);
-        rebuilt.push({ arm, drift, accepted: drifted });
+        const decision = rebuildDecision(arm, armsInfo[arm], fresh, Boolean(raw.acceptArmDrift));
+        log(decision.text);
+        // A refused rebuild must not pass for a finished one on the next resume.
+        if (decision.action === 'error') fs.rmSync(path.join(armDir, BUILT_MARKER), { force: true });
+        if (decision.action === 'error') throw new Error(`${decision.text}. New runs would not match the saved ones: pass --accept-arm-drift to continue anyway (recorded in the report), or start a new eval.`);
+        warnings.push(`${decision.text}${decision.action === 'accepted' ? ' (accepted with --accept-arm-drift)' : ''}.`);
+        rebuilt.push({ arm, drift: decision.drift, accepted: decision.action === 'accepted' });
         armsInfo[arm] = { ...fresh, previousExpected: armsInfo[arm].expected ?? null };
         continue;
       }
@@ -451,6 +453,12 @@ async function main() {
   const spent = () => spend.runsUsd + spend.judgeUsd;
 
   let stopReason = null;
+  // Set when the provider, not a task, ended a run or judgment: nothing is recorded for it.
+  let providerStop = null;
+  const stopForProvider = (failure) => {
+    providerStop ??= failure;
+    stopReason ??= `${failure.kind}${failure.resets ? ` (resets ${failure.resets})` : ''}: ${failure.message}`;
+  };
   let interrupted = 0;
   process.on('SIGINT', () => {
     interrupted += 1;
@@ -551,6 +559,20 @@ async function main() {
       // Stop browsers, then anything else the run left behind (the provider already killed its process group).
       spawnSync('agent-browser', ['close'], { env: { PATH: process.env.PATH, HOME: runHome, AGENT_BROWSER_SESSION: env.AGENT_BROWSER_SESSION }, timeout: 20000 });
       const strays = killStrays({ root: runRoot, markers: strayMarkers });
+      // A run the provider cut off (usage limit, overload) or that died from a signal without a result
+      // (service restart) says nothing about the task: record nothing, so --resume redoes it.
+      const readText = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '');
+      const transcriptText = readText(path.join(runDir, provider.transcriptFile));
+      const failure = provider.providerFailure?.(transcriptText, readText(path.join(runDir, 'stderr.log'))) ?? null;
+      const killed = !agentResult.timedOut && Boolean(agentResult.signal) && !/"type":"result"/.test(transcriptText);
+      if (failure || killed) {
+        const lost = collectSessions(provider.sessionRoot(runHome)).filter((session) => !session.relative.includes('/subagents/')).reduce((sum, session) => sum + (sessionCostUsd(session.text) ?? 0), 0);
+        spend.runsUsd += lost;
+        log(`DISCARDED ${job.id}: ${failure ? `${failure.kind}: ${failure.message}` : `agent died from ${agentResult.signal}`}; not recorded, --resume redoes it`);
+        if (failure) stopForProvider(failure);
+        removeTree(runDir, outDir);
+        return;
+      }
       // Task files (e.g. a spec) are part of the starting point: the diff is taken against a base that
       // has them too (built after the agent exited, so it could not touch it).
       let base = pristine;
@@ -644,6 +666,7 @@ async function main() {
         spend.judgeUsd += verdict.costUsd;
         log(`judged ${pair.id}: ${verdict.preference}${verdict.unanimous ? '' : ' (split)'}`);
       } catch (error) {
+        if (error.providerFailure) stopForProvider(error.providerFailure);
         log(`FAILED judge ${pair.id}: ${error.message}`);
       }
     }, () => Boolean(stopReason));
@@ -664,11 +687,16 @@ async function main() {
   // aggregate() leaves out runs with status "isolation" and names them in its warnings.
   const summary = aggregate({ config, taskSet, armsInfo, runs, judgments, activeJudgeSet, otherJudgeSets });
   summary.stoppedEarly = stopReason;
+  if (providerStop) summary.providerStop = providerStop;
   summary.warnings = warnings;
   summary.history = readAudit(outDir);
   writeJson(path.join(outDir, 'summary.json'), summary);
   fs.writeFileSync(path.join(outDir, 'REPORT.md'), renderReport({ summary, config, armsInfo, taskSet, fixture, spend }));
   log(`Verdict: ${summary.recommendation.verdict}. Spend $${spent().toFixed(2)}. Report: ${path.join(outDir, 'REPORT.md')}`);
+  if (providerStop) {
+    log(`Stopped by the provider (${providerStop.kind}${providerStop.resets ? `, resets ${providerStop.resets}` : ''}); exit ${EXIT_PROVIDER_STOP}. Wait, then: npm run eval -- --resume ${outDir}`);
+    process.exitCode = EXIT_PROVIDER_STOP;
+  }
 }
 
 main().catch((error) => {

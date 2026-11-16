@@ -68,7 +68,8 @@ export const fixedFlagsOnResume = (raw) => Object.entries(FIXED_ON_RESUME).filte
 
 /** Installed files whose content hash differs between an arm's build-time inventory and now. */
 export function changedArmFiles(built = {}, current = {}) {
-  return [...new Set([...Object.keys(built), ...Object.keys(current)])].sort().filter((file) => built[file] !== current[file]);
+  // Arms built before the skills CLI's lock was left out of the inventory still list it.
+  return [...new Set([...Object.keys(built), ...Object.keys(current)])].sort().filter((file) => file !== '.agents/.skill-lock.json' && built[file] !== current[file]);
 }
 
 /**
