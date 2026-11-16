@@ -144,5 +144,81 @@
         ]
       }
     ]
+  },
+  "In5vR8cWq2TxK9mLp3ZbD7": {
+    "name": "Acme-Console-Invoices",
+    "pages": [
+      {
+        "id": "0:1",
+        "name": "Invoices",
+        "frames": [
+          {
+            "nodeId": "52:2",
+            "name": "Invoices / Desktop",
+            "bundle": "invoices/desktop.json",
+            "screenshot": "invoices/desktop.png"
+          },
+          {
+            "nodeId": "52:3",
+            "name": "Invoices / Mobile",
+            "bundle": "invoices/mobile.json",
+            "screenshot": "invoices/mobile.png"
+          },
+          {
+            "nodeId": "52:4",
+            "name": "Invoices / Desktop / Filtered by status",
+            "bundle": "invoices/desktop-filtered.json",
+            "screenshot": "invoices/desktop-filtered.png"
+          },
+          {
+            "nodeId": "52:5",
+            "name": "Invoices / Desktop / Bulk selection",
+            "bundle": "invoices/desktop-bulk.json",
+            "screenshot": "invoices/desktop-bulk.png"
+          },
+          {
+            "nodeId": "52:6",
+            "name": "Invoices / Desktop / Empty",
+            "bundle": "invoices/desktop-empty.json",
+            "screenshot": "invoices/desktop-empty.png"
+          }
+        ]
+      }
+    ]
+  },
+  "Cu6sT9mWk3QpR8vXz2LnB5": {
+    "name": "Acme-Console-Customer-Detail",
+    "pages": [
+      {
+        "id": "0:1",
+        "name": "Customer detail",
+        "frames": [
+          {
+            "nodeId": "62:2",
+            "name": "Customer / Overview / Desktop",
+            "bundle": "customer/desktop.json",
+            "screenshot": "customer/desktop.png"
+          },
+          {
+            "nodeId": "62:3",
+            "name": "Customer / Overview / Mobile",
+            "bundle": "customer/mobile.json",
+            "screenshot": "customer/mobile.png"
+          },
+          {
+            "nodeId": "62:4",
+            "name": "Customer / Desktop / Edit panel open",
+            "bundle": "customer/desktop-edit-panel.json",
+            "screenshot": "customer/desktop-edit-panel.png"
+          },
+          {
+            "nodeId": "62:5",
+            "name": "Customer / Contacts / Desktop",
+            "bundle": "customer/desktop-contacts.json",
+            "screenshot": "customer/desktop-contacts.png"
+          }
+        ]
+      }
+    ]
   }
 }

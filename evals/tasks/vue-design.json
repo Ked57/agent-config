@@ -403,6 +403,193 @@
           "level": "required"
         }
       ]
+    },
+    {
+      "id": "D5-invoices-table",
+      "category": "design",
+      "prompt": "Implement this design from Figma.\nDesktop: https://www.figma.com/design/In5vR8cWq2TxK9mLp3ZbD7/Acme-Console-Invoices?node-id=52-2&m=dev\nMobile: https://www.figma.com/design/In5vR8cWq2TxK9mLp3ZbD7/Acme-Console-Invoices?node-id=52-3&m=dev\nState, \"Overdue\" status filter on: https://www.figma.com/design/In5vR8cWq2TxK9mLp3ZbD7/Acme-Console-Invoices?node-id=52-4&m=dev\nState, three invoices selected: https://www.figma.com/design/In5vR8cWq2TxK9mLp3ZbD7/Acme-Console-Invoices?node-id=52-5&m=dev\nState, no invoices yet: https://www.figma.com/design/In5vR8cWq2TxK9mLp3ZbD7/Acme-Console-Invoices?node-id=52-6&m=dev\n\nImplement it at route /invoices; the data source is src/services/invoices.ts.\nRow checkboxes are labelled \"Select <invoice number>\", and the pager's next button \"Next page\".",
+      "modes": {
+        "screenshot-only": {
+          "prompt": "Implement this screen from the mockups in design/invoices/ (desktop, mobile and 3 states). Implement it at route /invoices; the data source is src/services/invoices.ts. Row checkboxes are labelled \"Select <invoice number>\", and the pager's next button \"Next page\".",
+          "files": {
+            "figma-stub/invoices/desktop.png": "design/invoices/desktop.png",
+            "figma-stub/invoices/mobile.png": "design/invoices/mobile.png",
+            "figma-stub/invoices/desktop-filtered.png": "design/invoices/desktop-filtered.png",
+            "figma-stub/invoices/desktop-bulk.png": "design/invoices/desktop-bulk.png",
+            "figma-stub/invoices/desktop-empty.png": "design/invoices/desktop-empty.png"
+          }
+        }
+      },
+      "expectsComponents": [
+        "vue-primevue",
+        "typescript",
+        "emil-design-eng",
+        "manual-qa",
+        "plugin:taste-skill"
+      ],
+      "checks": [
+        {
+          "id": "visual",
+          "label": "Visual similarity to the mockups (SSIM + colour, baseline-normalised, mean over frames)",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/invoices": ".design-score/screen",
+            "figma-stub/invoices": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs visual",
+          "reporter": "json-score",
+          "weight": 0.4,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "layout",
+          "label": "Key elements present, in order and where the design puts them",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/invoices": ".design-score/screen",
+            "figma-stub/invoices": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs layout",
+          "reporter": "json-score",
+          "weight": 0.3,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "behaviour",
+          "label": "Status filter, search, sorting, paging, bulk selection, empty state and mobile cards work as drawn",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/invoices": ".design-score/screen",
+            "figma-stub/invoices": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs behaviour",
+          "reporter": "json-score",
+          "weight": 0.2,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "a11y",
+          "label": "axe-core WCAG A/AA on every frame state, scaled by layout coverage",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/invoices": ".design-score/screen",
+            "figma-stub/invoices": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs a11y",
+          "reporter": "json-score",
+          "weight": 0.1,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        }
+      ]
+    },
+    {
+      "id": "D6-customer-detail",
+      "category": "design",
+      "prompt": "Implement this design from Figma.\nDesktop: https://www.figma.com/design/Cu6sT9mWk3QpR8vXz2LnB5/Acme-Console-Customer-Detail?node-id=62-2&m=dev\nMobile: https://www.figma.com/design/Cu6sT9mWk3QpR8vXz2LnB5/Acme-Console-Customer-Detail?node-id=62-3&m=dev\nState, edit panel open: https://www.figma.com/design/Cu6sT9mWk3QpR8vXz2LnB5/Acme-Console-Customer-Detail?node-id=62-4&m=dev\nState, Contacts tab: https://www.figma.com/design/Cu6sT9mWk3QpR8vXz2LnB5/Acme-Console-Customer-Detail?node-id=62-5&m=dev\n\nImplement it at route /customers/northwind; the data source is src/services/accounts.ts.",
+      "modes": {
+        "screenshot-only": {
+          "prompt": "Implement this screen from the mockups in design/customer/ (desktop, mobile and 2 states). Implement it at route /customers/northwind; the data source is src/services/accounts.ts.",
+          "files": {
+            "figma-stub/customer/desktop.png": "design/customer/desktop.png",
+            "figma-stub/customer/mobile.png": "design/customer/mobile.png",
+            "figma-stub/customer/desktop-edit-panel.png": "design/customer/desktop-edit-panel.png",
+            "figma-stub/customer/desktop-contacts.png": "design/customer/desktop-contacts.png"
+          }
+        }
+      },
+      "expectsComponents": [
+        "vue-primevue",
+        "typescript",
+        "emil-design-eng",
+        "manual-qa",
+        "plugin:taste-skill"
+      ],
+      "checks": [
+        {
+          "id": "visual",
+          "label": "Visual similarity to the mockups (SSIM + colour, baseline-normalised, mean over frames)",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/customer": ".design-score/screen",
+            "figma-stub/customer": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs visual",
+          "reporter": "json-score",
+          "weight": 0.4,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "layout",
+          "label": "Key elements present, in order and where the design puts them",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/customer": ".design-score/screen",
+            "figma-stub/customer": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs layout",
+          "reporter": "json-score",
+          "weight": 0.3,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "behaviour",
+          "label": "Tabs, edit side panel (open, cancel, save), stat row and responsive stacking work as drawn",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/customer": ".design-score/screen",
+            "figma-stub/customer": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs behaviour",
+          "reporter": "json-score",
+          "weight": 0.2,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "a11y",
+          "label": "axe-core WCAG A/AA on every frame state, scaled by layout coverage",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/customer": ".design-score/screen",
+            "figma-stub/customer": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs a11y",
+          "reporter": "json-score",
+          "weight": 0.1,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        }
+      ]
     }
   ]
 }

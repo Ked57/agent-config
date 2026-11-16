@@ -27,7 +27,7 @@ function stubFiles(dir = STUB) {
 }
 
 test('figma stub holds only what a Figma file exposes: no source, component library, test ids or hidden checks', () => {
-  const hidden = new Set(['Row actions', 'Date range', 'Mentions: SMS', 'noHorizontalOverflow', 'sameRow', 'stacked', 'visibleText', 'hiddenText', 'baselines', 'layout.json', '.design-score']);
+  const hidden = new Set(['Row actions', 'Date range', 'Mentions: SMS', 'Select INV-', 'noHorizontalOverflow', 'sameRow', 'stacked', 'visibleText', 'hiddenText', 'baselines', 'layout.json', '.design-score']);
   for (const name of screens) {
     const screen = JSON.parse(fs.readFileSync(path.join(DESIGN, name, 'screen.json'), 'utf8'));
     for (const specs of Object.values(screen.layout)) for (const spec of specs) if (spec.id.includes('-')) hidden.add(spec.id);

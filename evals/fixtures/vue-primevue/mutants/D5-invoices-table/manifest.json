@@ -1,0 +1,17 @@
+{
+  "task": "D5-invoices-table",
+  "scoreGate": { "referenceMin": 0.95, "untouchedMax": 0.1, "mutantMaxDrop": 0.05 },
+  "references": [
+    { "file": "reference.patch", "source": "hand-built reference design (R3b); the mockups, layout.json and baselines are exported from it" }
+  ],
+  "mutants": [
+    { "file": "m1-spacing.patch", "wrong": "page, toolbar, chips, bulk bar, footer, cards and customer cells spaced 8 px more", "violates": "the spacing drawn in every frame", "expect": "killed" },
+    { "file": "m2-colour-tokens.patch", "wrong": "selected chips, bulk bar, selected rows, overdue notes and Open/Overdue tags use sky/indigo/orange/contrast instead of the drawn tokens", "violates": "the colours drawn in every frame", "expect": "killed" },
+    { "file": "m3-no-bulk-bar.patch", "wrong": "selecting rows never shows the bulk-action bar", "violates": "the bulk-selection state frame", "expect": "killed" },
+    { "file": "m4-no-mobile-layout.patch", "wrong": "the desktop table (scrolled) instead of the drawn cards at 390 px, header and toolbar kept in one row", "violates": "the mobile frame", "expect": "killed" },
+    { "file": "m5-plain-html-controls.patch", "wrong": "plain HTML table, native checkboxes, input, buttons and pager, plain-text statuses instead of the drawn data table, tags and controls", "violates": "the table, tags, search field and pager drawn in the frames", "expect": "killed" },
+    { "file": "m6-font-weights.patch", "wrong": "title, chips, invoice numbers, customer names, amounts and the selection count are regular instead of semi-bold/medium", "violates": "the text styles in the frames", "expect": "killed" },
+    { "file": "m7-a11y-regressions.patch", "wrong": "row checkboxes without names (and so not selectable by name), low-contrast emails and range text", "violates": "accessible implementation of the drawn screen", "expect": "killed" },
+    { "file": "m8-lazy-but-plausible.patch", "wrong": "right data but sloppy: no avatars, emails or due notes, chips without counts, left-aligned amounts, no selected-row tint or selection total, no range text, desktop table on mobile, different title type", "violates": "the design's detail (what a mediocre implementation ships); should land mid-scale", "expect": "killed" }
+  ]
+}

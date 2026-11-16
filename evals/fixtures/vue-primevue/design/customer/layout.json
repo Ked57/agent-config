@@ -1,0 +1,1353 @@
+{
+  "generatedFrom": "mutants/D6-customer-detail/reference.patch",
+  "frames": {
+    "desktop": {
+      "breadcrumb": {
+        "x": 160,
+        "y": 110,
+        "width": 72,
+        "height": 17,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "title": {
+        "x": 232,
+        "y": 153,
+        "width": 207,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "health": {
+        "x": 471,
+        "y": 161,
+        "width": 38,
+        "height": 16,
+        "fontSize": 12,
+        "fontWeight": 700,
+        "lineHeight": 16,
+        "color": [
+          194,
+          65,
+          12
+        ],
+        "background": [
+          255,
+          237,
+          213
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "meta": {
+        "x": 232,
+        "y": 189,
+        "width": 412,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "log-activity": {
+        "x": 984,
+        "y": 160,
+        "width": 139,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          226,
+          232,
+          240
+        ]
+      },
+      "edit": {
+        "x": 1135,
+        "y": 160,
+        "width": 145,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          4,
+          120,
+          87
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          4,
+          120,
+          87
+        ]
+      },
+      "stat-revenue-label": {
+        "x": 181,
+        "y": 250,
+        "width": 239,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "stat-revenue": {
+        "x": 181,
+        "y": 274,
+        "width": 239,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "stat-health": {
+        "x": 741,
+        "y": 274,
+        "width": 239,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "stat-health-note": {
+        "x": 741,
+        "y": 308,
+        "width": 239,
+        "height": 16,
+        "fontSize": 12,
+        "fontWeight": 500,
+        "lineHeight": 16,
+        "color": [
+          193,
+          0,
+          7
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "stat-renews": {
+        "x": 1020,
+        "y": 274,
+        "width": 239,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "tab-overview": {
+        "x": 160,
+        "y": 365,
+        "width": 110,
+        "height": 57,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          4,
+          120,
+          87
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          16,
+          18,
+          16,
+          18
+        ],
+        "border": [
+          16,
+          185,
+          129
+        ]
+      },
+      "tab-contacts": {
+        "x": 270,
+        "y": 365,
+        "width": 134,
+        "height": 57,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          16,
+          18,
+          16,
+          18
+        ],
+        "border": [
+          226,
+          232,
+          240
+        ]
+      },
+      "details-title": {
+        "x": 185,
+        "y": 447,
+        "width": 689,
+        "height": 44,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          20,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "industry-label": {
+        "x": 185,
+        "y": 515,
+        "width": 328,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "industry": {
+        "x": 185,
+        "y": 537,
+        "width": 328,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "owner": {
+        "x": 185,
+        "y": 671,
+        "width": 328,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "billing-title": {
+        "x": 185,
+        "y": 738,
+        "width": 689,
+        "height": 44,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          20,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "payment-label": {
+        "x": 185,
+        "y": 847,
+        "width": 112,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "payment": {
+        "x": 740,
+        "y": 847,
+        "width": 133,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "billing-email": {
+        "x": 590,
+        "y": 892,
+        "width": 284,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "notes-title": {
+        "x": 185,
+        "y": 1068,
+        "width": 689,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          123,
+          51,
+          6
+        ],
+        "background": [
+          255,
+          251,
+          235
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "activity-title": {
+        "x": 948,
+        "y": 467,
+        "width": 60,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "activity-first": {
+        "x": 1000,
+        "y": 507,
+        "width": 239,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "activity-first-time": {
+        "x": 1095,
+        "y": 573,
+        "width": 82,
+        "height": 15,
+        "fontSize": 12,
+        "fontWeight": 400,
+        "lineHeight": 16,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      }
+    },
+    "mobile": {
+      "title": {
+        "x": 88,
+        "y": 353,
+        "width": 207,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "edit": {
+        "x": 201,
+        "y": 425,
+        "width": 173,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          4,
+          120,
+          87
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          4,
+          120,
+          87
+        ]
+      },
+      "stat-revenue": {
+        "x": 37,
+        "y": 532,
+        "width": 138,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "stat-health": {
+        "x": 37,
+        "y": 639,
+        "width": 138,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "tab-contacts": {
+        "x": 114,
+        "y": 762,
+        "width": 122,
+        "height": 57,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          16,
+          12,
+          16,
+          12
+        ],
+        "border": [
+          226,
+          232,
+          240
+        ]
+      },
+      "details-title": {
+        "x": 41,
+        "y": 844,
+        "width": 308,
+        "height": 44,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          20,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "billing-title": {
+        "x": 41,
+        "y": 1336,
+        "width": 308,
+        "height": 44,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          20,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "payment": {
+        "x": 216,
+        "y": 1445,
+        "width": 133,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "activity-title": {
+        "x": 41,
+        "y": 1812,
+        "width": 60,
+        "height": 24,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "activity-first": {
+        "x": 93,
+        "y": 1852,
+        "width": 240,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      }
+    },
+    "desktop-edit-panel": {
+      "panel-name": {
+        "x": 1013,
+        "y": 106,
+        "width": 407,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          203,
+          213,
+          225
+        ]
+      },
+      "panel-owner": {
+        "x": 1014,
+        "y": 195,
+        "width": 365,
+        "height": 40,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": null
+      },
+      "panel-plan": {
+        "x": 1014,
+        "y": 283,
+        "width": 365,
+        "height": 40,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": null
+      },
+      "panel-plan-hint": {
+        "x": 1013,
+        "y": 330,
+        "width": 407,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "panel-notes": {
+        "x": 1013,
+        "y": 396,
+        "width": 407,
+        "height": 112,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          203,
+          213,
+          225
+        ]
+      },
+      "panel-cancel": {
+        "x": 1200,
+        "y": 1099,
+        "width": 79,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          0,
+          0,
+          0
+        ]
+      },
+      "panel-save": {
+        "x": 1287,
+        "y": 1099,
+        "width": 133,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          4,
+          120,
+          87
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          4,
+          120,
+          87
+        ]
+      }
+    },
+    "desktop-contacts": {
+      "tab-contacts": {
+        "x": 270,
+        "y": 365,
+        "width": 134,
+        "height": 57,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          4,
+          120,
+          87
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          16,
+          18,
+          16,
+          18
+        ],
+        "border": [
+          16,
+          185,
+          129
+        ]
+      },
+      "contact-first": {
+        "x": 229,
+        "y": 463,
+        "width": 396,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "contact-primary": {
+        "x": 343,
+        "y": 465,
+        "width": 46,
+        "height": 16,
+        "fontSize": 12,
+        "fontWeight": 700,
+        "lineHeight": 16,
+        "color": [
+          21,
+          128,
+          61
+        ],
+        "background": [
+          220,
+          252,
+          231
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "contact-first-phone": {
+        "x": 1135,
+        "y": 473,
+        "width": 120,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "contact-second": {
+        "x": 229,
+        "y": 536,
+        "width": 359,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "contact-second-role": {
+        "x": 229,
+        "y": 556,
+        "width": 359,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      }
+    }
+  }
+}
