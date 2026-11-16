@@ -14,9 +14,15 @@ Apply to `*.ts` and to pure TypeScript / `<script>` blocks in React and Vue sour
 
 - Cyclomatic complexity under 22 (`complexity` with `max: 21`).
 - Cognitive complexity under 22: reuse an existing single-rule cognitive plugin when present; otherwise enable only `sonarjs/cognitive-complexity` (threshold `21`) without the Sonar recommended suite and without a SonarQube server.
-- Halstead via `quality-metrics/halstead`: configure `maxVolume` and `maxEffort` co-thresholds the plugin supports. The rule reports Difficulty; treat reported Difficulty ≥ 80 as failure when auditing or installing. Do not invent a `maxDifficulty` option.
+- Halstead via `quality-metrics/halstead` from the npm package `quality-metrics` (not `eslint-plugin-quality-metrics`, which does not exist); register it as `plugins: { "quality-metrics": qualityMetrics }` from `import qualityMetrics from "quality-metrics"`, and install its `ts-morph` peer. Configure `maxVolume` and `maxEffort` co-thresholds the plugin supports. The rule reports Difficulty; treat reported Difficulty ≥ 80 as failure when auditing or installing. Do not invent a `maxDifficulty` option.
 - File length under 500 lines (`max-lines` with `max: 499`) and function length under 100 lines (`max-lines-per-function` with `max: 99`).
 - `@typescript-eslint/no-explicit-any`, allowing `unknown`.
+
+Missing plugins, installed with the project's package manager (only the ones not already present):
+
+```sh
+npm install -D eslint typescript-eslint eslint-plugin-sonarjs quality-metrics ts-morph knip
+```
 
 ## Knip
 
