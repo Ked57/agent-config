@@ -171,3 +171,18 @@ and the run is excluded and reported.
   those dirs needs `node_modules` linked back from a prepared fixture.
 - Host now reports 15.7 GB RAM (was 7.5 GB).
 - Phase 3 spend so far: $21.14.
+- 11:35 UTC: **comparison 1 complete**: `~/agent-config-evals/2026-11-16T10-20-full-vs-bare` (74 runs, 37 tasks,
+  $36.3 with the Vue judging finished at 11:43). First combined report: run score A (bare) 0.92, B (full)
+  0.98, d +0.06, CI −0.03 to +0.15, MDE 0.13, 30 of 37 tasks at ceiling; cost B +103% (CI +75% to +139%).
+  To redo after the two items below: recombine (delete `phase3/combined-dir` and the combined dir first).
+  1. H1 bare scored 3 of 9 because its solution makes the `Idempotency-Key` header mandatory (422
+     without it) and the hidden test sends most requests without one. The prompt allows that reading:
+     test artefact. Planned correction after comparison 2 finishes (a fixture edit mid-eval would block
+     its resume): the test sends a unique key on every request, mutant gate for H1, then `--recheck`
+     on `fvb-hard` (trail kept), recombine.
+  2. Vue judging was cut by the part's cap; finished by a resume with a higher cap.
+- 11:43 UTC: comparison 2 stopped after 2 of 10 runs: the suite detected writes in the fixture cache.
+  Cause: the lead symlinked the cache's `node_modules` into a scratch copy to re-run H1's hidden test.
+  Driver relaunched at 11:47; resume rebuilds the cache. Lesson: never link the live cache by hand; use
+  `--recheck` or `evals/mutants.mjs`.
+- Phase 3 spend so far: full-vs-bare $36.30, poteto-mode $2.94.
