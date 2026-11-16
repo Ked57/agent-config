@@ -4,7 +4,6 @@ import { locate } from './capture.mjs';
 
 const POSITION_TOLERANCE = 16; // px: full credit within this, linearly down to 0 at 3x
 const SIZE_SHARE = 0.05; // size tolerance: the larger of 16 px and 5% of the reference size
-const SAME_ROW = 4; // px: boxes whose tops differ less than this are on the same row (ordered by x)
 
 /** Page-coordinate boxes `{ x, y, width, height, fontSize, fontWeight }` of the frame's key elements; null for elements not found. */
 export async function measure(page, specs) {
@@ -23,7 +22,8 @@ export async function measure(page, specs) {
 }
 
 const credit = (error, tolerance) => Math.min(1, Math.max(0, 1 - (error - tolerance) / (2 * tolerance)));
-const before = (a, b) => (Math.abs(a.y - b.y) < SAME_ROW ? a.x - b.x : a.y - b.y);
+// Reading order: boxes that overlap vertically by at least half the shorter one share a row (left to right).
+const before = (a, b) => (Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) >= Math.min(a.height, b.height) / 2 ? a.x - b.x : a.y - b.y);
 
 /**
  * Scores measured boxes against reference boxes (both `{ id: box | null }`): per element, 0 when

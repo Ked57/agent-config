@@ -228,6 +228,12 @@ navigation starts a transition, C4 that the header changes state on scroll and r
 and C5 (container-sized grid) has static checks only. The `mutants/<task>/` patches are the gate for
 these tests (`npm run eval:mutants -- --set vue-primevue`).
 
+**Vue design tasks.** The `vue-design` set builds screens from a design hand-off on the same fixture. Its
+scorer, screen specs and export tools live in `fixtures/vue-primevue/design/` (see its README for the metric
+and how to add a screen); the Figma MCP stub and the frame mockups in `fixtures/vue-primevue/figma-stub/`. The
+template carries what the screens need and nothing else: bundled Inter fonts (`public/fonts`, linked from
+`index.html`) and seed data modules such as `src/services/analytics.ts`.
+
 The `ts-backend` fixture is a small multi-tenant tasks API with organisations, users, API tokens,
 projects, tasks and a billing webhook. It has bearer-token auth (an Elysia `requireAuth` macro),
 TypeBox request validation, JSON request logging, drizzle-kit SQL migrations plus a seed, and 16
@@ -295,7 +301,7 @@ A score is the mean of the task's required check scores. Every reference must sc
 `referenceMin`, the untouched fixture at most `untouchedMax`, and a mutant counts as killed (a known-failing
 solution as failing) when it scores at least `mutantMaxDrop` below the lowest reference. The 80% kill-rate
 rule applies to that count. The gate table prints the scores of the references, the untouched fixture and
-each mutant for every task.
+each mutant for every task; `--json` adds each run's per-check scores (`checkScores`).
 
 Make a patch from a worked app (a saved run's `app/`, or a copy you broke by hand) with
 `npm run eval:mutants -- --fixture ts-backend --make-patch <app> > <task>/m7-….patch`. It diffs
@@ -337,7 +343,9 @@ test.
 - `command` checks run a shell command in the worked copy (with `node_modules/.bin` on `PATH`) and
   pass on exit 0, or on failure with `"expect": "fail"`. `copy` maps fixture-relative files (hidden tests)
   to app-relative paths; they are copied in after the diff is taken and removed afterwards.
-  `timeoutSec` defaults to 600; a timeout scores 0.
+  `timeoutSec` defaults to 600; a timeout scores 0. `"browserTools": true` installs Playwright with Chromium,
+  pngjs and axe-core (pinned) into `<sandbox>/.cache/tools` on first use and passes that dir as `EVAL_TOOLS_DIR`
+  (browser-based scorers load their packages from there, never from the fixture).
 - `"reporter": "json-score"` on a `command` check scores it continuously: the command runs with
   `EVAL_SCORE_FILE=<temp file outside the app>` in its environment and must write
   `{ "score": <0..1>, "components": { "<name>": <0..1> }, "detail": "<short text>" }` there. The result

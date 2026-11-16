@@ -26,7 +26,11 @@ export function collectTree({ idPrefix }) {
   const px = (value) => Math.round(Number.parseFloat(value) || 0);
   const round = (value) => Math.round(value);
   const box = (rect) => ({ x: round(rect.x + window.scrollX), y: round(rect.y + window.scrollY), width: round(rect.width), height: round(rect.height) });
-  const visible = (element, style) => style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0 && element.getClientRects().length > 0;
+  // Visually hidden text (1 px clipped boxes for screen readers) is not part of a design either.
+  const visible = (element, style) => {
+    const rect = element.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0 && element.getClientRects().length > 0 && (rect.width > 1 || rect.height > 1);
+  };
   const weightName = { 100: 'Thin', 200: 'Extra Light', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semi Bold', 700: 'Bold', 800: 'Extra Bold', 900: 'Black' };
   const textStyle = (style) => ({
     fontFamily: style.fontFamily.split(',')[0].replace(/["']/g, '').trim(),

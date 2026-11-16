@@ -77,6 +77,7 @@ function runJob({ fixtureName, pristine, scratch, task, patch, label }) {
     return {
       pass: failed.length === 0,
       score: required.length ? required.reduce((sum, check) => sum + checkScore(check), 0) / required.length : null,
+      checkScores: Object.fromEntries(required.map((check) => [check.id, checkScore(check)])),
       failed: failed.map((check) => check.id),
       details: Object.fromEntries(failed.map((check) => [check.id, String(check.detail ?? '').slice(-400)])),
       ms: Date.now() - started
