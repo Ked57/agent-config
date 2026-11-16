@@ -21,13 +21,17 @@ export const DEFAULTS = Object.freeze({
   browser: false,
   http: false,
   maxUsd: null,
-  maxRuns: null
+  maxRuns: null,
+  // Non-bare arms install the ref's external plugins; 'skip' keeps installs offline.
+  plugins: 'install',
+  // Stop the eval at the first run whose session loaded something the arm did not install.
+  strictIsolation: true
 });
 
 const LIST_FLAGS = new Set(['a-add', 'a-remove', 'b-add', 'b-remove', 'env', 'watch', 'only']);
-const BOOLEAN_FLAGS = new Set(['smoke', 'browser', 'http', 'no-judge', 'dry-run', 'report-only', 'rejudge', 'recheck', 'single-arm', 'help']);
+const BOOLEAN_FLAGS = new Set(['smoke', 'browser', 'http', 'no-judge', 'dry-run', 'report-only', 'rejudge', 'recheck', 'single-arm', 'strict-isolation', 'no-strict-isolation', 'help']);
 const NUMBER_FLAGS = new Set(['reps', 'concurrency', 'timeout-min', 'judge-reps', 'judge-controls', 'max-usd', 'max-runs']);
-const STRING_FLAGS = new Set(['a', 'b', 'tasks', 'provider', 'model', 'effort', 'judge-provider', 'judge-model', 'judge-effort', 'judge-command', 'out', 'resume', 'name']);
+const STRING_FLAGS = new Set(['a', 'b', 'tasks', 'provider', 'model', 'effort', 'judge-provider', 'judge-model', 'judge-effort', 'judge-command', 'out', 'resume', 'name', 'plugins', 'a-prefix', 'b-prefix']);
 
 const camel = (flag) => flag.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
 
@@ -47,6 +51,7 @@ export function parseArgs(argv) {
     };
     if (BOOLEAN_FLAGS.has(flag)) {
       if (flag === 'no-judge') options.judge = false;
+      else if (flag === 'no-strict-isolation') options.strictIsolation = false;
       else options[camel(flag)] = true;
     } else if (NUMBER_FLAGS.has(flag)) {
       const value = Number(takeValue());
@@ -68,10 +73,26 @@ export function parseArgs(argv) {
 
 /** Parses `--x-add <path>[=<source>]`. Source is `<ref>` (same path from that ref), `<ref>:<path>`, or a filesystem path. */
 export function parseToggle(spec) {
+  if (spec.startsWith('plugin:')) throw new Error(`Adding a plugin is not supported; build the arm from a ref that declares it: ${spec}`);
   const [target, source] = spec.split(/=(.*)/s, 2);
   if (!target || target.startsWith('/') || target.split('/').includes('..')) throw new Error(`Invalid toggle path: ${spec}`);
   if (!/^(policy|skills)\//.test(target)) throw new Error(`Toggles must target policy/ or skills/: ${spec}`);
   return { path: target.replace(/\/$/, ''), source: source || null };
+}
+
+/** Validates `--x-remove`: `policy/<x>.md`, `skills/<x>`, or `plugin:<id>` (an id from the ref's bin/external-plugins.mjs). */
+export function parseRemove(spec) {
+  if (spec.startsWith('plugin:')) {
+    if (!/^plugin:[a-z0-9][a-z0-9._-]*$/.test(spec)) throw new Error(`Invalid plugin id: ${spec}`);
+    return spec;
+  }
+  return parseToggle(spec).path;
+}
+
+/** The exact prompt an arm's agent receives: the task's own `promptPrefix[arm]` wins over the arm's `--x-prefix`. */
+export function promptFor(task, arm, armSpec = {}) {
+  const prefix = task.promptPrefix?.[arm] ?? armSpec.prefix ?? '';
+  return prefix ? `${prefix} ${task.prompt}` : task.prompt;
 }
 
 const parseEnv = (pairs = []) => Object.fromEntries(pairs.map((pair) => {
@@ -93,9 +114,15 @@ export function resolveConfig(raw, taskSet) {
     config.judge = false;
   }
   config.env = parseEnv(raw.env);
+  if (!['install', 'skip'].includes(config.plugins)) throw new Error('--plugins must be install or skip');
+  const armSpec = (ref, add = [], remove = [], prefix, flag) => {
+    if (prefix !== undefined && !prefix.trim()) throw new Error(`--${flag}-prefix must not be empty`);
+    if (ref === 'BARE' && (add.length || remove.length)) throw new Error(`--${flag}-add and --${flag}-remove do not apply to a BARE arm`);
+    return { ref, add: add.map(parseToggle), remove: remove.map(parseRemove), ...(prefix !== undefined ? { prefix } : {}) };
+  };
   config.arms = {
-    A: { ref: config.a, add: (raw.aAdd ?? []).map(parseToggle), remove: raw.aRemove ?? [] },
-    B: { ref: config.b, add: (raw.bAdd ?? []).map(parseToggle), remove: raw.bRemove ?? [] }
+    A: armSpec(config.a, raw.aAdd, raw.aRemove, raw.aPrefix, 'a'),
+    B: armSpec(config.b, raw.bAdd, raw.bRemove, raw.singleArm ? raw.aPrefix : raw.bPrefix, 'b')
   };
   const known = new Set(taskSet.tasks.map((task) => task.id));
   let taskIds = taskSet.tasks.map((task) => task.id);
@@ -120,6 +147,8 @@ export function resolveConfig(raw, taskSet) {
   delete config.aRemove;
   delete config.bAdd;
   delete config.bRemove;
+  delete config.aPrefix;
+  delete config.bPrefix;
   return config;
 }
 
@@ -166,6 +195,10 @@ export function validateTaskSet(taskSet) {
     else ids.add(task.id);
     if (typeof task?.prompt !== 'string' || !task.prompt.trim()) errors.push(`${where}: prompt is required`);
     if (!(task?.category in categories)) errors.push(`${where}: unknown category ${task?.category}`);
+    if (task?.promptPrefix !== undefined && !(task.promptPrefix && typeof task.promptPrefix === 'object' && !Array.isArray(task.promptPrefix)
+      && Object.entries(task.promptPrefix).every(([arm, prefix]) => ['A', 'B'].includes(arm) && typeof prefix === 'string'))) {
+      errors.push(`${where}: promptPrefix must map A and/or B to a string`);
+    }
     if (task?.expectsPolicies !== undefined && !(Array.isArray(task.expectsPolicies) && task.expectsPolicies.every((p) => typeof p === 'string'))) {
       errors.push(`${where}: expectsPolicies must be a string array`);
     }

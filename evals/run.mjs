@@ -7,12 +7,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { aggregate } from './lib/aggregate.mjs';
-import { buildArm, compareInventories, inventory } from './lib/arms.mjs';
+import { buildArm, compareInventories, installedPlugins, inventory, prepareRunHome } from './lib/arms.mjs';
 import { browserSmoke } from './lib/browser.mjs';
-import { DEFAULTS, judgeSetId, parseArgs, resolveConfig, validateTaskSet } from './lib/config.mjs';
-import { ancestorAgentConfig, browserToolEnv } from './lib/env.mjs';
+import { DEFAULTS, judgeSetId, parseArgs, promptFor, resolveConfig, validateTaskSet } from './lib/config.mjs';
+import { browserToolEnv, killStrays, sandboxProblems, sandboxRoot } from './lib/env.mjs';
 import { httpSmoke } from './lib/http-smoke.mjs';
-import { copyForRun, fixtureHash, loadFixture, preparePristine, verifyPristine } from './lib/fixtures.mjs';
+import { copyForRun, fixtureHash, loadFixture, moveTree, preparePristine, verifyPristine } from './lib/fixtures.mjs';
+import { initEvent, initProblems, invokedCommands, loadedInstructionFiles, removalLeftovers, sessionComponents, sessionCostUsd, strayInstructionFiles, unexplainedComponents } from './lib/isolation.mjs';
 import { buildJudgePrompt, judgePair } from './lib/judge.mjs';
 import { measureRun, recheckRun } from './lib/measure.mjs';
 import { budgetAllows, buildRunQueue, changedArmFiles, fixedFlagsOnResume, flippedChecks, planJudgePairs } from './lib/plan.mjs';
@@ -22,18 +23,25 @@ import { renderReport } from './lib/report.mjs';
 const EVALS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(EVALS_DIR, '..');
 const EVALS_HOME = process.env.AGENT_CONFIG_EVALS_HOME ?? path.join(os.homedir(), 'agent-config-evals');
-const CACHE_ROOT = path.join(EVALS_HOME, '.cache');
+// Agents run in a sandbox outside the home tree (see evals/README.md, "Isolation and safety"). The
+// fixture cache lives there too, so nothing an agent can reach by relative path sits under the home.
+const SANDBOX_ROOT = sandboxRoot();
+const CACHE_ROOT = path.join(SANDBOX_ROOT, '.cache');
 const MAX_DIFF_CHARS = 60000;
 
 const USAGE = `Usage: npm run eval -- --b <ref> [options]
 
 Arms
-  --a <ref>                 Arm A agent-config ref (default: main). WORKTREE = current working tree.
+  --a <ref>                 Arm A agent-config ref (default: main). WORKTREE = current working tree,
+                            BARE = empty home (Claude Code with nothing installed).
   --b <ref>                 Arm B ref (required unless --single-arm). Use --b main for an A/A control.
   --single-arm              Run only arm A (no --b, no judging): validate tasks and checks cheaply.
   --a-add / --b-add <path>[=<src>]   Add or replace policy/<x>.md or skills/<x> in that arm.
                             <src>: a ref (same path), <ref>:<path>, or a file/dir. Omit for the working tree.
-  --a-remove / --b-remove <path>     Remove policy/<x>.md or skills/<x> from that arm.
+  --a-remove / --b-remove <path>     Remove policy/<x>.md, skills/<x> or plugin:<id> (external plugin) from that arm.
+  --a-prefix / --b-prefix "<text>"   Prepend to every task prompt in that arm (e.g. "/pstack:poteto-mode").
+                            A task's own promptPrefix: { "A": ..., "B": ... } wins.
+  --plugins install|skip    Install the refs' external plugins into the arms (default: install).
 Tasks
   --tasks <name|file>       Task set in evals/tasks/<name>.json or a path (default: ${DEFAULTS.tasks}).
   --only <id,id>            Run only these task ids.   --smoke   Task set's smoke subset, 1 rep.
@@ -60,6 +68,7 @@ Execution
   --report-only             With --resume: re-aggregate and rewrite the report only.
   --recheck                 With --resume: re-score saved runs against the repo's current task checks
                             (hidden tests included); no agent runs, gates are not re-run.
+  --no-strict-isolation     Keep going after a run fails the isolation check (it is excluded either way).
   --dry-run                 Build arms and fixture, print the plan, call no models.
   --name <name>             Label for the results dir and report.`;
 
@@ -101,6 +110,90 @@ function migrateLegacyJudgments(outDir, config) {
   log(`Moved ${legacy.length} earlier judgment(s) into results/judge/${set}/`);
 }
 
+/** Every session log (jsonl) under a provider's session root, with its path relative to that root. */
+function collectSessions(root) {
+  const sessions = [];
+  const visit = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(full);
+      else if (entry.isFile() && entry.name.endsWith('.jsonl')) sessions.push({ relative: path.relative(root, full).split(path.sep).join('/'), text: fs.readFileSync(full, 'utf8') });
+    }
+  };
+  if (fs.existsSync(root)) visit(root);
+  return sessions;
+}
+
+/**
+ * The per-run isolation check: the run's init event against the arm's probe, and every instruction
+ * file its sessions loaded against the run's own home and working copy.
+ */
+function checkIsolation({ arm, runHome, app, runDir, provider, record, sessions, sessionText }) {
+  const transcriptFile = path.join(runDir, provider.transcriptFile);
+  const init = initEvent(fs.existsSync(transcriptFile) ? fs.readFileSync(transcriptFile, 'utf8') : '');
+  const problems = [];
+  // A run that died before its session started has nothing to verify and is already an error.
+  if (init || record.status === 'ok') problems.push(...initProblems({ expected: arm.expected, init, runHome, app }));
+  if (init && !sessions.length) problems.push('no session log, so loaded instruction files could not be checked');
+  const instructions = loadedInstructionFiles(sessionText);
+  problems.push(...strayInstructionFiles(instructions, [runHome, app]).map((file) => `instruction file outside the run: ${file}`));
+  const shown = (file) => file.split(runHome).join('~').split(app).join('<app>');
+  return { ok: problems.length === 0, problems, instructions: instructions.map(shown), commands: invokedCommands(sessionText) };
+}
+
+/**
+ * One cheap probe session per arm (and one in an empty home, for the built-ins) from an empty cwd in
+ * the sandbox. The arm's init event becomes its expectation for every run; every component that is not
+ * built in must come from a file under the arm home, and removed plugins must be gone.
+ */
+async function probeArms({ provider, sandbox, outDir, armsInfo, armIds }) {
+  const probeRoot = path.join(sandbox, 'probe');
+  const session = async (name, template, files) => {
+    const dir = path.join(probeRoot, name);
+    const home = path.join(dir, 'home');
+    const cwd = path.join(dir, 'cwd');
+    const tmp = path.join(dir, 'tmp');
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (template) prepareRunHome({ template, home, files });
+    for (const directory of [home, cwd, tmp]) fs.mkdirSync(directory, { recursive: true });
+    const transcriptPath = path.join(dir, 'transcript.jsonl');
+    const text = await provider.probe({ home, cwd, tmp, transcriptPath });
+    fs.mkdirSync(path.join(outDir, 'probes'), { recursive: true });
+    fs.copyFileSync(transcriptPath, path.join(outDir, 'probes', `${name}.jsonl`));
+    const init = initEvent(text);
+    if (!init) throw new Error(`Probe ${name} printed no init event`);
+    const instructions = loadedInstructionFiles(collectSessions(provider.sessionRoot(home)).map((entry) => entry.text).join('\n'));
+    const problems = [
+      ...strayInstructionFiles(instructions, [home, cwd]).map((file) => `instruction file outside the probe home: ${file}`),
+      ...(init.mcp_servers?.length ? [`MCP servers loaded: ${init.mcp_servers.map((server) => server.name ?? server).join(', ')}`] : [])
+    ];
+    const costUsd = provider.parseTranscript(text).costUsd ?? 0;
+    log(`probe ${name}: ${init.skills?.length ?? 0} skills, ${init.plugins?.length ?? 0} plugins, ${init.agents?.length ?? 0} agents, ${instructions.length} instruction file(s), $${costUsd.toFixed(4)}`);
+    return { dir, home, cwd, init, components: sessionComponents(init, home), instructions: instructions.map((file) => file.split(home).join('~')), problems, costUsd };
+  };
+  const builtin = await session('builtin', null);
+  if (builtin.problems.length || builtin.instructions.length) throw new Error(`An empty home already loads more than Claude Code's built-ins: ${[...builtin.problems, ...builtin.instructions].join('; ')}`);
+  armsInfo.builtins = { skills: builtin.components.skills, plugins: builtin.components.plugins, agents: builtin.components.agents, slashCommands: builtin.components.slashCommands, claudeCodeVersion: builtin.init.claude_code_version ?? null };
+  fs.rmSync(builtin.dir, { recursive: true, force: true });
+  for (const arm of armIds) {
+    const info = armsInfo[arm];
+    const probe = await session(`arm-${arm}`, info.home, info.homePathFiles);
+    const plugins = installedPlugins(probe.home);
+    const installed = Object.fromEntries(Object.entries(plugins).map(([name, plugin]) => [name, plugin.installPath]));
+    const loaded = new Set(probe.components.plugins.map((plugin) => plugin.name));
+    const problems = [
+      ...probe.problems,
+      ...unexplainedComponents({ components: probe.components, builtins: armsInfo.builtins, home: probe.home, installed }),
+      ...removalLeftovers(probe.components, info.removedPlugins),
+      ...Object.keys(plugins).filter((name) => !loaded.has(name)).map((name) => `installed plugin ${name} did not load`)
+    ];
+    if (problems.length) throw new Error(`Arm ${arm} (${info.ref}) failed its probe: ${problems.join('; ')}`);
+    info.expected = probe.components;
+    info.probe = { instructions: probe.instructions, costUsd: probe.costUsd, claudeCodeVersion: probe.init.claude_code_version ?? null };
+    fs.rmSync(probe.dir, { recursive: true, force: true });
+  }
+}
+
 async function pool(items, concurrency, worker, shouldStop) {
   const queue = [...items];
   await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
@@ -123,7 +216,7 @@ async function main() {
     if (fixed.length) throw new Error(`--resume keeps the eval's arms, tasks, model and reps: drop ${fixed.join(', ')} or start a new eval`);
     migrateLegacyJudgments(outDir, config);
     const overrides = {};
-    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser', 'http', 'judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand']) if (raw[key] !== undefined && raw[key] !== config[key]) {
+    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser', 'http', 'judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand', 'strictIsolation']) if (raw[key] !== undefined && raw[key] !== config[key]) {
       overrides[key] = { from: config[key] ?? null, to: raw[key] };
       config[key] = raw[key];
     }
@@ -141,6 +234,7 @@ async function main() {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     outDir = path.resolve(raw.out ?? path.join(EVALS_HOME, `${stamp}-${config.name}`));
     if (fs.existsSync(path.join(outDir, 'config.json'))) throw new Error(`${outDir} already holds an eval; use --resume ${outDir}`);
+    config.sandbox = path.join(SANDBOX_ROOT, `${path.basename(outDir)}-${sha256(outDir).slice(0, 6)}`);
     writeJson(path.join(outDir, 'config.json'), config);
     writeJson(path.join(outDir, 'taskset.json'), taskSet);
   }
@@ -158,15 +252,26 @@ async function main() {
   }
   const warnings = [];
   if (raw.resume && agentRunsWanted && !config.fixtureHash) warnings.push('This eval predates fixture hashes: runs added by --resume may use a different fixture version than the earlier ones.');
-  const ancestors = ancestorAgentConfig(path.join(outDir, 'runs', 'run', 'app'));
-  if (ancestors.length) warnings.push(`Agent working copies sit under ${ancestors.map((file) => `\`${file}\``).join(', ')}: Claude Code loads these as project config in BOTH arms regardless of HOME. Keep results outside your home (AGENT_CONFIG_EVALS_HOME or --out) for a clean isolation.`);
-  const tasksById = Object.fromEntries(taskSet.tasks.map((task) => [task.id, task]));
+  // Evals from before the sandbox ran agents under the results dir; their saved runs can still be
+  // reported, rechecked and rejudged, but new agent runs need arms built in a sandbox.
+  const sandbox = config.sandbox ?? path.join(SANDBOX_ROOT, `${path.basename(outDir)}-${sha256(outDir).slice(0, 6)}`);
   const armsFile = path.join(outDir, 'arms.json');
+  // Arm builds, agent runs and the judge all execute in the sandbox.
+  if (!fs.existsSync(armsFile) || agentRunsWanted || (config.judge && !reportOnly)) {
+    const problems = sandboxProblems(sandbox);
+    if (problems.length) throw new Error(`Refusing to run agents: ${problems.join('; ')}. Set AGENT_CONFIG_EVALS_SANDBOX to a directory outside your home with no agent config above it.`);
+    if (agentRunsWanted && !config.sandbox && fs.existsSync(armsFile)) throw new Error('This eval predates the sandbox (its agents ran under the results dir): start a new eval for new runs, or use --report-only, --rejudge or --recheck.');
+  }
+  const tasksById = Object.fromEntries(taskSet.tasks.map((task) => [task.id, task]));
+  const armIds = config.singleArm ? ['A'] : ['A', 'B'];
   let armsInfo;
   if (fs.existsSync(armsFile)) {
     armsInfo = readJson(armsFile);
-    for (const arm of config.singleArm ? ['A'] : ['A', 'B']) {
-      if (!fs.existsSync(armsInfo[arm].home)) continue;
+    for (const arm of armIds) {
+      if (!fs.existsSync(armsInfo[arm].home)) {
+        if (agentRunsWanted && !raw.dryRun) throw new Error(`Arm ${arm}'s home ${armsInfo[arm].home} is gone (sandbox cleaned?); new runs could not match the saved ones. Start a new eval.`);
+        continue;
+      }
       const changed = changedArmFiles(armsInfo[arm].hashes, inventory(armsInfo[arm].home).hashes);
       if (!changed.length) continue;
       const message = `Arm ${arm}'s installed config changed after it was built (${changed.slice(0, 5).join(', ')})`;
@@ -175,9 +280,10 @@ async function main() {
     }
   } else {
     const built = {};
-    for (const arm of config.singleArm ? ['A'] : ['A', 'B']) {
-      log(`Building arm ${arm} from ${config.arms[arm].ref}${config.arms[arm].add.length + config.arms[arm].remove.length ? ' with toggles' : ''}`);
-      built[arm] = buildArm({ repoRoot: REPO_ROOT, spec: config.arms[arm], armDir: path.join(outDir, 'arms', arm) });
+    for (const arm of armIds) {
+      log(`Building arm ${arm} from ${config.arms[arm].ref}${config.arms[arm].add.length + config.arms[arm].remove.length ? ' with toggles' : ''} in ${path.join(sandbox, 'arms', arm)}`);
+      built[arm] = await buildArm({ repoRoot: REPO_ROOT, spec: config.arms[arm], armDir: path.join(sandbox, 'arms', arm), plugins: config.plugins ?? 'skip', npmCache: path.join(CACHE_ROOT, 'npm-cache') });
+      log(`Arm ${arm}: ${built[arm].policies.length} policies, ${built[arm].skills.length} skills, plugins ${built[arm].plugins.map((plugin) => `${plugin.id}@${plugin.version}`).join(', ') || 'none'}`);
     }
     built.B ??= built.A;
     armsInfo = { A: built.A, B: built.B, ...compareInventories(built.A, built.B) };
@@ -185,11 +291,24 @@ async function main() {
   }
   log(`Arms ${armsInfo.identical ? 'identical (A/A control)' : `differ in ${armsInfo.changedFiles.length} file(s); watching ${armsInfo.watched.join(', ') || 'nothing'}`}`);
 
-  const pristine = agentRunsWanted ? preparePristine(fixture, CACHE_ROOT, log) : null;
   const provider = agentProvider(config.provider);
+  if (agentRunsWanted && !raw.dryRun && armIds.some((arm) => !armsInfo[arm].expected)) {
+    await probeArms({ provider, sandbox, outDir, armsInfo, armIds });
+    if (config.singleArm) armsInfo.B = armsInfo.A;
+    writeJson(armsFile, armsInfo);
+  }
+  const pristine = agentRunsWanted ? preparePristine(fixture, CACHE_ROOT, log) : null;
   const resultsDir = path.join(outDir, 'results', 'runs');
-  const activeJudgeSet = judgeSetId(config);
   const judgeRoot = path.join(outDir, 'results', 'judge');
+  let activeJudgeSet = judgeSetId(config);
+  // A bare --report-only must report the judge set the last report used, even if config.json says otherwise.
+  const judgeFlagPassed = ['judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand'].some((key) => raw[key] !== undefined);
+  const lastSummary = fs.existsSync(path.join(outDir, 'summary.json')) ? readJson(path.join(outDir, 'summary.json')) : null;
+  const lastJudgeSet = lastSummary?.cost?.judgeSet ?? lastSummary?.judgeSet ?? null;
+  if (reportOnly && !judgeFlagPassed && lastJudgeSet && lastJudgeSet !== activeJudgeSet && fs.existsSync(path.join(judgeRoot, lastJudgeSet))) {
+    warnings.push(`config.json names judge set \`${activeJudgeSet}\`, the last report used \`${lastJudgeSet}\`: kept \`${lastJudgeSet}\`. Pass --judge-model to switch.`);
+    activeJudgeSet = lastJudgeSet;
+  }
   const judgeDir = path.join(judgeRoot, activeJudgeSet);
   const runs = readDir(resultsDir);
   // A judgment belongs to the patches it saw: once a run is redone, verdicts on its old patch are dropped.
@@ -254,12 +373,14 @@ async function main() {
   }
   const pending = agentRunsWanted ? queue.filter((job) => !done.has(job.id)) : [];
   if (raw.dryRun) {
-    console.log(JSON.stringify({ outDir, arms: { A: armsInfo.A.ref, B: armsInfo.B.ref }, identical: armsInfo.identical, changedFiles: armsInfo.changedFiles, watched: armsInfo.watched, tasks: config.taskIds, reps: config.reps, pendingRuns: pending.length, completedRuns: runs.length }, null, 2));
+    console.log(JSON.stringify({ outDir, sandbox, arms: { A: armsInfo.A.ref, B: armsInfo.B.ref }, plugins: { A: armsInfo.A.plugins?.map((plugin) => `${plugin.id}@${plugin.version}`), B: armsInfo.B.plugins?.map((plugin) => `${plugin.id}@${plugin.version}`) }, identical: armsInfo.identical, changedFiles: armsInfo.changedFiles, watched: armsInfo.watched, tasks: config.taskIds, reps: config.reps, pendingRuns: pending.length, completedRuns: runs.length }, null, 2));
     return;
   }
 
   let inFlight = 0;
   log(`${pending.length} run(s) pending, ${runs.length} already done, $${spent().toFixed(2)} spent so far`);
+  // A run interrupted mid-way has no result file: its sandbox dir is stale and is redone from scratch.
+  if (pending.length) fs.rmSync(path.join(sandbox, 'runs'), { recursive: true, force: true });
   await pool(pending, config.concurrency, async (job) => {
     const budget = budgetAllows(config, { spentUsd: spent(), runsDone: runs.length, runsInFlight: inFlight });
     if (!budget.ok) {
@@ -267,18 +388,29 @@ async function main() {
       return;
     }
     inFlight += 1;
+    const runRoot = path.join(sandbox, 'runs', job.id);
+    const runHome = path.join(runRoot, 'home');
+    const tmp = path.join(runRoot, 'tmp');
+    const strayMarkers = [`HOME=${runHome}`, `TMPDIR=${tmp}`];
     try {
       const task = tasksById[job.task];
       const arm = armsInfo[job.arm];
       const runDir = path.join(outDir, 'runs', job.id);
-      const app = path.join(runDir, 'app');
+      const app = path.join(runRoot, 'app');
+      fs.rmSync(runRoot, { recursive: true, force: true });
+      fs.rmSync(runDir, { recursive: true, force: true });
+      fs.mkdirSync(runDir, { recursive: true });
+      fs.mkdirSync(tmp, { recursive: true });
+      prepareRunHome({ template: arm.home, home: runHome, files: arm.homePathFiles });
       copyForRun(fixture, pristine, app);
+      const prompt = promptFor(task, job.arm, config.arms[job.arm]);
       log(`start ${job.id}`);
       const env = { ...browserToolEnv(job.id), ...config.env };
       const agentResult = await provider.runAgent({
-        home: arm.home,
+        home: runHome,
         cwd: app,
-        prompt: task.prompt,
+        tmp,
+        prompt,
         model: config.model,
         effort: config.effort,
         transcriptPath: path.join(runDir, provider.transcriptFile),
@@ -286,11 +418,26 @@ async function main() {
         timeoutMs: config.timeoutMin * 60 * 1000,
         env
       });
-      // Stop dev servers or browsers the agent left behind in this run's copy.
-      spawnSync('pkill', ['-f', '--', app]);
-      spawnSync('agent-browser', ['close'], { env: { PATH: process.env.PATH, HOME: arm.home, AGENT_BROWSER_SESSION: env.AGENT_BROWSER_SESSION }, timeout: 20000 });
+      // Stop browsers, then anything else the run left behind (the provider already killed its process group).
+      spawnSync('agent-browser', ['close'], { env: { PATH: process.env.PATH, HOME: runHome, AGENT_BROWSER_SESSION: env.AGENT_BROWSER_SESSION }, timeout: 20000 });
+      const strays = killStrays({ root: runRoot, markers: strayMarkers });
       const record = measureRun({ job, fixture, pristine, runDir, app, taskSet, task, provider, armsInfo, agentResult });
       record.fixtureHash = currentFixtureHash;
+      record.prompt = prompt;
+      if (strays.length) record.strays = strays;
+      const sessions = collectSessions(provider.sessionRoot(runHome));
+      const sessionText = sessions.map((session) => session.text).join('\n');
+      // A run killed before its result event has no total; its session log still has the running cost.
+      if (record.cost?.usd === null || record.cost?.usd === undefined) {
+        const usd = sessions.filter((session) => !session.relative.includes('/subagents/')).reduce((sum, session) => sum + (sessionCostUsd(session.text) ?? 0), 0);
+        if (usd > 0) record.cost = { ...record.cost, usd, usdSource: 'session-log' };
+      }
+      record.isolation = checkIsolation({ arm, runHome, app, runDir, provider, record, sessions, sessionText });
+      if (!record.isolation.ok) {
+        record.status = 'isolation';
+        record.error = `isolation: ${record.isolation.problems.join('; ')}`;
+        if (config.strictIsolation ?? true) stopReason ??= `${job.id} failed the isolation check (${record.isolation.problems[0]})`;
+      }
       // A run that wrote through a hard link has changed node_modules for every later run: stop there.
       const cacheChanged = verifyPristine(fixture, pristine);
       if (cacheChanged.length) {
@@ -299,21 +446,32 @@ async function main() {
       }
       if (config.browser) record.browser = await browserSmoke({ fixture, app, outDir: path.join(runDir, 'screens'), cacheRoot: CACHE_ROOT }).catch((error) => ({ ok: false, error: String(error), routes: {} }));
       if (config.http) record.http = await httpSmoke({ fixture, app, outDir: path.join(runDir, 'http') }).catch((error) => ({ ok: false, error: String(error), requests: {} }));
+      // The worked copy joins the results (same filesystem: a rename, hard links intact) so --recheck,
+      // gates and diff.patch keep working; the session logs are kept; the run's home and tmp go.
+      killStrays({ root: runRoot, markers: strayMarkers });
+      moveTree(app, path.join(runDir, 'app'));
+      for (const session of sessions) {
+        const target = path.join(runDir, 'session', session.relative);
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, session.text);
+      }
       writeJson(path.join(resultsDir, `${job.id}.json`), record);
       runs.push(record);
       spend.runsUsd += record.cost?.usd ?? 0;
-      const fired = Object.entries(record.telemetry.policies).filter(([name, value]) => value.fired && armsInfo.watched.includes(name)).map(([name]) => name);
+      const fired = Object.entries(record.telemetry?.policies ?? {}).filter(([name, value]) => value.fired && armsInfo.watched.includes(name)).map(([name]) => name);
       log(`done  ${job.id} ${record.status} ${(record.wallMs / 60000).toFixed(1)}min $${(record.cost?.usd ?? 0).toFixed(2)} gates=${record.gatesPass ? 'pass' : 'FAIL'} checks=${record.checks.filter((c) => c.level === 'required' && c.pass).length}/${record.checks.filter((c) => c.level === 'required').length}${fired.length ? ` fired=${fired.join(',')}` : ''} | total $${spent().toFixed(2)}`);
     } catch (error) {
       log(`FAILED ${job.id}: ${error.message}`);
     } finally {
+      killStrays({ root: runRoot, markers: strayMarkers });
+      fs.rmSync(runRoot, { recursive: true, force: true });
       inFlight -= 1;
     }
   }, () => Boolean(stopReason));
 
   if (config.judge && !reportOnly) {
     const judge = judgeProvider(config);
-    const judgeHome = path.join(outDir, 'judge-home');
+    const judgeHome = path.join(sandbox, 'judge', 'home');
     fs.mkdirSync(judgeHome, { recursive: true });
     const judged = new Set(judgments.map((judgment) => judgment.id));
     const pairs = planJudgePairs({ runs, controls: config.judgeControls, armsIdentical: armsInfo.identical }).filter((pair) => !judged.has(pair.id));
@@ -350,15 +508,19 @@ async function main() {
   if (pristine) {
     const changed = verifyPristine(fixture, pristine);
     if (changed.length) warnings.push(`${changed.length} cached fixture file(s) changed during this eval through hard links (e.g. \`${changed[0]}\`): runs after the first write used a modified node_modules. The cache is rebuilt on the next eval.`);
-    for (const arm of config.singleArm ? ['A'] : ['A', 'B']) {
+    for (const arm of armIds) {
+      if (!fs.existsSync(armsInfo[arm].home)) continue;
       const changedConfig = changedArmFiles(armsInfo[arm].hashes, inventory(armsInfo[arm].home).hashes);
       if (changedConfig.length) warnings.push(`Arm ${arm}'s installed config was modified during the eval (${changedConfig.slice(0, 5).join(', ')}).`);
     }
   }
+  const isolationFailures = runs.filter((run) => run.status === 'isolation');
+  if (isolationFailures.length) warnings.push(`${isolationFailures.length} run(s) failed the isolation check and are excluded from the results: ${isolationFailures.map((run) => `${run.id} (${run.isolation?.problems?.[0] ?? run.error})`).join('; ')}.`);
   for (const warning of warnings) log(`WARNING: ${warning}`);
   if (stopReason) log(`Stopped early: ${stopReason}. Resume with: npm run eval -- --resume ${outDir}`);
 
-  const summary = aggregate({ config, taskSet, armsInfo, runs, judgments, activeJudgeSet, otherJudgeSets });
+  // Runs that loaded something the arm did not install measured a different setup: leave them out.
+  const summary = aggregate({ config, taskSet, armsInfo, runs: runs.filter((run) => run.status !== 'isolation'), judgments, activeJudgeSet, otherJudgeSets });
   summary.stoppedEarly = stopReason;
   summary.warnings = warnings;
   summary.history = readAudit(outDir);

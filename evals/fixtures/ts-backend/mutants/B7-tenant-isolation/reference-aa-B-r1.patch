@@ -1,0 +1,54 @@
+diff -ruN a/src/routes/tasks.test.ts b/src/routes/tasks.test.ts
+--- a/src/routes/tasks.test.ts
++++ b/src/routes/tasks.test.ts
+@@ -70,6 +70,33 @@
+     expect(transport).toHaveBeenCalledTimes(1);
+   });
+ 
++  it("hides other organizations' tasks as if they did not exist", async () => {
++    const { request } = await createTestContext();
++    const token = SEED_TOKENS.globexAdmin;
++    const missing = await request("GET", "/api/tasks/tsk_missing", { token });
++    expect(missing.status).toBe(404);
++    const missingBody = await missing.json();
++
++    const read = await request("GET", "/api/tasks/tsk_1", { token });
++    expect(read.status).toBe(404);
++    expect(await read.json()).toEqual(missingBody);
++    const update = await request("PATCH", "/api/tasks/tsk_1", {
++      token,
++      body: { title: "Hijacked" },
++    });
++    expect(update.status).toBe(404);
++    expect(await update.json()).toEqual(missingBody);
++    const remove = await request("DELETE", "/api/tasks/tsk_1", { token });
++    expect(remove.status).toBe(404);
++    expect(await remove.json()).toEqual(missingBody);
++
++    const own = await request("GET", "/api/tasks/tsk_1", {
++      token: SEED_TOKENS.acmeMember,
++    });
++    expect(own.status).toBe(200);
++    expect(await own.json()).not.toMatchObject({ title: "Hijacked" });
++  });
++
+   it("only lets admins delete tasks", async () => {
+     const { request } = await createTestContext();
+     expect(
+diff -ruN a/src/routes/tasks.ts b/src/routes/tasks.ts
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -12,11 +12,11 @@
+     .use(authGuard(db))
+     .get(
+       "/:id",
+-      async ({ params, status }) => {
++      async ({ params, user, status }) => {
+         const task = await db
+           .select()
+           .from(tasks)
+-          .where(eq(tasks.id, params.id))
++          .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
+           .get();
+         if (!task) return status(404, { error: "task not found" });
+         return toTaskResponse(task);

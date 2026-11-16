@@ -1,0 +1,263 @@
+diff -ruN a/src/lib/cursor.test.ts b/src/lib/cursor.test.ts
+--- /dev/null
++++ b/src/lib/cursor.test.ts
+@@ -0,0 +1,25 @@
++import { describe, expect, it } from "vitest";
++
++import { decodeCursor, encodeCursor } from "./cursor";
++
++describe("cursor", () => {
++  it("round-trips a position", () => {
++    const position = {
++      createdAt: new Date("2026-10-01T09:01:00Z"),
++      id: "tsk_1",
++    };
++    expect(decodeCursor(encodeCursor(position))).toEqual(position);
++  });
++
++  it("rejects malformed cursors", () => {
++    const encode = (value: unknown) =>
++      Buffer.from(JSON.stringify(value)).toString("base64url");
++    expect(decodeCursor("not a cursor")).toBeNull();
++    expect(decodeCursor("")).toBeNull();
++    expect(decodeCursor(encode({ createdAt: 1, id: "tsk_1" }))).toBeNull();
++    expect(decodeCursor(encode([1.5, "tsk_1"]))).toBeNull();
++    expect(decodeCursor(encode([1, ""]))).toBeNull();
++    expect(decodeCursor(encode([1, 2]))).toBeNull();
++    expect(decodeCursor(encode([1, "tsk_1", "extra"]))).toBeNull();
++  });
++});
+diff -ruN a/src/lib/cursor.ts b/src/lib/cursor.ts
+--- /dev/null
++++ b/src/lib/cursor.ts
+@@ -0,0 +1,29 @@
++/**
++ * Opaque keyset cursor for lists ordered by (createdAt, id). The id breaks ties between
++ * rows created in the same millisecond so no row is skipped or repeated across pages.
++ */
++export interface Cursor {
++  createdAt: Date;
++  id: string;
++}
++
++export function encodeCursor({ createdAt, id }: Cursor): string {
++  return Buffer.from(JSON.stringify([createdAt.getTime(), id])).toString(
++    "base64url",
++  );
++}
++
++/** Returns null for anything that was not produced by `encodeCursor`. */
++export function decodeCursor(value: string): Cursor | null {
++  let parsed: unknown;
++  try {
++    parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
++  } catch {
++    return null;
++  }
++  if (!Array.isArray(parsed) || parsed.length !== 2) return null;
++  const [time, id] = parsed as unknown[];
++  if (!Number.isSafeInteger(time) || typeof id !== "string" || id === "")
++    return null;
++  return { createdAt: new Date(time as number), id };
++}
+diff -ruN a/src/routes/projects.test.ts b/src/routes/projects.test.ts
+--- a/src/routes/projects.test.ts
++++ b/src/routes/projects.test.ts
+@@ -1,7 +1,13 @@
+ import { describe, expect, it } from "vitest";
+ 
++import { tasks } from "../db/schema";
+ import { createTestContext, SEED_TOKENS } from "../test/helpers";
+ 
++interface TaskPage {
++  items: Array<{ id: string; status: string; assigneeId: string | null }>;
++  nextCursor: string | null;
++}
++
+ describe("projects", () => {
+   it("lists the organization's projects with task counts", async () => {
+     const { request } = await createTestContext();
+@@ -56,9 +62,100 @@
+     const response = await request("GET", "/api/projects/prj_web/tasks", {
+       token: SEED_TOKENS.acmeMember,
+     });
+-    const { items } = (await response.json()) as {
+-      items: Array<{ id: string }>;
+-    };
++    const { items, nextCursor } = (await response.json()) as TaskPage;
+     expect(items.map((item) => item.id)).toEqual(["tsk_1", "tsk_2", "tsk_3"]);
++    expect(nextCursor).toBeNull();
++  });
++
++  it("pages through a project's tasks with a cursor", async () => {
++    const { db, request } = await createTestContext();
++    // 25 extra tasks, all sharing one timestamp so the id tie-breaker is exercised.
++    const createdAt = new Date("2026-10-02T00:00:00Z");
++    await db.insert(tasks).values(
++      Array.from({ length: 25 }, (_, i) => ({
++        id: `tsk_bulk_${String(i).padStart(2, "0")}`,
++        orgId: "org_acme",
++        projectId: "prj_web",
++        title: `Bulk ${i}`,
++        createdAt,
++        updatedAt: createdAt,
++      })),
++    );
++    const getPage = async (query: string) => {
++      const response = await request(
++        "GET",
++        `/api/projects/prj_web/tasks${query}`,
++        { token: SEED_TOKENS.acmeMember },
++      );
++      expect(response.status).toBe(200);
++      return (await response.json()) as TaskPage;
++    };
++
++    const first = await getPage("");
++    expect(first.items).toHaveLength(20);
++    expect(first.nextCursor).toEqual(expect.any(String));
++    const second = await getPage(`?cursor=${first.nextCursor}`);
++    expect(second.items).toHaveLength(8);
++    expect(second.nextCursor).toBeNull();
++    expect([...first.items, ...second.items].map((item) => item.id)).toEqual([
++      "tsk_1",
++      "tsk_2",
++      "tsk_3",
++      ...Array.from(
++        { length: 25 },
++        (_, i) => `tsk_bulk_${String(i).padStart(2, "0")}`,
++      ),
++    ]);
++
++    const small = await getPage("?limit=2");
++    expect(small.items.map((item) => item.id)).toEqual(["tsk_1", "tsk_2"]);
++    const all = await getPage("?limit=100");
++    expect(all.items).toHaveLength(28);
++    expect(all.nextCursor).toBeNull();
++  });
++
++  it("filters a project's tasks by status and assignee", async () => {
++    const { request } = await createTestContext();
++    const list = async (query: string) => {
++      const response = await request(
++        "GET",
++        `/api/projects/prj_web/tasks${query}`,
++        { token: SEED_TOKENS.acmeMember },
++      );
++      return ((await response.json()) as TaskPage).items.map((item) => item.id);
++    };
++    expect(await list("?status=todo")).toEqual(["tsk_3"]);
++    expect(await list("?assigneeId=usr_bob")).toEqual(["tsk_2"]);
++    expect(await list("?status=todo&assigneeId=usr_bob")).toEqual([]);
++
++    const firstUnfinished = await request(
++      "GET",
++      "/api/projects/prj_web/tasks?status=in_progress&limit=1",
++      { token: SEED_TOKENS.acmeMember },
++    );
++    expect(await firstUnfinished.json()).toMatchObject({
++      items: [{ id: "tsk_2" }],
++      nextCursor: null,
++    });
++  });
++
++  it("rejects invalid task list parameters", async () => {
++    const { request } = await createTestContext();
++    for (const query of [
++      "?limit=0",
++      "?limit=101",
++      "?limit=abc",
++      "?limit=2.5",
++      "?status=archived",
++      "?cursor=garbage",
++    ]) {
++      const response = await request(
++        "GET",
++        `/api/projects/prj_web/tasks${query}`,
++        { token: SEED_TOKENS.acmeMember },
++      );
++      expect(response.status, query).toBeGreaterThanOrEqual(400);
++      expect(response.status, query).toBeLessThan(500);
++    }
+   });
+ });
+diff -ruN a/src/routes/projects.ts b/src/routes/projects.ts
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -1,8 +1,9 @@
+-import { and, asc, count, eq } from "drizzle-orm";
++import { and, asc, count, eq, gt, or, type SQL } from "drizzle-orm";
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+ import { projects, tasks, users } from "../db/schema";
++import { decodeCursor, encodeCursor } from "../lib/cursor";
+ import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+@@ -79,7 +80,7 @@
+     )
+     .get(
+       "/:id/tasks",
+-      async ({ params, user, status }) => {
++      async ({ params, query, user, status }) => {
+         const project = await db
+           .select()
+           .from(projects)
+@@ -88,14 +89,52 @@
+           )
+           .get();
+         if (!project) return status(404, "Project not found");
++
++        const conditions: SQL[] = [eq(tasks.projectId, project.id)];
++        if (query.status) conditions.push(eq(tasks.status, query.status));
++        if (query.assigneeId)
++          conditions.push(eq(tasks.assigneeId, query.assigneeId));
++        if (query.cursor !== undefined) {
++          const cursor = decodeCursor(query.cursor);
++          if (!cursor) return status(400, { error: "invalid cursor" });
++          const after = or(
++            gt(tasks.createdAt, cursor.createdAt),
++            and(eq(tasks.createdAt, cursor.createdAt), gt(tasks.id, cursor.id)),
++          );
++          if (after) conditions.push(after);
++        }
++
++        const limit = query.limit ?? 20;
++        // Fetch one extra row to learn whether another page exists.
+         const rows = await db
+           .select()
+           .from(tasks)
+-          .where(eq(tasks.projectId, project.id))
+-          .orderBy(asc(tasks.createdAt));
+-        return { items: rows.map(toTaskResponse) };
++          .where(and(...conditions))
++          .orderBy(asc(tasks.createdAt), asc(tasks.id))
++          .limit(limit + 1);
++        const page = rows.slice(0, limit);
++        const last = page.at(-1);
++        return {
++          items: page.map(toTaskResponse),
++          nextCursor: rows.length > limit && last ? encodeCursor(last) : null,
++        };
++      },
++      {
++        requireAuth: true,
++        query: t.Object({
++          limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
++          cursor: t.Optional(t.String()),
++          // Not t.UnionEnum: Elysia fills an omitted UnionEnum query param with its first value.
++          status: t.Optional(
++            t.Union([
++              t.Literal("todo"),
++              t.Literal("in_progress"),
++              t.Literal("done"),
++            ]),
++          ),
++          assigneeId: t.Optional(t.String({ minLength: 1 })),
++        }),
+       },
+-      { requireAuth: true },
+     )
+     .post(
+       "/:id/tasks",

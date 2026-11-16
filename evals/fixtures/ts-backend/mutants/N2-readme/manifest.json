@@ -1,0 +1,22 @@
+{
+  "task": "N2-readme",
+  "references": [
+    {
+      "file": "reference-aa-A-r1.patch",
+      "source": "validation-ts-backend-aa A r1"
+    },
+    {
+      "file": "reference-aa-A-r2.patch",
+      "source": "validation-ts-backend-aa A r2"
+    },
+    {
+      "file": "reference-aa-B-r1.patch",
+      "source": "validation-ts-backend-aa B r1"
+    },
+    {
+      "file": "reference-aa-B-r2.patch",
+      "source": "validation-ts-backend-aa B r2"
+    }
+  ],
+  "mutants": []
+}

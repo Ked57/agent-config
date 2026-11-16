@@ -1,143 +1,181 @@
 // Pure markdown rendering of an aggregated summary.
 import { fmt, fmtSigned } from './aggregate.mjs';
-import { DIMENSIONS } from './judge.mjs';
 
 const pct = (value) => (value === null || value === undefined ? '–' : `${Math.round(value * 100)}%`);
 const signedPct = (value) => (value === null || value === undefined ? '–' : `${value >= 0 ? '+' : ''}${(value * 100).toFixed(1)}%`);
 const counts = (entries) => Object.entries(entries).sort((a, b) => b[1] - a[1]).map(([name, n]) => `${name}×${n}`).join(', ') || '–';
 const cell = (value) => String(value).replaceAll('|', '\\|').replaceAll('\n', ' ');
+const ci = (interval, format = fmtSigned) => (interval ? `${format(interval[0])} to ${format(interval[1])}` : '–');
+const pluginLabel = (plugin) => (typeof plugin === 'string' ? plugin : `${plugin.name}${plugin.version ? `@${plugin.version}` : ''}`);
 
 function armLine(arm, info) {
   const toggles = [
     ...(info.add ?? []).map((toggle) => `+${toggle.path}${toggle.source ? ` from ${toggle.source}` : ''}`),
     ...(info.remove ?? []).map((path) => `−${path}`)
   ];
-  return `| ${arm} | \`${info.ref}\` (${info.sha?.slice(0, 7) ?? 'working tree'}) | ${toggles.join(', ') || '–'} | ${(info.policies ?? []).join(', ')} | ${(info.skills ?? []).join(', ')} |`;
+  return `| ${arm} | \`${info.ref}\` (${info.sha?.slice(0, 7) ?? 'working tree'}) | ${toggles.join(', ') || '–'} | ${(info.policies ?? []).join(', ')} | ${(info.skills ?? []).join(', ')} | ${(info.plugins ?? []).map(pluginLabel).join(', ') || '–'} |`;
 }
 
-export function renderReport({ summary, config, armsInfo, taskSet, fixture, spend }) {
+function comparisonRow(label, c) {
+  if (!c) return `| ${label} | – | – | – | – | – | – | – | – | – | – |`;
+  const bounds = c.ceiling === null ? '–' : `${c.ceiling} / ${c.floor}`;
+  return `| ${label} | ${fmt(c.meanA)} | ${fmt(c.meanB)} | ${fmtSigned(c.mean)} | ${fmt(c.sd)} | ${ci(c.ci)} | ${ci(c.bootstrapCi)} | ${fmt(c.mde)} | ${c.tasksNeeded?.['0.10'] ?? '–'} / ${c.tasksNeeded?.['0.20'] ?? '–'} | ${bounds} | ${cell(c.verdict.text)} |`;
+}
+
+export function renderReport({ summary, config, armsInfo, taskSet, fixture }) {
   const lines = [];
-  const { overall, comparison, noise, recommendation } = summary;
+  const { overall, noise, recommendation, primary, sample } = summary;
+  const single = Boolean(config.singleArm);
   lines.push(`# Agent-config A/B eval: ${config.name}`, '');
   lines.push(`Generated ${summary.generatedAt}. Task set \`${taskSet.name}\`, fixture \`${fixture.name}\`, ${summary.runs} runs, ${summary.judgments} judgments.`, '');
 
-  lines.push('## Recommendation', '');
-  lines.push(`**${recommendation.verdict}**${recommendation.heuristic ? ' (heuristic; read the evidence below)' : ''}`, '');
-  for (const reason of recommendation.reasons) lines.push(`- ${reason}`);
+  lines.push('## Verdict', '');
+  if (single) lines.push(`**${recommendation.verdict}**`, '', ...recommendation.reasons.map((reason) => `- ${reason}`));
+  else {
+    for (const line of summary.headline) lines.push(`**${line.split(':')[0]}:**${line.slice(line.indexOf(':') + 1)}`, '');
+    lines.push(`- Sample: ${sample.pairedTasks} paired task(s) of ${sample.tasks} × ${sample.reps ?? '?'} rep(s) per arm, ${sample.runs} runs counted, ${sample.excludedRuns.length} excluded (isolation)${sample.unscoredTasks.length ? `, ${sample.unscoredTasks.length} task(s) without required checks left out` : ''}. Each task is one sample; reps only make each task's mean more precise.`);
+    lines.push(`- Ceiling (both arms 1.0) / floor (both 0): primary ${primary.ceiling} / ${primary.floor} of ${primary.tasks} tasks; all-pass ${summary.allPass.ceiling} / ${summary.allPass.floor}. Tasks at the ceiling or floor cannot show a difference.`);
+    if (armsInfo.identical) lines.push('- Arms are identical (A/A control): every difference is run-to-run or judge noise, and any "better" verdict is a false positive.');
+  }
   lines.push('');
 
-  if (summary.warnings?.length) {
+  const warnings = [...(summary.warnings ?? []), ...(summary.scoringWarnings ?? [])];
+  if (warnings.length) {
     lines.push('## Integrity warnings', '');
-    for (const warning of summary.warnings) lines.push(`- ${warning}`);
+    for (const warning of warnings) lines.push(`- ${warning}`);
     lines.push('');
   }
 
   lines.push('## Setup', '');
-  lines.push('| Arm | Ref | Toggles | Policies | Skills |', '|---|---|---|---|---|');
+  lines.push('| Arm | Ref | Toggles | Policies | Skills | Plugins |', '|---|---|---|---|---|---|');
   lines.push(armLine('A', armsInfo.A), armLine('B', armsInfo.B), '');
   lines.push(`- Arms identical: **${armsInfo.identical ? 'yes (A/A control)' : 'no'}**. Changed between arms: ${armsInfo.changedFiles?.length ? armsInfo.changedFiles.map((file) => `\`${file}\``).join(', ') : '–'}`);
   lines.push(`- Agent: provider \`${config.provider}\`, model \`${config.model}\`, effort \`${config.effort}\`, ${config.reps} rep(s) per task and arm, concurrency ${config.concurrency}.`);
   lines.push(`- Judge: ${config.judge ? `provider \`${config.judgeProvider}\`${config.judgeProvider === 'command' ? ` (\`${config.judgeCommand}\`)` : `, model \`${config.judgeModel}\``}, ${config.judgeReps} verdict(s) per pair with alternating patch order, ${config.judgeControls} A#1-vs-A#2 control pair(s) per task` : 'disabled'}.`);
-  lines.push(`- Isolation: each arm installed with its own ref's \`bin/agent-config.mjs sync --user\` into a temporary HOME; telemetry env vars off.`);
   const rechecks = (summary.history ?? []).filter((entry) => entry.action === 'recheck-result');
   if (rechecks.length) {
     const last = rechecks.at(-1);
     lines.push(`- **Rechecked ${rechecks.length} time(s)**, last ${last.at} against fixture \`${last.fixtureHash}\`${last.runFixtureHash && last.runFixtureHash !== last.fixtureHash ? ` (runs were made on \`${last.runFixtureHash}\`)` : ''}: ${rechecks.reduce((total, entry) => total + entry.flips.length, 0)} check result(s) changed in total. Gates were not re-run. First results are kept as \`checksOriginal\` in each run record; see \`audit.jsonl\`.`);
   }
   if (summary.stoppedEarly) lines.push(`- **Stopped early:** ${summary.stoppedEarly}. Results are partial.`);
-  const cost = summary.cost;
-  if (cost) lines.push(`- Spend: agent runs $${fmt(cost.runsUsd)}, judge (\`${cost.judgeSet ?? 'n/a'}\`) $${fmt(cost.judgeUsd)}${Object.keys(cost.otherJudgeSetsUsd).length ? `, other judge sets $${fmt(Object.values(cost.otherJudgeSetsUsd).reduce((a, b) => a + b, 0))}` : ''}, total $${fmt(cost.totalUsd)}${config.maxUsd ? ` (cap $${config.maxUsd})` : ''}.`);
+  const spend = summary.spend;
+  if (spend) lines.push(`- Spend: agent runs $${fmt(spend.runsUsd)}, judge (\`${spend.judgeSet ?? 'n/a'}\`) $${fmt(spend.judgeUsd)}${Object.keys(spend.otherJudgeSetsUsd).length ? `, other judge sets $${fmt(Object.values(spend.otherJudgeSetsUsd).reduce((a, b) => a + b, 0))}` : ''}, total $${fmt(spend.totalUsd)}${config.maxUsd ? ` (cap $${config.maxUsd})` : ''}.`);
   for (const arm of ['A', 'B']) {
     const smoke = summary.runtimeSmoke?.[arm];
     if (smoke) lines.push(`- Runtime smoke (browser/HTTP) arm ${arm}: ${smoke.pass}/${smoke.runs} runs passed.`);
   }
   lines.push('');
 
+  if (!single) {
+    lines.push('## Task-level comparison', '');
+    lines.push(`d = B − A per task, each arm's task value being the mean over its reps. CI: paired t over tasks (decides the verdict) and seeded task bootstrap (10,000 resamples). MDE: smallest true difference detected 80% of the time at two-sided α = 0.05, at the observed SD. Verdicts: "B better"/"A better" when the CI excludes 0, "no difference larger than ±0.10" when it lies inside ±0.10, else "cannot conclude"; fewer than 5 paired tasks always "cannot conclude".`, '');
+    lines.push('| Metric | Mean A | Mean B | Mean d | SD(d) | Paired-t 95% CI | Bootstrap 95% CI | MDE | Tasks for MDE 0.10 / 0.20 | Ceiling / floor | Verdict |', '|---|---|---|---|---|---|---|---|---|---|---|');
+    lines.push(comparisonRow('**Run score (primary)**', primary), comparisonRow('All-pass rate', summary.allPass), comparisonRow('Judge overall, 1–5 (secondary)', summary.judge), '');
+  }
+
   lines.push('## Per-task results', '');
-  lines.push('Gates = all fixture gates pass. Checks = required task checks passed. Judge = mean of the five dimensions on A/B pairs. Pref = judge preference A·B·tie.', '');
-  lines.push('| Task | Category | Gates A / B | Checks A / B | Judge A / B | Pref A·B·tie | Cost $ A / B | Wall min A / B | Features A | Features B |');
-  lines.push('|---|---|---|---|---|---|---|---|---|---|');
+  lines.push('Score = mean required-check score over reps (Vitest-scored checks count passed/total test cases; 0 when a gate failed or the run errored). All-pass = share of reps with every required check and gate passing. Judge = mean overall score on A/B pairs; Pref = judge preference A·B·tie.', '');
+  lines.push('| Task | Category | Score A | Score B | d | Reps A / B | All-pass A / B | Judge A / B | Pref A·B·tie | Cost $ A / B | Features A | Features B |');
+  lines.push('|---|---|---|---|---|---|---|---|---|---|---|---|');
   for (const task of summary.perTask) {
     const p = task.judge.preference;
-    lines.push(`| ${task.id} | ${task.category} | ${pct(task.A.gatesPass)} / ${pct(task.B.gatesPass)} | ${pct(task.A.requiredChecksPass)} / ${pct(task.B.requiredChecksPass)} | ${fmt(task.judge.A.overall)} / ${fmt(task.judge.B.overall)} | ${p.A}·${p.B}·${p.tie} | ${fmt(task.A.costUsd)} / ${fmt(task.B.costUsd)} | ${fmt(task.A.wallMin, 1)} / ${fmt(task.B.wallMin, 1)} | ${cell(counts(task.A.features))} | ${cell(counts(task.B.features))} |`);
+    lines.push(`| ${task.id}${task.unscored ? ' (no required checks)' : ''} | ${task.category} | ${fmt(task.scoreA)} | ${fmt(task.scoreB)} | ${fmtSigned(task.d)} | ${task.A.n} / ${task.B.n} | ${pct(task.A.allPass)} / ${pct(task.B.allPass)} | ${fmt(task.judge.A.overall)} / ${fmt(task.judge.B.overall)} | ${p.A}·${p.B}·${p.tie} | ${fmt(task.A.costUsd)} / ${fmt(task.B.costUsd)} | ${cell(counts(task.A.features))} | ${cell(counts(task.B.features))} |`);
   }
   lines.push('');
 
-  lines.push('## Per-category summary', '');
-  lines.push(`| Category | Arm | Gates | Checks | ${DIMENSIONS.map((d) => d[0].toUpperCase() + d.slice(1)).join(' | ')} | Overall | Pref A·B·tie | Cost $ | Out tokens | Wall min | Tool calls | New-dep runs |`);
-  lines.push(`|---|---|---|---|${DIMENSIONS.map(() => '---|').join('')}---|---|---|---|---|---|---|`);
+  lines.push('## Per-category means (descriptive)', '');
+  lines.push('Means over runs, no verdicts: categories hold too few tasks for a test.', '');
+  lines.push('| Category | Arm | Runs | Score | All-pass | Gates | Judge overall | Cost $ | Wall min | Tool calls | New-dep runs |', '|---|---|---|---|---|---|---|---|---|---|---|');
   for (const category of [...summary.perCategory, { label: '**All tasks**', ...summary.overall }]) {
     for (const arm of ['A', 'B']) {
       const s = category[arm];
-      const p = category.judge.preference;
-      lines.push(`| ${arm === 'A' ? `${category.label}${category.control ? ' (control)' : ''}` : ''} | ${arm} | ${pct(s.gatesPass)} | ${pct(s.requiredChecksPass)} | ${DIMENSIONS.map((d) => fmt(category.judge[arm][d])).join(' | ')} | ${fmt(category.judge[arm].overall)} | ${arm === 'A' ? `${p.A}·${p.B}·${p.tie}` : ''} | ${fmt(s.costUsd)} | ${s.outputTokens === null ? '–' : Math.round(s.outputTokens)} | ${fmt(s.wallMin, 1)} | ${fmt(s.toolCalls, 1)} | ${s.newDepRuns} |`);
+      if (single && arm === 'B') continue;
+      lines.push(`| ${arm === 'A' ? `${category.label}${category.control ? ' (control)' : ''}` : ''} | ${arm} | ${s.n} | ${fmt(s.score)} | ${pct(s.allPass)} | ${pct(s.gatesPass)} | ${fmt(category.judge[arm].overall)} | ${fmt(s.costUsd)} | ${fmt(s.wallMin, 1)} | ${fmt(s.toolCalls, 1)} | ${s.newDepRuns} |`);
     }
   }
   lines.push('');
 
-  lines.push('## Cost overhead of B', '');
+  lines.push('## Cost', '');
+  if (summary.cost) {
+    lines.push('Ratio of task means (B / A − 1) with a task-bootstrap 95% CI. Reported next to quality, never folded into it.', '');
+    lines.push('| Metric | Mean A | Mean B | B vs A | Bootstrap 95% CI | Tasks | Verdict |', '|---|---|---|---|---|---|---|');
+    for (const [label, c, digits] of [['Cost per run ($)', summary.cost, 2], ['Wall time per run (min)', summary.cost.wallMin, 1], ['Turns per run', summary.cost.turns, 1]]) {
+      lines.push(`| ${label} | ${fmt(c.meanA, digits)} | ${fmt(c.meanB, digits)} | ${signedPct(c.mean)} | ${ci(c.bootstrapCi, signedPct)} | ${c.tasks} | ${cell(c.verdict.text)} |`);
+    }
+    lines.push('');
+  }
+  lines.push('Means over runs (descriptive):', '');
   lines.push('| Metric | A | B | Δ |', '|---|---|---|---|');
   const rows = [['Cost per run ($)', 'costUsd', 2], ['Output tokens', 'outputTokens', 0], ['Input tokens incl. cache', 'inputTokens', 0], ['Wall time (min)', 'wallMin', 2], ['Turns', 'turns', 1], ['Tool calls', 'toolCalls', 1]];
   for (const [label, key, digits] of rows) lines.push(`| ${label} | ${fmt(overall.A[key], digits)} | ${fmt(overall.B[key], digits)} | ${signedPct(summary.overhead[key])} |`);
   lines.push(`| Cost per run, non-control tasks | | | ${signedPct(summary.overheadNonControl)} |`, '');
-  if (cost) {
+  if (spend) {
     lines.push('Where the money went:', '');
     lines.push('| Item | USD | Share |', '|---|---|---|');
-    const share = (value) => (cost.totalUsd ? pct(value / cost.totalUsd) : '–');
-    lines.push(`| Agent runs, arm A | ${fmt(cost.runsUsdByArm.A)} | ${share(cost.runsUsdByArm.A)} |`);
-    lines.push(`| Agent runs, arm B | ${fmt(cost.runsUsdByArm.B)} | ${share(cost.runsUsdByArm.B)} |`);
-    lines.push(`| Judge \`${cost.judgeSet ?? 'n/a'}\` (${summary.judgments} judgments, $${fmt(cost.judgeUsdPerJudgment, 3)} each) | ${fmt(cost.judgeUsd)} | ${share(cost.judgeUsd)} |`);
-    for (const [id, usd] of Object.entries(cost.otherJudgeSetsUsd)) lines.push(`| Judge \`${id}\` (comparison set) | ${fmt(usd)} | ${share(usd)} |`);
+    const share = (value) => (spend.totalUsd ? pct(value / spend.totalUsd) : '–');
+    lines.push(`| Agent runs, arm A | ${fmt(spend.runsUsdByArm.A)} | ${share(spend.runsUsdByArm.A)} |`);
+    lines.push(`| Agent runs, arm B | ${fmt(spend.runsUsdByArm.B)} | ${share(spend.runsUsdByArm.B)} |`);
+    lines.push(`| Judge \`${spend.judgeSet ?? 'n/a'}\` (${summary.judgments} judgments, $${fmt(spend.judgeUsdPerJudgment, 3)} each) | ${fmt(spend.judgeUsd)} | ${share(spend.judgeUsd)} |`);
+    for (const [id, usd] of Object.entries(spend.otherJudgeSetsUsd)) lines.push(`| Judge \`${id}\` (comparison set) | ${fmt(usd)} | ${share(usd)} |`);
     lines.push('');
   }
 
-  lines.push('## Policy and skill telemetry', '');
-  lines.push('Fired = the agent read the policy file (or, for policies with a command signal, acted on it).', '');
-  const policyNames = [...new Set([...Object.keys(overall.A.policiesFired), ...Object.keys(overall.B.policiesFired)])].sort();
-  if (policyNames.length) {
-    lines.push('| Policy | Fired A | Fired B | Signal hits/run A | Signal hits/run B |', '|---|---|---|---|---|');
-    for (const name of policyNames) lines.push(`| ${name} | ${pct(overall.A.policiesFired[name])} | ${pct(overall.B.policiesFired[name])} | ${fmt(overall.A.signalHits[name], 1)} | ${fmt(overall.B.signalHits[name], 1)} |`);
+  lines.push('## Component telemetry', '');
+  lines.push('Fired: a policy when the agent read its file (or ran its command signal); a skill on a `Skill` call, a read of its SKILL.md or a slash invocation; a plugin when one of its `<plugin>:<skill>` skills fired.', '');
+  const firedTable = (title, key) => {
+    const names = [...new Set([...Object.keys(overall.A[key] ?? {}), ...Object.keys(overall.B[key] ?? {})])].sort();
+    if (!names.length) return;
+    lines.push(`| ${title} | Fired A | Fired B |`, '|---|---|---|');
+    for (const name of names) lines.push(`| ${name} | ${pct(overall.A[key][name])} | ${pct(overall.B[key][name])} |`);
     lines.push('');
-  }
-  const skillNames = [...new Set([...Object.keys(overall.A.skillsFired ?? {}), ...Object.keys(overall.B.skillsFired ?? {})])].sort();
-  if (skillNames.length) {
-    lines.push('| Skill | Invoked A | Invoked B |', '|---|---|---|');
-    for (const name of skillNames) lines.push(`| ${name} | ${pct(overall.A.skillsFired[name])} | ${pct(overall.B.skillsFired[name])} |`);
-    lines.push('');
-  }
+  };
+  firedTable('Policy', 'policiesFired');
+  firedTable('Skill', 'skillsFired');
+  firedTable('Plugin', 'pluginsFired');
   if (summary.telemetry.watched.length) {
-    lines.push('| Watched policy | Arm | False triggers on controls | Fired where not expected | Missed where expected |', '|---|---|---|---|---|');
+    lines.push('Watched components (changed between arms, or `--watch`). Expected = the task lists it in `expectsComponents`/`expectsPolicies`.', '');
+    lines.push('| Watched | Arm | Fired in runs | Tasks fired on | False triggers on controls | Fired where not expected | Missed where expected |', '|---|---|---|---|---|---|---|');
     for (const [name, entry] of Object.entries(summary.telemetry.perPolicy)) {
       for (const arm of ['A', 'B']) {
         const f = entry.falseTriggers[arm];
         const m = entry.misses[arm];
+        const fired = entry.fired?.[arm];
         if (!f) continue;
-        lines.push(`| ${name} | ${arm} | ${f.controlFired}/${f.controlRuns} | ${f.unexpectedFired.length}/${f.unexpectedRuns} | ${m.missed.length}/${m.expectedRuns}${m.missed.length ? ` (${m.missed.join(', ')})` : ''} |`);
+        lines.push(`| ${name} | ${arm} | ${fired ? `${fired.fired.length}/${fired.runs}` : '–'} | ${fired?.tasks.join(', ') || '–'} | ${f.controlFired}/${f.controlRuns} | ${f.unexpectedFired.length}/${f.unexpectedRuns} | ${m.missed.length}/${m.expectedRuns}${m.missed.length ? ` (${m.missed.join(', ')})` : ''} |`);
       }
     }
   } else {
-    lines.push('No watched policies (nothing changed between arms; pass `--watch <policy>` to track one).');
+    lines.push('No watched components (nothing changed between arms; pass `--watch <name>` to track one).');
   }
   lines.push('');
 
-  lines.push('## Judge noise floor', '');
-  lines.push(`Source: ${noise.source}, ${noise.pairs} pair(s). Decisive (non-tie) rate ${pct(noise.decisiveRate)}, mean |overall diff| ${fmt(noise.meanAbsDiff)}, max ${fmt(noise.maxAbsDiff)}, order/repeat split rate ${pct(noise.splitRate)}.`, '');
-  lines.push(`A/B comparison: ${comparison.pairs} pair(s), B ${comparison.bWins} · A ${comparison.aWins} · tie ${comparison.ties}; mean overall B−A ${fmtSigned(comparison.meanDiff)}; sign test p=${fmt(comparison.signTestP)}; ${comparison.beyondNoise === null ? 'noise floor unavailable' : comparison.beyondNoise ? 'mean difference beyond the noise floor' : 'mean difference within the noise floor'}. A difference counts only when it is beyond the floor **and** p < 0.1: **${comparison.beyondNoise && comparison.signTestP < 0.1 ? 'significant' : 'not significant'}**.`, '');
+  lines.push('## Judge (secondary)', '');
+  if (summary.judge) {
+    lines.push(`Task-level judge comparison: ${summary.judge.verdict.text}. Mean B−A ${fmtSigned(summary.judge.mean)} overall points over ${summary.judge.tasks} task(s), 95% CI ${ci(summary.judge.ci)}. The judge only breaks a "no difference" or "cannot conclude" on the primary metric and never overrides it.`, '');
+  }
+  const dimensionNames = summary.overall.judge.pairs ? Object.keys(summary.overall.judge.A).filter((name) => name !== 'overall') : [];
+  if (dimensionNames.length) {
+    lines.push(`| Arm | ${dimensionNames.map((d) => d[0].toUpperCase() + d.slice(1)).join(' | ')} | Overall | Preferred (pairs) |`, `|---|${dimensionNames.map(() => '---|').join('')}---|---|`);
+    const p = summary.overall.judge.preference;
+    for (const arm of ['A', 'B']) lines.push(`| ${arm} | ${dimensionNames.map((d) => fmt(summary.overall.judge[arm][d])).join(' | ')} | ${fmt(summary.overall.judge[arm].overall)} | ${p[arm]} of ${summary.overall.judge.pairs} (${p.tie} ties) |`);
+    lines.push('');
+  }
+  lines.push(`Noise (descriptive, gates nothing): ${noise.source}, ${noise.pairs} pair(s). Mean |overall diff| ${fmt(noise.meanAbsDiff)} (bootstrap 95% CI ${noise.meanAbsDiffCi ? `${fmt(noise.meanAbsDiffCi[0])} to ${fmt(noise.meanAbsDiffCi[1])}` : '–'}), max ${fmt(noise.maxAbsDiff)}, decisive (non-tie) rate ${pct(noise.decisiveRate)}, order/repeat split rate ${pct(noise.splitRate)}.`, '');
 
   if (summary.judgeComparisons?.length) {
-    lines.push('## Judge comparison', '');
-    lines.push(`Active judge: \`${cost?.judgeSet}\`. Each other judge set below re-judged the same pairs.`, '');
+    lines.push('### Judge comparison', '');
+    lines.push(`Active judge: \`${spend?.judgeSet}\`. Each other judge set below re-judged the same pairs.`, '');
     for (const comparison of summary.judgeComparisons) {
-      lines.push(`### vs \`${comparison.id}\` (${comparison.pairs} common pairs)`, '');
+      lines.push(`#### vs \`${comparison.id}\` (${comparison.pairs} common pairs)`, '');
       lines.push(`- Same preference: ${pct(comparison.preferenceAgreement)}; decisive flips (one judge prefers A, the other B): ${comparison.decisiveFlips}/${comparison.decisiveBoth}.`);
       lines.push(`- Mean |overall score difference| per patch: ${fmt(comparison.meanAbsScoreDelta)}; correlation of B−A margins: ${fmt(comparison.marginCorrelation)}.`, '');
-      lines.push(`| | \`${cost?.judgeSet}\` | \`${comparison.id}\` |`, '|---|---|---|');
-      const row = (label, pick, digits = 2) => lines.push(`| ${label} | ${pick(comparison.active)} | ${pick(comparison.other)} |`);
+      lines.push(`| | \`${spend?.judgeSet}\` | \`${comparison.id}\` |`, '|---|---|---|');
+      const row = (label, pick) => lines.push(`| ${label} | ${pick(comparison.active)} | ${pick(comparison.other)} |`);
       row('Cost (these pairs)', (side) => `$${fmt(side.costUsd)}`);
       row('Cost per judgment', (side) => `$${fmt(side.costPerJudgment, 3)}`);
       row('Decisive rate', (side) => pct(side.decisiveRate));
       row('Order/repeat split rate', (side) => pct(side.splitRate));
-      row(`Noise floor: mean abs score diff (${comparison.active.noise.source})`, (side) => `${fmt(side.noise.meanAbsDiff)} over ${side.noise.pairs} pair(s), decisive ${pct(side.noise.decisiveRate)}`);
+      row(`Noise: mean abs score diff (${comparison.active.noise.source})`, (side) => `${fmt(side.noise.meanAbsDiff)} over ${side.noise.pairs} pair(s), decisive ${pct(side.noise.decisiveRate)}`);
       lines.push('');
     }
   }

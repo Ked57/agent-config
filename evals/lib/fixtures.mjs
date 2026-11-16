@@ -106,3 +106,17 @@ export function verifyPristine(fixture, pristine) {
   const actual = manifest(pristine, fixture.linkPaths);
   return Object.keys({ ...expected, ...actual }).filter((file) => expected[file] !== actual[file]);
 }
+
+/** Moves a directory tree; across filesystems (EXDEV) it copies with `cp -a` and removes the source. */
+export function moveTree(from, to) {
+  fs.rmSync(to, { recursive: true, force: true });
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  try {
+    fs.renameSync(from, to);
+  } catch (error) {
+    if (error.code !== 'EXDEV') throw error;
+    const copy = spawnSync('cp', ['-a', from, to], { encoding: 'utf8' });
+    if (copy.status !== 0) throw new Error(`copy of ${from} failed: ${copy.stderr.slice(0, 500)}`);
+    fs.rmSync(from, { recursive: true, force: true });
+  }
+}

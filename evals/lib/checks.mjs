@@ -94,7 +94,7 @@ export function evaluateChecks(checks = [], diff, readFinal) {
     if (check.type === 'changed') {
       const hits = diff.changedFiles.filter((file) => matchesAny(file, check.files));
       const pass = check.expect === 'any' ? hits.length > 0 : hits.length === 0;
-      return { id: check.id, label: check.label ?? check.id, level, pass, detail: hits.slice(0, 5).join(', ') };
+      return { id: check.id, label: check.label ?? check.id, level, pass, score: pass ? 1 : 0, detail: hits.slice(0, 5).join(', ') };
     }
     const pattern = new RegExp(check.pattern, 'm');
     let hits;
@@ -106,7 +106,7 @@ export function evaluateChecks(checks = [], diff, readFinal) {
       hits = readFinal(check.files).filter((file) => pattern.test(text(file.content))).map((file) => file.path);
     }
     const pass = check.expect === 'present' ? hits.length > 0 : hits.length === 0;
-    return { id: check.id, label: check.label ?? check.id, level, pass, detail: [...new Set(hits)].slice(0, 5).join(', ') };
+    return { id: check.id, label: check.label ?? check.id, level, pass, score: pass ? 1 : 0, detail: [...new Set(hits)].slice(0, 5).join(', ') };
   });
 }
 
@@ -123,15 +123,29 @@ export function countFeatures(patterns = {}, addedLines = []) {
 
 const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/** Slash commands a run was started with or expanded: `/<name>` at the start of the prompt, plus `<command-name>` tags. */
+export function slashInvocations({ prompt = '', commandTags = [] } = {}) {
+  const fromPrompt = /^\s*\/([A-Za-z0-9._-]+(?::[A-Za-z0-9._-]+)?)/.exec(prompt ?? '')?.[1];
+  return [...new Set([...(fromPrompt ? [fromPrompt] : []), ...commandTags.map((tag) => tag.replace(/^\//, ''))])];
+}
+
+/** `<command-name>/x:y</command-name>` tags in a raw transcript: Claude Code's record of an expanded slash command. */
+export const commandTags = (transcript) => [...String(transcript).matchAll(/<command-name>\s*(\/?[^<\s]+)\s*<\/command-name>/g)].map((match) => match[1]);
+
 /**
- * Detects which policies and skills an agent consulted.
+ * Detects which policies, skills and plugins an agent consulted.
  * `events` is a provider-normalised transcript: `{ reads: string[], commands: string[], skills: string[] }`.
  * A policy counts as read when a Read targeted `.../policy/<name>.md` or a shell command named
  * `<name>.md` (agents often `cat $P/<name>.md`). If the task set defines a `commandPattern`
  * signal for the policy, `fired` means the agent acted on it; otherwise `fired` means read.
+ * A skill fires on a `Skill` call naming it (bare or `<plugin>:<name>`), a read of its SKILL.md, or a
+ * slash invocation (`prompt` starting with `/<name>`, or an expanded `<command-name>` tag in
+ * `commandTags`). A plugin fires when any of its skills fires that way (`<plugin>:<skill>`).
  */
-export function detectPolicies(events, { policies = [], skills = [], signals = {} }) {
-  const result = { policies: {}, skills: {} };
+export function detectPolicies(events, { policies = [], skills = [], plugins = [], signals = {}, prompt = '', commandTags = [] }) {
+  const result = { policies: {}, skills: {}, plugins: {} };
+  const slash = slashInvocations({ prompt, commandTags });
+  const invocations = [...events.skills, ...slash];
   for (const name of policies) {
     const file = new RegExp(`(^|[\\s/"'$=])${escape(name)}\\.md\\b`);
     const read = events.reads.some((path) => path.endsWith(`/policy/${name}.md`))
@@ -142,12 +156,59 @@ export function detectPolicies(events, { policies = [], skills = [], signals = {
   }
   for (const name of skills) {
     const path = `skills/${name}/SKILL.md`;
-    const invoked = events.skills.some((skill) => skill === name || skill.endsWith(`:${name}`))
+    const invoked = invocations.some((skill) => skill === name || skill.endsWith(`:${name}`))
       || events.reads.some((read) => read.endsWith(path))
       || events.commands.some((command) => command.includes(path));
     result.skills[name] = { fired: invoked };
   }
+  for (const name of plugins) {
+    const used = [...new Set(invocations.filter((skill) => skill.startsWith(`${name}:`)))].sort();
+    result.plugins[name] = { fired: used.length > 0, skills: used };
+  }
   return result;
+}
+
+/**
+ * Reads a Vitest `--reporter=json` report. Counts test cases that ran (passed or failed; skipped
+ * and todo are left out). `loadFailed` lists test files that failed without running any test
+ * (import or syntax errors). Returns null when the text is not a Vitest JSON report.
+ */
+export function parseVitestJson(text) {
+  let report;
+  try {
+    report = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(report?.testResults)) return null;
+  const cases = report.testResults.flatMap((file) => file.assertionResults ?? []);
+  const failed = cases.filter((test) => test.status === 'failed');
+  return {
+    passed: cases.filter((test) => test.status === 'passed').length,
+    total: cases.filter((test) => test.status === 'passed' || test.status === 'failed').length,
+    failed: failed.map((test) => test.fullName ?? test.title),
+    loadFailed: report.testResults.filter((file) => file.status === 'failed' && !(file.assertionResults ?? []).length)
+      .map((file) => ({ file: String(file.name ?? '').split('/').slice(-2).join('/'), message: String(file.message ?? '').slice(0, 300) }))
+  };
+}
+
+/** Score of one check result: its `score` when it has one (Vitest-scored command checks), else 1 for a pass and 0 for a fail. */
+export const checkScore = (check) => (typeof check?.score === 'number' ? check.score : check?.pass ? 1 : 0);
+
+/**
+ * Run score: mean score of the required checks, or 0 when the run did not finish (`status` other than
+ * `ok`) or a fixture gate failed. `score` is null when the task has no required checks. `allPass`
+ * means every required check and every gate passed. Old records without check scores are scored
+ * from `pass`.
+ */
+export function scoreRun(run) {
+  const required = (run.checks ?? []).filter((check) => check && (check.level ?? 'required') === 'required');
+  const finished = run.status === 'ok' && run.gatesPass !== false;
+  if (!required.length) return { score: null, allPass: finished };
+  return {
+    score: finished ? required.reduce((sum, check) => sum + checkScore(check), 0) / required.length : 0,
+    allPass: finished && required.every((check) => check.pass)
+  };
 }
 
 /** Dependency names present in `after` but not in `before` (npm-style manifests). */

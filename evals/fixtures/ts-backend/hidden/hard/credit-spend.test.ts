@@ -14,21 +14,35 @@ async function balance(db: Context["db"], orgId: string) {
 const spend = (request: Context["request"], token: string, amount: unknown, key?: string) =>
   request("POST", "/api/credits/spend", { token, body: { amount, reason: "export" }, headers: key ? { "idempotency-key": key } : {} });
 
+const topUp = (request: Context["request"], id: string, orgId: string, credits: number) =>
+  request("POST", "/api/webhooks/billing", { headers: { "x-webhook-secret": "test-webhook-secret" }, body: { id, type: "payment.succeeded", data: { orgId, credits } } });
+
 // org_acme is seeded with 100 credits, org_globex with 0.
-describe("hidden: spending credits", () => {
-  it("deducts, reports the remaining balance and refuses to overdraw", async () => {
+describe("hidden: spending credits", { timeout: 30_000 }, () => {
+  it("deducts the amount and answers 200 with the remaining balance", async () => {
     const { request, db } = await createTestContext();
     const ok = await spend(request, SEED_TOKENS.acmeMember, 30);
     expect(ok.status).toBe(200);
     expect(await ok.json()).toMatchObject({ credits: 70 });
-    const tooMuch = await spend(request, SEED_TOKENS.acmeAdmin, 71);
-    expect(tooMuch.status).toBe(402);
     expect(await balance(db, "org_acme")).toBe(70);
-    const exact = await spend(request, SEED_TOKENS.acmeAdmin, 70);
-    expect(exact.status).toBe(200);
-    expect(await exact.json()).toMatchObject({ credits: 0 });
+  });
+
+  it("refuses to overdraw with 402 and leaves the balance alone", async () => {
+    const { request, db } = await createTestContext();
+    expect((await spend(request, SEED_TOKENS.acmeAdmin, 101)).status).toBe(402);
+    expect(await balance(db, "org_acme")).toBe(100);
     expect((await spend(request, SEED_TOKENS.globexAdmin, 1)).status).toBe(402);
     expect(await balance(db, "org_globex")).toBe(0);
+  });
+
+  it("lets an organization spend its balance down to exactly zero", async () => {
+    const { request, db } = await createTestContext();
+    expect((await spend(request, SEED_TOKENS.acmeAdmin, 60)).status).toBe(200);
+    const exact = await spend(request, SEED_TOKENS.acmeAdmin, 40);
+    expect(exact.status).toBe(200);
+    expect(await exact.json()).toMatchObject({ credits: 0 });
+    expect((await spend(request, SEED_TOKENS.acmeAdmin, 1)).status).toBe(402);
+    expect(await balance(db, "org_acme")).toBe(0);
   });
 
   it("requires authentication and a positive whole amount", async () => {
@@ -42,18 +56,7 @@ describe("hidden: spending credits", () => {
     expect(await balance(db, "org_acme")).toBe(100);
   });
 
-  it("never overdraws or loses a spend when requests arrive together", async () => {
-    const { request, db } = await createTestContext();
-    // 100 credits, 30 simultaneous spends of 7: exactly 14 fit (98), 16 must be refused.
-    const responses = await Promise.all(Array.from({ length: 30 }, (_, index) => spend(request, index % 2 ? SEED_TOKENS.acmeAdmin : SEED_TOKENS.acmeMember, 7)));
-    const statuses = responses.map((response) => response.status);
-    expect(statuses.filter((status) => status !== 200 && status !== 402)).toEqual([]);
-    expect(statuses.filter((status) => status === 200)).toHaveLength(14);
-    expect(statuses.filter((status) => status === 402)).toHaveLength(16);
-    expect(await balance(db, "org_acme")).toBe(2);
-  });
-
-  it("replays the first answer for a repeated Idempotency-Key", async () => {
+  it("replays the first answer for a repeated Idempotency-Key without spending again", async () => {
     const { request, db } = await createTestContext();
     const first = await spend(request, SEED_TOKENS.acmeAdmin, 10, "key-1");
     expect(first.status).toBe(200);
@@ -75,11 +78,7 @@ describe("hidden: spending credits", () => {
     const refused = await spend(request, SEED_TOKENS.acmeAdmin, 500, "big-export");
     expect(refused.status).toBe(402);
     const refusedBody = await refused.text();
-    const topUp = await request("POST", "/api/webhooks/billing", {
-      headers: { "x-webhook-secret": "test-webhook-secret" },
-      body: { id: "evt_topup", type: "payment.succeeded", data: { orgId: "org_acme", credits: 1000 } },
-    });
-    expect(topUp.status).toBe(200);
+    expect((await topUp(request, "evt_topup", "org_acme", 1000)).status).toBe(200);
     const replay = await spend(request, SEED_TOKENS.acmeAdmin, 500, "big-export");
     expect(replay.status).toBe(402);
     expect(await replay.text()).toBe(refusedBody);
@@ -88,10 +87,7 @@ describe("hidden: spending credits", () => {
 
   it("scopes idempotency keys to the organization", async () => {
     const { request, db } = await createTestContext();
-    await request("POST", "/api/webhooks/billing", {
-      headers: { "x-webhook-secret": "test-webhook-secret" },
-      body: { id: "evt_globex", type: "payment.succeeded", data: { orgId: "org_globex", credits: 50 } },
-    });
+    expect((await topUp(request, "evt_globex", "org_globex", 50)).status).toBe(200);
     expect((await spend(request, SEED_TOKENS.acmeAdmin, 10, "shared-key")).status).toBe(200);
     const other = await spend(request, SEED_TOKENS.globexAdmin, 20, "shared-key");
     expect(other.status).toBe(200);
@@ -100,7 +96,18 @@ describe("hidden: spending credits", () => {
     expect(await balance(db, "org_globex")).toBe(30);
   });
 
-  it("charges once when the same key arrives many times at once", async () => {
+  it("never overdraws, loses a spend or errors when spends arrive together", async () => {
+    const { request, db } = await createTestContext();
+    // 100 credits, 30 simultaneous spends of 7: exactly 14 fit (98), 16 must be refused.
+    const responses = await Promise.all(Array.from({ length: 30 }, (_, index) => spend(request, index % 2 ? SEED_TOKENS.acmeAdmin : SEED_TOKENS.acmeMember, 7)));
+    const statuses = responses.map((response) => response.status);
+    expect(statuses.filter((status) => status !== 200 && status !== 402)).toEqual([]);
+    expect(statuses.filter((status) => status === 200)).toHaveLength(14);
+    expect(statuses.filter((status) => status === 402)).toHaveLength(16);
+    expect(await balance(db, "org_acme")).toBe(2);
+  });
+
+  it("charges once and answers every request when the same key arrives many times at once", async () => {
     const { request, db } = await createTestContext();
     const responses = await Promise.all(Array.from({ length: 12 }, () => spend(request, SEED_TOKENS.acmeAdmin, 10, "retry-storm")));
     expect(responses.map((response) => response.status)).toEqual(Array.from({ length: 12 }, () => 200));

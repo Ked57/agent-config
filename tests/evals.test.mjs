@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { aggregate, signTest } from '../evals/lib/aggregate.mjs';
+import { aggregate } from '../evals/lib/aggregate.mjs';
 import { compareInventories } from '../evals/lib/arms.mjs';
 import { countFeatures, detectPolicies, evaluateChecks, newDependencies, parseUnifiedDiff, stripComments } from '../evals/lib/checks.mjs';
 import { DEFAULTS, globToRegExp, judgeSetId, parseArgs, parseToggle, resolveConfig, validateTaskSet } from '../evals/lib/config.mjs';
@@ -304,12 +304,12 @@ const judgment = (task, rep, kind, a, b, preference) => {
   return { id: `${task}__${kind}__r${rep}`, kind, task, reps: [rep, rep], sides, scores: { [sides[0]]: dims(a), [sides[1]]: dims(b) }, preference, unanimous: true, votes: {}, notes: { [sides[0]]: [], [sides[1]]: [] }, reasons: ['because'], costUsd: 0.1 };
 };
 
-test('aggregate measures overhead, false triggers, noise floor and recommends', () => {
+test('aggregate measures overhead, false triggers, noise floor and the task-level verdict', () => {
   const runs = [];
   for (let rep = 1; rep <= 6; rep += 1) {
     runs.push(makeRun('t-web', 'A', rep), makeRun('t-web', 'B', rep));
   }
-  runs.push(makeRun('t-ctl', 'A', 1), makeRun('t-ctl', 'B', 1));
+  runs.push(makeRun('t-ctl', 'A', 1, { checks: [] }), makeRun('t-ctl', 'B', 1, { checks: [] }));
   const judgments = [];
   for (let rep = 1; rep <= 6; rep += 1) judgments.push(judgment('t-web', rep, 'AB', 3, 4.5, 'B'));
   judgments.push(judgment('t-web', 1, 'AA', 3.5, 3.6, 'tie'));
@@ -318,9 +318,10 @@ test('aggregate measures overhead, false triggers, noise floor and recommends', 
   const opusJudgments = judgments.map((j) => ({ ...j, preference: j.kind === 'AB' && j.reps[0] <= 2 ? 'A' : j.preference, scores: { ...j.scores }, costUsd: 0.5 }));
   const summary = aggregate({ config, taskSet: miniTaskSet, armsInfo, runs, judgments, activeJudgeSet: 'claude-sonnet-5-5', otherJudgeSets: { 'claude-opus-5-5': opusJudgments } });
   assert.ok(Math.abs(summary.overhead.costUsd - 0.5) < 1e-9);
-  assert.equal(summary.cost.runsUsd, 17.5);
-  assert.ok(Math.abs(summary.cost.judgeUsd - 0.7) < 1e-9);
-  assert.ok(Math.abs(summary.cost.otherJudgeSetsUsd['claude-opus-5-5'] - 3.5) < 1e-9);
+  assert.ok(Math.abs(summary.cost.mean - 0.5) < 1e-9);
+  assert.equal(summary.spend.runsUsd, 17.5);
+  assert.ok(Math.abs(summary.spend.judgeUsd - 0.7) < 1e-9);
+  assert.ok(Math.abs(summary.spend.otherJudgeSetsUsd['claude-opus-5-5'] - 3.5) < 1e-9);
   const [comparison] = summary.judgeComparisons;
   assert.equal(comparison.pairs, 7);
   assert.equal(comparison.decisiveFlips, 2);
@@ -329,15 +330,19 @@ test('aggregate measures overhead, false triggers, noise floor and recommends', 
   assert.equal(summary.telemetry.perPolicy['modern-web'].falseTriggers.B.controlFired, 1);
   assert.equal(summary.telemetry.perPolicy['modern-web'].falseTriggers.A, undefined);
   assert.equal(summary.telemetry.perPolicy['modern-web'].misses.B.missed.length, 0);
+  assert.deepEqual(summary.telemetry.perPolicy['modern-web'].fired.B.tasks, ['t-ctl', 't-web']);
   assert.equal(summary.noise.pairs, 1);
   assert.ok(Math.abs(summary.noise.meanAbsDiff - 0.1) < 1e-9);
-  assert.equal(summary.comparison.bWins, 6);
-  assert.ok(summary.comparison.signTestP < 0.05);
-  assert.equal(summary.recommendation.verdict, 'adopt with changes');
-  assert.match(summary.recommendation.reasons.join(' '), /fired on 1 run/);
+  // Two tasks, one without required checks: one paired task, so the rule cannot conclude.
+  assert.equal(summary.primary.tasks, 1);
+  assert.deepEqual(summary.sample.unscoredTasks, ['t-ctl']);
+  assert.equal(summary.recommendation.verdict, 'cannot conclude');
+  assert.match(summary.headline[0], /^Quality: cannot conclude: 1 paired task\(s\), at least 5 needed/);
+  assert.match(summary.headline[0], /judge \(secondary\) favours neither/);
+  assert.match(summary.headline[1], /^Cost per run \(USD\): /);
+  for (const key of ['primary', 'allPass', 'judge', 'cost']) for (const field of ['mean', 'ci', 'bootstrapCi', 'mde', 'tasks', 'verdict']) assert.ok(field in summary[key], `${key}.${field}`);
 
   const identical = aggregate({ config, taskSet: miniTaskSet, armsInfo: { ...armsInfo, identical: true, watched: [] }, runs, judgments: judgments.filter((j) => j.kind === 'AB') });
-  assert.equal(identical.recommendation.verdict, 'A/A control');
   assert.equal(identical.noise.source, 'A/B pairs (arms identical)');
 
   const report = renderReport({
@@ -348,20 +353,15 @@ test('aggregate measures overhead, false triggers, noise floor and recommends', 
     fixture: { name: 'vue-primevue' },
     spend: { runsUsd: 20, judgeUsd: 1 }
   });
-  for (const heading of ['## Recommendation', '## Setup', '## Per-task results', '## Per-category summary', '## Cost overhead of B', '## Policy and skill telemetry', '## Judge noise floor', '## Notable diffs']) assert.ok(report.includes(heading), heading);
+  for (const heading of ['## Verdict', '## Setup', '## Task-level comparison', '## Per-task results', '## Per-category means (descriptive)', '## Cost', '## Component telemetry', '## Judge (secondary)', '## Notable diffs']) assert.ok(report.includes(heading), heading);
+  assert.ok(report.indexOf('## Verdict') < report.indexOf('## Setup'));
+  assert.match(report, /\*\*Quality:\*\* cannot conclude/);
   assert.match(report, /\| t-web \| web \|/);
-  assert.match(report, /\| modern-web \| B \| 1\/1 \|/);
+  assert.match(report, /\| modern-web \| B \| 7\/7 \| t-ctl, t-web \| 1\/1 \|/);
   assert.match(report, /total \$21\.70/);
   assert.match(report, /Judge `claude-sonnet-5-5` \(7 judgments, \$0\.100 each\)/);
   assert.match(report, /## Judge comparison/);
   assert.match(report, /decisive flips \(one judge prefers A, the other B\): 2\/6/);
-});
-
-test('signTest matches exact binomial values', () => {
-  assert.equal(signTest(0, 0), 1);
-  assert.equal(signTest(5, 5), 0.0625);
-  assert.equal(signTest(3, 6), 1);
-  assert.ok(Math.abs(signTest(9, 10) - 0.021484375) < 1e-12);
 });
 
 test('compareInventories ignores routing when naming watched policies', () => {

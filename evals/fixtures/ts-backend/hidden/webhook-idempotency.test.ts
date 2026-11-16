@@ -34,21 +34,14 @@ describe("hidden: idempotent billing webhooks", () => {
     expect(org?.credits).toBe(100);
   });
 
-  // SQLite may reject some concurrent writers (SQLITE_BUSY) and the provider will retry those, so
-  // only the invariant is required: never applied twice, at least one delivery acknowledged, and
-  // the provider's retries of the rejected deliveries acknowledged without applying again.
-  it("applies concurrent deliveries of the same event once", async () => {
+  // A provider retry can overlap the original delivery. Every delivery of a repeated event must be
+  // acknowledged (a 5xx makes the provider retry again) and the credits applied once.
+  it("acknowledges concurrent deliveries of the same event and applies it once", async () => {
     const { request, db } = await createTestContext();
     const responses = await Promise.all(Array.from({ length: 4 }, () => request("POST", "/api/webhooks/billing", { body: event("evt_c"), headers })));
-    expect(responses.some(acknowledged)).toBe(true);
+    expect(responses.map((response) => response.status).filter((status) => status < 200 || status >= 300)).toEqual([]);
     const org = await db.select().from(organizations).where(eq(organizations.id, "org_globex")).get();
     expect(org?.credits).toBe(50);
-    for (const rejected of responses.filter((response) => !acknowledged(response))) {
-      expect(rejected.status).toBeGreaterThanOrEqual(500);
-      expect(acknowledged(await request("POST", "/api/webhooks/billing", { body: event("evt_c"), headers }))).toBe(true);
-    }
-    const afterRetries = await db.select().from(organizations).where(eq(organizations.id, "org_globex")).get();
-    expect(afterRetries?.credits).toBe(50);
   });
 
   // The provider retries for hours, so a retry can arrive after a deploy or on another instance:

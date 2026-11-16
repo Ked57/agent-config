@@ -19,5 +19,5 @@
     "serve": "vite preview --port {port} --strictPort",
     "routes": ["/", "/projects", "/users", "/users/u1", "/gallery", "/settings", "/help"]
   },
-  "judgeContext": "The codebase is a Vite + Vue 3 (<script setup>, Composition API) + TypeScript (strict) + Tailwind CSS v4 + PrimeVue 4 (Aura preset, styled mode, tailwindcss-primeui) + Pinia + vue-router admin console. Browser support target: Baseline Widely Available. Penalise bypassing or replacing PrimeVue where PrimeVue 4 has a fitting component; reward reuse of existing patterns."
+  "judgeContext": "The codebase is a Vite + Vue 3 (<script setup>, Composition API) + TypeScript (strict) + Tailwind CSS v4 + PrimeVue 4 (Aura preset, styled mode, tailwindcss-primeui) + Pinia + vue-router admin console. Penalise bypassing or replacing PrimeVue where PrimeVue 4 has a fitting component; reward reuse of existing patterns."
 }

@@ -1,5 +1,13 @@
 // Pure aggregation of run and judgment records into the summary that the report renders.
-import { DIMENSIONS } from './judge.mjs';
+// The unit of comparison is the task: an arm's task score is the mean over its reps, and the arms are
+// compared on the paired per-task differences d_t = B_t − A_t (see stats.mjs and evals/README.md).
+import { checkScore, scoreRun, slashInvocations } from './checks.mjs';
+import { bootstrapCi, pairedStats, ratioStats } from './stats.mjs';
+
+/** Differences smaller than this (in metric units) count as "no difference". */
+export const EQUIVALENCE = 0.1;
+/** Fewer paired tasks than this always gives "cannot conclude". */
+export const MIN_TASKS = 5;
 
 const mean = (values) => {
   const numbers = values.filter((value) => typeof value === 'number' && Number.isFinite(value));
@@ -7,36 +15,49 @@ const mean = (values) => {
 };
 const rate = (runs, predicate) => (runs.length ? runs.filter(predicate).length / runs.length : null);
 const relative = (b, a) => (a && b !== null && a !== null ? b / a - 1 : null);
+const pluginName = (plugin) => (typeof plugin === 'string' ? plugin : plugin?.name ?? plugin?.id ?? '').split('@')[0];
 
-/** Two-sided exact sign test for `wins` successes out of `n` decisive trials (p = 0.5). */
-export function signTest(wins, n) {
-  if (n === 0) return 1;
-  const k = Math.min(wins, n - wins);
-  let tail = 0;
-  let coefficient = 1;
-  for (let i = 0; i <= k; i += 1) {
-    tail += coefficient;
-    coefficient = (coefficient * (n - i)) / (i + 1);
-  }
-  return Math.min(1, (2 * tail) / 2 ** n);
+/**
+ * Whether a run shows a component firing: a policy or skill name, or `plugin:<name>`. Besides the
+ * measured telemetry, a slash invocation counts: the exact prompt sent (`run.prompt`) or a slash
+ * command the session log shows expanded (`run.isolation.commands`, recorded after measuring).
+ */
+export function componentFired(run, name) {
+  const telemetry = run.telemetry ?? {};
+  const slash = slashInvocations({ prompt: run.prompt ?? '', commandTags: run.isolation?.commands ?? [] });
+  if (name.startsWith('plugin:')) return Boolean(telemetry.plugins?.[name.slice(7)]?.fired) || slash.some((command) => command.startsWith(`${name.slice(7)}:`));
+  return Boolean(telemetry.policies?.[name]?.fired || telemetry.skills?.[name]?.fired) || slash.some((command) => command === name || command.endsWith(`:${name}`));
 }
+
+const armHas = (info = {}, name) => (name.startsWith('plugin:')
+  ? (info.plugins ?? []).some((plugin) => pluginName(plugin) === name.slice(7))
+  : (info.policies ?? []).includes(name) || (info.skills ?? []).includes(name));
+
+/** Components a task expects to fire (`expectsComponents`, or the older `expectsPolicies`). */
+export const expectedComponents = (task) => task?.expectsComponents ?? task?.expectsPolicies ?? [];
 
 export function armStats(runs) {
   const checkStats = {};
   for (const run of runs) {
     for (const check of run.checks ?? []) {
-      checkStats[check.id] ??= { label: check.label, level: check.level, pass: 0, n: 0 };
+      checkStats[check.id] ??= { label: check.label, level: check.level, pass: 0, n: 0, score: 0 };
       checkStats[check.id].n += 1;
+      checkStats[check.id].score += checkScore(check);
       if (check.pass) checkStats[check.id].pass += 1;
     }
   }
+  for (const entry of Object.values(checkStats)) entry.score /= entry.n;
   const required = runs.flatMap((run) => (run.checks ?? []).filter((check) => check.level === 'required'));
   const features = {};
   for (const run of runs) for (const name of Object.keys(run.features ?? {})) features[name] = (features[name] ?? 0) + 1;
   const gateNames = [...new Set(runs.flatMap((run) => Object.keys(run.gates ?? {})))];
+  const firedRate = (kind) => Object.fromEntries([...new Set(runs.flatMap((run) => Object.keys(run.telemetry?.[kind] ?? {})))]
+    .map((name) => [name, rate(runs, (run) => run.telemetry?.[kind]?.[name]?.fired)]));
   return {
     n: runs.length,
     errors: runs.filter((run) => run.status !== 'ok').length,
+    score: mean(runs.map((run) => scoreRun(run).score)),
+    allPass: rate(runs, (run) => scoreRun(run).allPass),
     gatesPass: rate(runs, (run) => run.gatesPass),
     gates: Object.fromEntries(gateNames.map((gate) => [gate, rate(runs, (run) => run.gates?.[gate]?.ok)])),
     requiredChecksPass: required.length ? required.filter((check) => check.pass).length / required.length : null,
@@ -51,22 +72,40 @@ export function armStats(runs) {
     toolCalls: mean(runs.map((run) => run.agent?.toolCalls)),
     addedLines: mean(runs.map((run) => run.diff?.addedLines)),
     features,
-    policiesFired: Object.fromEntries([...new Set(runs.flatMap((run) => Object.keys(run.telemetry?.policies ?? {})))]
-      .map((name) => [name, rate(runs, (run) => run.telemetry.policies[name]?.fired)])),
-    skillsFired: Object.fromEntries([...new Set(runs.flatMap((run) => Object.keys(run.telemetry?.skills ?? {})))]
-      .map((name) => [name, rate(runs, (run) => run.telemetry.skills[name]?.fired)])),
+    policiesFired: firedRate('policies'),
+    skillsFired: firedRate('skills'),
+    pluginsFired: firedRate('plugins'),
     signalHits: Object.fromEntries([...new Set(runs.flatMap((run) => Object.keys(run.telemetry?.policies ?? {})))]
       .filter((name) => runs.some((run) => run.telemetry.policies[name]?.signalHits !== null && run.telemetry.policies[name]?.signalHits !== undefined))
       .map((name) => [name, mean(runs.map((run) => run.telemetry.policies[name]?.signalHits))]))
   };
 }
 
+/**
+ * Re-derives a judgment's preference from its per-call record with the current tie rule (every
+ * verdict must name the same side), so judgments saved under the older rule (one vote plus a tie
+ * counted as a win) report consistently. Uses the per-call `calls`, else the `votes` tally; records
+ * with neither are returned unchanged.
+ */
+export function applyTieRule(judgment) {
+  let preference;
+  if (Array.isArray(judgment.calls) && judgment.calls.length) {
+    const sides = judgment.calls.map((call) => (call.preference === 'tie' ? 'tie' : call.order[call.preference === '1' ? 0 : 1]));
+    preference = sides.every((side) => side === sides[0]) ? sides[0] : 'tie';
+  } else if (judgment.votes && Object.values(judgment.votes).some((count) => count > 0)) {
+    const total = Object.values(judgment.votes).reduce((sum, count) => sum + count, 0);
+    preference = (judgment.sides ?? []).find((side) => judgment.votes[side] === total) ?? 'tie';
+  } else return judgment;
+  return preference === judgment.preference ? judgment : { ...judgment, preference, preferenceAsRecorded: judgment.preference };
+}
+
+/** Judge dimensions present in a set of judgments, in first-seen order (fixtures may pick their own). */
+export const judgedDimensions = (judgments) => [...new Set(judgments.flatMap((judgment) => Object.values(judgment.scores ?? {}).flatMap((scores) => Object.keys(scores ?? {}))))]
+  .filter((dimension) => dimension !== 'overall');
+
 function judgeStats(judgments) {
   const ab = judgments.filter((judgment) => judgment.kind === 'AB');
-  const dims = (side) => {
-    const values = Object.fromEntries([...DIMENSIONS, 'overall'].map((dimension) => [dimension, mean(ab.map((judgment) => judgment.scores[side]?.[dimension]))]));
-    return values;
-  };
+  const dims = (side) => Object.fromEntries([...judgedDimensions(ab), 'overall'].map((dimension) => [dimension, mean(ab.map((judgment) => judgment.scores[side]?.[dimension]))]));
   return {
     pairs: ab.length,
     A: dims('A'),
@@ -75,25 +114,101 @@ function judgeStats(judgments) {
   };
 }
 
-/** Noise floor from same-arm control pairs (A#1 vs A#2), or from A/B pairs when the arms are identical. */
-export function noiseFloor(judgments, armsIdentical) {
+/**
+ * Judge noise from same-arm control pairs (A#1 vs A#2), or from A/B pairs when the arms are
+ * identical: mean |overall difference| with a seeded bootstrap CI over pairs. Descriptive only.
+ */
+export function noiseFloor(judgments, armsIdentical, seed = 1) {
   const pairs = armsIdentical ? judgments.filter((j) => j.kind === 'AB') : judgments.filter((j) => j.kind === 'AA');
   const diffs = pairs.map((judgment) => {
     const [left, right] = judgment.sides;
     return judgment.scores[right].overall - judgment.scores[left].overall;
   });
+  const absolute = diffs.map(Math.abs);
   return {
     source: armsIdentical ? 'A/B pairs (arms identical)' : 'A#1 vs A#2 control pairs',
     pairs: pairs.length,
     decisiveRate: pairs.length ? pairs.filter((j) => j.preference !== 'tie').length / pairs.length : null,
-    meanAbsDiff: mean(diffs.map(Math.abs)),
-    maxAbsDiff: diffs.length ? Math.max(...diffs.map(Math.abs)) : null,
+    meanAbsDiff: mean(absolute),
+    meanAbsDiffCi: bootstrapCi(absolute, mean, { seed }),
+    maxAbsDiff: diffs.length ? Math.max(...absolute) : null,
     splitRate: pairs.length ? pairs.filter((j) => !j.unanimous).length / pairs.length : null
   };
 }
 
-export function aggregate({ config, taskSet, armsInfo, runs, judgments, activeJudgeSet = null, otherJudgeSets = {} }) {
+const fmtCi = (ci, digits = 2) => (ci ? `[${fmtSigned(ci[0], digits)}, ${fmtSigned(ci[1], digits)}]` : '–');
+
+/**
+ * The decision rule, applied to one metric's paired stats (`pairedStats` plus `ceiling`/`floor`
+ * task counts). Uses the paired-t CI; the bootstrap CI is reported next to it.
+ */
+export function decide(stats, { equivalence = EQUIVALENCE, minTasks = MIN_TASKS } = {}) {
+  const { tasks, mean: m, sd, ci, mde, tasksNeeded } = stats;
+  const need = () => `MDE ${fmt(mde)} at ${tasks} task(s); about ${tasksNeeded['0.10'] ?? '–'} tasks needed for an MDE of 0.10, ${tasksNeeded['0.20'] ?? '–'} for 0.20`;
+  const bounded = (stats.ceiling ?? 0) + (stats.floor ?? 0);
+  const atBounds = bounded ? `; metric at ceiling/floor on ${bounded} of ${tasks} tasks` : '';
+  if (tasks < minTasks) return { code: 'cannot conclude', text: `cannot conclude: ${tasks} paired task(s), at least ${minTasks} needed${sd ? `; ${need()}` : ''}${atBounds}` };
+  if (sd === 0 && m === 0) {
+    return { code: 'no difference', text: `no difference observed; metric at ceiling/floor on ${bounded} of ${tasks} tasks (ceiling ${stats.ceiling ?? 0}, floor ${stats.floor ?? 0})` };
+  }
+  if (ci[0] > 0) return { code: 'B better', text: `B better (95% CI ${fmtCi(ci)} excludes 0)` };
+  if (ci[1] < 0) return { code: 'A better', text: `A better (95% CI ${fmtCi(ci)} excludes 0)` };
+  if (ci[0] >= -equivalence && ci[1] <= equivalence) return { code: 'no difference', text: `no difference larger than ±${fmt(equivalence)} (95% CI ${fmtCi(ci)})` };
+  return { code: 'cannot conclude', text: `cannot conclude: 95% CI ${fmtCi(ci)} spans 0 and ±${fmt(equivalence)}; ${need()}` };
+}
+
+/**
+ * Paired task-level comparison of one metric. `value(run)` gives a run's value (null to skip it);
+ * an arm's task value is the mean over its reps; tasks without both arms are left out.
+ */
+export function compareTasks({ runs, taskIds, value, seed, bounds = null, metric }) {
+  const perTask = [];
+  for (const task of taskIds) {
+    const armMean = (arm) => mean(runs.filter((run) => run.task === task && run.arm === arm).map(value));
+    const [A, B] = [armMean('A'), armMean('B')];
+    if (A === null || B === null) continue;
+    perTask.push({ task, A, B, d: B - A });
+  }
+  const stats = pairedStats(perTask.map((row) => row.d), { seed });
+  const ceiling = bounds ? perTask.filter((row) => row.A === bounds[1] && row.B === bounds[1]).length : null;
+  const floor = bounds ? perTask.filter((row) => row.A === bounds[0] && row.B === bounds[0]).length : null;
+  const result = { metric, ...stats, meanA: mean(perTask.map((row) => row.A)), meanB: mean(perTask.map((row) => row.B)), ceiling, floor, perTask };
+  return { ...result, verdict: decide(result) };
+}
+
+/** Cost-type comparison: ratio of task means B/A − 1 with a task-bootstrap CI. Never part of the quality verdict. */
+export function compareCost({ runs, taskIds, value, seed, metric }) {
+  const pairs = [];
+  for (const task of taskIds) {
+    const armMean = (arm) => mean(runs.filter((run) => run.task === task && run.arm === arm).map(value));
+    const [a, b] = [armMean('A'), armMean('B')];
+    if (a !== null && b !== null) pairs.push({ task, a, b });
+  }
+  const stats = ratioStats(pairs, { seed });
+  const ci = stats.bootstrapCi;
+  const pct = (x) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(0)}%`;
+  let verdict;
+  if (!ci || stats.tasks < MIN_TASKS) verdict = { code: 'cannot conclude', text: `cannot conclude (fewer than ${MIN_TASKS} paired tasks)${stats.mean !== null ? `: B ${pct(stats.mean)}` : ''}${ci ? ` (task-bootstrap 95% CI ${pct(ci[0])} to ${pct(ci[1])})` : ''}` };
+  else if (ci[0] > 0) verdict = { code: 'B costs more', text: `B ${pct(stats.mean)} (task-bootstrap 95% CI ${pct(ci[0])} to ${pct(ci[1])})` };
+  else if (ci[1] < 0) verdict = { code: 'B costs less', text: `B ${pct(stats.mean)} (task-bootstrap 95% CI ${pct(ci[0])} to ${pct(ci[1])})` };
+  else verdict = { code: 'no difference', text: `no difference detected: B ${pct(stats.mean)} (task-bootstrap 95% CI ${pct(ci[0])} to ${pct(ci[1])})` };
+  return { metric, ...stats, ci, mde: null, perTask: pairs, verdict };
+}
+
+export function aggregate({ config, taskSet, armsInfo, runs: allRuns, judgments, activeJudgeSet = null, otherJudgeSets = {} }) {
   const tasksById = Object.fromEntries(taskSet.tasks.map((task) => [task.id, task]));
+  const scoringWarnings = [];
+  // Runs that failed the isolation check saw config the arm did not install: excluded from everything.
+  const isolated = allRuns.filter((run) => run.status === 'isolation');
+  const runs = allRuns.filter((run) => run.status !== 'isolation');
+  if (isolated.length) scoringWarnings.push(`${isolated.length} run(s) failed the isolation check and are excluded from every figure: ${isolated.map((run) => run.id).join(', ')}.`);
+  const excludedIds = new Set(isolated.map((run) => run.id));
+  const usable = (set) => set.filter((judgment) => !(judgment.runs ?? []).some((id) => excludedIds.has(id))).map(applyTieRule);
+  judgments = usable(judgments);
+  otherJudgeSets = Object.fromEntries(Object.entries(otherJudgeSets).map(([id, set]) => [id, usable(set)]));
+  const retied = judgments.filter((judgment) => judgment.preferenceAsRecorded).length;
+  if (retied) scoringWarnings.push(`${retied} judgment(s) were saved under the older tie rule (one vote plus a tie counted as a win) and are reported as ties.`);
+
   const taskIds = config.taskIds.filter((id) => runs.some((run) => run.task === id));
   const armRuns = (arm, filter = () => true) => runs.filter((run) => run.arm === arm && filter(run));
   const section = (filter, judgmentFilter) => ({
@@ -101,8 +216,29 @@ export function aggregate({ config, taskSet, armsInfo, runs, judgments, activeJu
     B: armStats(armRuns('B', filter)),
     judge: judgeStats(judgments.filter(judgmentFilter))
   });
+  const seed = config.seed ?? 1;
+  const unscoredTasks = taskIds.filter((id) => runs.filter((run) => run.task === id).every((run) => scoreRun(run).score === null));
 
-  const perTask = taskIds.map((id) => ({ id, category: tasksById[id].category, ...section((run) => run.task === id, (j) => j.task === id) }));
+  const twoArms = !config.singleArm;
+  // Judge scores as per-arm rows so the same task-level machinery applies to them.
+  const judgeRuns = judgments.filter((judgment) => judgment.kind === 'AB').map((judgment) => [
+    { task: judgment.task, arm: 'A', overall: judgment.scores.A?.overall },
+    { task: judgment.task, arm: 'B', overall: judgment.scores.B?.overall }
+  ]).flat();
+  const primary = twoArms ? compareTasks({ runs, taskIds, seed, bounds: [0, 1], metric: 'run score (mean required-check score)', value: (run) => scoreRun(run).score }) : null;
+  const allPass = twoArms ? compareTasks({ runs, taskIds, seed, bounds: [0, 1], metric: 'all-pass rate', value: (run) => (scoreRun(run).score === null ? null : Number(scoreRun(run).allPass)) }) : null;
+  const judge = twoArms && judgeRuns.length ? compareTasks({ runs: judgeRuns, taskIds, seed, bounds: [1, 5], metric: 'judge overall (1-5)', value: (row) => row.overall ?? null }) : null;
+  const cost = twoArms ? {
+    ...compareCost({ runs, taskIds, seed, metric: 'cost per run (USD)', value: (run) => run.cost?.usd ?? null }),
+    wallMin: compareCost({ runs, taskIds, seed, metric: 'wall time per run (min)', value: (run) => (typeof run.wallMs === 'number' ? run.wallMs / 60000 : null) }),
+    turns: compareCost({ runs, taskIds, seed, metric: 'turns per run', value: (run) => run.agent?.turns ?? null })
+  } : null;
+
+  const perTask = taskIds.map((id) => {
+    const row = { id, category: tasksById[id]?.category, ...section((run) => run.task === id, (j) => j.task === id) };
+    const paired = primary?.perTask.find((entry) => entry.task === id);
+    return { ...row, scoreA: paired?.A ?? row.A.score, scoreB: paired?.B ?? row.B.score, d: paired?.d ?? null, unscored: unscoredTasks.includes(id) };
+  });
   const perCategory = Object.entries(taskSet.categories)
     .map(([key, category]) => ({ key, label: category.label ?? key, control: Boolean(category.control), ...section((run) => tasksById[run.task]?.category === key, (j) => tasksById[j.task]?.category === key) }))
     .filter((category) => category.A.n + category.B.n > 0);
@@ -113,65 +249,83 @@ export function aggregate({ config, taskSet, armsInfo, runs, judgments, activeJu
   const nonControl = section((run) => !taskSet.categories[tasksById[run.task]?.category]?.control, () => false);
   const overheadNonControl = relative(nonControl.B.costUsd, nonControl.A.costUsd);
 
-  // Routing telemetry for watched policies (changed between arms or requested with --watch).
+  // Routing telemetry for watched components (changed between arms or requested with --watch):
+  // policies and skills by name, plugins as `plugin:<name>`.
   const watched = [...new Set([...(armsInfo.watched ?? []), ...(config.watch ?? [])])].sort();
   const telemetry = { watched, perPolicy: {} };
   for (const name of watched) {
-    const entry = { falseTriggers: {}, misses: {} };
+    const entry = { fired: {}, falseTriggers: {}, misses: {} };
     for (const arm of ['A', 'B']) {
-      if (!armsInfo[arm]?.policies?.includes(name)) continue;
-      const notExpected = armRuns(arm, (run) => !(tasksById[run.task]?.expectsPolicies ?? []).includes(name));
-      const expected = armRuns(arm, (run) => (tasksById[run.task]?.expectsPolicies ?? []).includes(name));
+      if (!armHas(armsInfo[arm], name)) continue;
+      const expects = (run) => expectedComponents(tasksById[run.task]).includes(name);
+      const notExpected = armRuns(arm, (run) => !expects(run));
+      const expected = armRuns(arm, expects);
       const controls = notExpected.filter((run) => taskSet.categories[tasksById[run.task]?.category]?.control);
+      const fired = armRuns(arm, (run) => componentFired(run, name));
+      entry.fired[arm] = { runs: armRuns(arm).length, fired: fired.map((run) => run.id), tasks: [...new Set(fired.map((run) => run.task))].sort() };
       entry.falseTriggers[arm] = {
         controlRuns: controls.length,
-        controlFired: controls.filter((run) => run.telemetry?.policies?.[name]?.fired).length,
+        controlFired: controls.filter((run) => componentFired(run, name)).length,
         unexpectedRuns: notExpected.length,
-        unexpectedFired: notExpected.filter((run) => run.telemetry?.policies?.[name]?.fired).map((run) => run.id)
+        unexpectedFired: notExpected.filter((run) => componentFired(run, name)).map((run) => run.id)
       };
       entry.misses[arm] = {
         expectedRuns: expected.length,
-        missed: expected.filter((run) => !run.telemetry?.policies?.[name]?.fired).map((run) => run.id)
+        missed: expected.filter((run) => !componentFired(run, name)).map((run) => run.id)
       };
     }
     telemetry.perPolicy[name] = entry;
   }
 
-  const noise = noiseFloor(judgments, armsInfo.identical);
-  const ab = judgments.filter((j) => j.kind === 'AB');
-  const bWins = ab.filter((j) => j.preference === 'B').length;
-  const aWins = ab.filter((j) => j.preference === 'A').length;
-  const meanDiff = mean(ab.map((j) => j.scores.B.overall - j.scores.A.overall));
-  const comparison = {
-    pairs: ab.length,
-    bWins,
-    aWins,
-    ties: ab.length - bWins - aWins,
-    meanDiff,
-    signTestP: signTest(bWins, bWins + aWins),
-    beyondNoise: meanDiff !== null && noise.meanAbsDiff !== null ? Math.abs(meanDiff) > noise.meanAbsDiff : null
-  };
+  const noise = noiseFloor(judgments, armsInfo.identical, seed);
+  const notable = notableDiffs({ perTask, judgments: judgments.filter((j) => j.kind === 'AB'), runs });
+  if (twoArms && armsInfo.identical) {
+    for (const [label, comparison] of [['primary', primary], ['all-pass', allPass], ['judge', judge]]) {
+      if (comparison && ['A better', 'B better'].includes(comparison.verdict.code)) scoringWarnings.push(`A/A eval: the ${label} metric says "${comparison.verdict.code}" between identical arms. That is a false positive (expected about 5% of the time per metric).`);
+    }
+  }
+  if (unscoredTasks.length) scoringWarnings.push(`${unscoredTasks.length} task(s) have no required checks and are left out of the primary metric: ${unscoredTasks.join(', ')}.`);
+  const headline = twoArms ? headlineLines({ primary, judge, cost }) : null;
+  const recommendation = twoArms
+    ? { verdict: primary.verdict.code, reasons: headline }
+    : { verdict: 'single-arm validation', reasons: ['Only arm A ran: this report validates tasks, checks and gates, not a change. Comparison, judge and cost-overhead sections are empty by design.'] };
 
-  const notable = notableDiffs({ perTask, judgments: ab, runs });
-  const recommendation = config.singleArm
-    ? { verdict: 'single-arm validation', reasons: ['Only arm A ran: this report validates tasks, checks and gates, not a change. Judge, comparison and cost-overhead sections are empty by design.'] }
-    : recommend({ armsInfo, comparison, noise, overall, overhead, telemetry });
   const sum = (items, pick) => items.reduce((total, item) => total + (pick(item) ?? 0), 0);
-  const cost = {
-    runsUsd: sum(runs, (run) => run.cost?.usd),
-    runsUsdByArm: { A: sum(runs.filter((run) => run.arm === 'A'), (run) => run.cost?.usd), B: sum(runs.filter((run) => run.arm === 'B'), (run) => run.cost?.usd) },
+  const spend = {
+    runsUsd: sum(allRuns, (run) => run.cost?.usd),
+    runsUsdByArm: { A: sum(allRuns.filter((run) => run.arm === 'A'), (run) => run.cost?.usd), B: sum(allRuns.filter((run) => run.arm === 'B'), (run) => run.cost?.usd) },
     judgeSet: activeJudgeSet,
     judgeUsd: sum(judgments, (judgment) => judgment.costUsd),
     judgeUsdPerJudgment: judgments.length ? sum(judgments, (judgment) => judgment.costUsd) / judgments.length : null,
     otherJudgeSetsUsd: Object.fromEntries(Object.entries(otherJudgeSets).map(([id, set]) => [id, sum(set, (judgment) => judgment.costUsd)]))
   };
-  cost.totalUsd = cost.runsUsd + cost.judgeUsd + Object.values(cost.otherJudgeSetsUsd).reduce((total, value) => total + value, 0);
+  spend.totalUsd = spend.runsUsd + spend.judgeUsd + Object.values(spend.otherJudgeSetsUsd).reduce((total, value) => total + value, 0);
   const judgeComparisons = Object.entries(otherJudgeSets).map(([id, set]) => ({ id, ...compareJudgeSets(judgments, set, armsInfo.identical) }));
   const runtimeSmoke = Object.fromEntries(['A', 'B'].map((arm) => {
     const checked = runs.filter((run) => run.arm === arm && (run.browser || run.http));
     return [arm, checked.length ? { runs: checked.length, pass: checked.filter((run) => (run.browser?.ok ?? true) && (run.http?.ok ?? true)).length } : null];
   }));
-  return { generatedAt: new Date().toISOString(), runs: runs.length, judgments: judgments.length, cost, judgeComparisons, runtimeSmoke, perTask, perCategory, overall, overhead, overheadNonControl, telemetry, noise, comparison, notable, recommendation };
+  const sample = {
+    tasks: taskIds.length,
+    pairedTasks: primary?.tasks ?? 0,
+    reps: config.reps ?? null,
+    runs: runs.length,
+    excludedRuns: isolated.map((run) => run.id),
+    unscoredTasks
+  };
+  return { generatedAt: new Date().toISOString(), runs: runs.length, judgments: judgments.length, sample, headline, primary, allPass, judge, cost, spend, scoringWarnings, judgeComparisons, runtimeSmoke, perTask, perCategory, overall, overhead, overheadNonControl, telemetry, noise, notable, recommendation };
+}
+
+/**
+ * The two headline lines: quality (primary metric; the judge only breaks a "no difference" or
+ * "cannot conclude", and never upgrades it to "better") and cost.
+ */
+export function headlineLines({ primary, judge, cost }) {
+  const tiebreak = judge && ['no difference', 'cannot conclude'].includes(primary.verdict.code)
+    ? `; judge (secondary) favours ${judge.verdict.code === 'B better' ? 'B' : judge.verdict.code === 'A better' ? 'A' : 'neither'}`
+    : '';
+  const quality = `Quality: ${primary.verdict.text}${tiebreak}. Mean B−A ${fmtSigned(primary.mean)} on the ${primary.metric}, paired-t 95% CI ${fmtCi(primary.ci)}, bootstrap ${fmtCi(primary.bootstrapCi)}, MDE ${fmt(primary.mde)}, over ${primary.tasks} paired task(s).`;
+  return [quality, `Cost per run (USD): ${cost.verdict.text}, over ${cost.tasks} paired task(s).`];
 }
 
 const pearson = (xs, ys) => {
@@ -225,8 +379,8 @@ export function notableDiffs({ perTask, judgments, runs }) {
     for (const [id, a] of Object.entries(task.A.checks)) {
       const b = task.B.checks[id];
       if (!b || !a.n || !b.n) continue;
-      const delta = b.pass / b.n - a.pass / a.n;
-      if (Math.abs(delta) >= 0.5) notes.push({ kind: 'check', task: task.id, text: `${a.label} (${a.level}): A ${a.pass}/${a.n}, B ${b.pass}/${b.n}` });
+      const delta = b.score - a.score;
+      if (Math.abs(delta) >= 0.5) notes.push({ kind: 'check', task: task.id, text: `${a.label} (${a.level}): A ${a.pass}/${a.n} passed (score ${fmt(a.score)}), B ${b.pass}/${b.n} (score ${fmt(b.score)})` });
     }
     for (const arm of ['A', 'B']) {
       if (task[arm].newDeps.length) notes.push({ kind: 'deps', task: task.id, text: `Arm ${arm} added dependencies: ${task[arm].newDeps.join(', ')}` });
@@ -245,37 +399,6 @@ export function notableDiffs({ perTask, judgments, runs }) {
   for (const run of runs.filter((r) => r.browser && !r.browser.ok)) notes.push({ kind: 'browser', task: run.task, text: `${run.id} browser smoke failed: ${run.browser.error ?? Object.entries(run.browser.routes).filter(([, v]) => v.errors.length || !v.textLength).map(([route, v]) => `${route} ${v.errors[0] ?? 'empty'}`).join('; ')}` });
   for (const run of runs.filter((r) => r.status !== 'ok')) notes.push({ kind: 'error', task: run.task, text: `${run.id} did not complete (${run.error ?? `exit ${run.exitCode}`})` });
   return notes;
-}
-
-/** Heuristic recommendation. Quality differences count only when beyond the noise floor and sign-test p < 0.1. */
-export function recommend({ armsInfo, comparison, noise, overall, overhead, telemetry }) {
-  const reasons = [];
-  if (armsInfo.identical) {
-    return { verdict: 'A/A control', reasons: ['Arms are identical; every difference in this report is run-to-run or judge noise.'] };
-  }
-  const significant = comparison.beyondNoise && comparison.signTestP < 0.1 && comparison.pairs >= 4;
-  const better = significant && comparison.meanDiff > 0;
-  const worse = significant && comparison.meanDiff < 0;
-  const regressions = [];
-  if ((overall.B.gatesPass ?? 1) < (overall.A.gatesPass ?? 1) - 0.05) regressions.push('lower gate pass rate');
-  if ((overall.B.requiredChecksPass ?? 1) < (overall.A.requiredChecksPass ?? 1) - 0.1) regressions.push('lower required-check pass rate');
-  if (overall.B.newDepRuns > overall.A.newDepRuns) regressions.push('more runs adding dependencies');
-  for (const [name, entry] of Object.entries(telemetry.perPolicy)) {
-    const fired = entry.falseTriggers.B?.unexpectedFired?.length ?? 0;
-    if (fired) regressions.push(`${name} fired on ${fired} run(s) that did not expect it`);
-  }
-  const cost = overhead.costUsd;
-  if (comparison.pairs) reasons.push(`Judge: B ${comparison.bWins} wins, A ${comparison.aWins}, ${comparison.ties} ties; mean overall B−A ${fmtSigned(comparison.meanDiff)} vs noise floor ±${fmt(noise.meanAbsDiff)} (sign test p=${fmt(comparison.signTestP)}).`);
-  if (cost !== null) reasons.push(`Cost per run ${fmtSigned(cost * 100, 0)}% for B.`);
-  if (regressions.length) reasons.push(`Regressions: ${regressions.join('; ')}.`);
-  let verdict;
-  if (worse) verdict = "don't adopt";
-  else if (better && !regressions.length) verdict = 'adopt';
-  else if (better) verdict = 'adopt with changes';
-  else if (cost !== null && cost > 0.1) verdict = "don't adopt (no measurable benefit)";
-  else if (regressions.length) verdict = 'adopt with changes';
-  else verdict = 'neutral';
-  return { verdict, reasons, heuristic: true };
 }
 
 export const fmt = (value, digits = 2) => (value === null || value === undefined || Number.isNaN(value) ? '–' : Number(value).toFixed(digits));

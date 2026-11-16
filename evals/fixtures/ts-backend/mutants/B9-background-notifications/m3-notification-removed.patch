@@ -1,0 +1,40 @@
+diff -ruN a/src/routes/projects.ts b/src/routes/projects.ts
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -5,7 +5,6 @@
+ import { projects, tasks, users } from "../db/schema";
+ import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
+-import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+ 
+ export const projectRoutes = (db: Db) =>
+@@ -135,8 +134,6 @@
+           })
+           .returning();
+         if (!task) throw new Error("insert returned no row");
+-        if (task.assigneeId)
+-          await notifyTaskAssigned(db, task, task.assigneeId);
+         return status(201, toTaskResponse(task));
+       },
+       {
+diff -ruN a/src/routes/tasks.ts b/src/routes/tasks.ts
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -4,7 +4,6 @@
+ import type { Db } from "../db/client";
+ import { tasks, users, type TaskStatus } from "../db/schema";
+ import { authGuard } from "../plugins/auth";
+-import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+ 
+ export const taskRoutes = (db: Db) =>
+@@ -109,7 +108,7 @@
+           .where(eq(tasks.id, task.id))
+           .returning();
+         if (!updated) throw new Error("update returned no row");
+-        if (newAssignee) await notifyTaskAssigned(db, updated, newAssignee);
++        void newAssignee;
+         return toTaskResponse(updated);
+       },
+       {

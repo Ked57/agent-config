@@ -1,0 +1,35 @@
+{
+  "task": "B3-project-list-n-plus-one",
+  "references": [
+    {
+      "file": "reference-shakeout-A-r1.patch",
+      "source": "validation-ts-backend-shakeout A r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-promise-all-loop.patch",
+      "wrong": "still one count query per project, run with Promise.all",
+      "violates": "use a fixed number of queries no matter how many projects there are",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-drops-empty-projects.patch",
+      "wrong": "projects without tasks disappear (inner join)",
+      "violates": "without changing the response",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-drops-response-fields.patch",
+      "wrong": "description and createdAt are dropped from each item",
+      "violates": "without changing the response",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-unsorted.patch",
+      "wrong": "projects are no longer ordered by name",
+      "violates": "without changing the response",
+      "expect": "killed"
+    }
+  ]
+}

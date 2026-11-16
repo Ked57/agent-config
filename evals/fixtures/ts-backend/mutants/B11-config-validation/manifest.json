@@ -1,0 +1,62 @@
+{
+  "task": "B11-config-validation",
+  "references": [
+    {
+      "file": "reference-shakeout-A-r1.patch",
+      "source": "validation-ts-backend-shakeout A r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-loglevel-unvalidated.patch",
+      "wrong": "an invalid LOG_LEVEL silently becomes info",
+      "violates": "LOG_LEVEL (debug, info, warn, error or silent; default info)",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-database-url-default.patch",
+      "wrong": "DATABASE_URL keeps a default",
+      "violates": "DATABASE_URL (required)",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-ttl-any-positive-number.patch",
+      "wrong": "TOKEN_TTL_HOURS accepts 0 and 1.5",
+      "violates": "TOKEN_TTL_HOURS (positive integer, default 24)",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-warn-only.patch",
+      "wrong": "prints the errors and starts anyway",
+      "violates": "The server should refuse to start",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-first-error-only.patch",
+      "wrong": "reports only the first invalid variable",
+      "violates": "names every invalid or missing variable",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-generic-usage-message.patch",
+      "wrong": "the error lists all five variable names whatever is wrong",
+      "violates": "a clear error that names every invalid or missing variable",
+      "expect": "survives",
+      "why": "pending: needs a check that valid variables are not named"
+    },
+    {
+      "file": "m7-port-default-3000.patch",
+      "wrong": "PORT defaults to 3000",
+      "violates": "PORT (default 4000)",
+      "expect": "survives",
+      "why": "testing the default needs a server on the fixed port 4000, which collides with concurrent runs"
+    },
+    {
+      "file": "m8-unnamed-error-source-dump.patch",
+      "wrong": "throws \"Invalid configuration\" without names; the names only appear in Bun's source excerpt",
+      "violates": "a clear error that names every invalid or missing variable",
+      "expect": "survives",
+      "why": "pending: needs output filtering of Bun's source excerpt"
+    }
+  ]
+}

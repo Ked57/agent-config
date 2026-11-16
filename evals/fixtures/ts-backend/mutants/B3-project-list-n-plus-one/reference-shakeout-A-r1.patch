@@ -1,0 +1,133 @@
+diff -ruN a/src/routes/projects.test.ts b/src/routes/projects.test.ts
+--- a/src/routes/projects.test.ts
++++ b/src/routes/projects.test.ts
+@@ -1,5 +1,6 @@
+ import { describe, expect, it } from "vitest";
+ 
++import { projects, tasks } from "../db/schema";
+ import { createTestContext, SEED_TOKENS } from "../test/helpers";
+ 
+ describe("projects", () => {
+@@ -24,6 +25,55 @@
+     });
+   });
+ 
++  it("lists projects with a fixed number of queries", async () => {
++    const queries: string[] = [];
++    const { db, request } = await createTestContext({
++      logger: { logQuery: (query) => queries.push(query) },
++    });
++    const listQueryCount = async () => {
++      queries.length = 0;
++      const response = await request("GET", "/api/projects", {
++        token: SEED_TOKENS.acmeAdmin,
++      });
++      expect(response.status).toBe(200);
++      return {
++        count: queries.length,
++        body: (await response.json()) as {
++          items: Array<{ id: string; taskCounts: Record<string, number> }>;
++        },
++      };
++    };
++
++    const before = await listQueryCount();
++    await db.insert(projects).values([
++      { id: "prj_extra_1", orgId: "org_acme", name: "Extra 1" },
++      { id: "prj_extra_2", orgId: "org_acme", name: "Extra 2" },
++    ]);
++    await db.insert(tasks).values({
++      id: "tsk_extra",
++      orgId: "org_acme",
++      projectId: "prj_extra_1",
++      title: "Extra",
++      status: "done",
++    });
++    const after = await listQueryCount();
++
++    expect(after.body.items).toHaveLength(before.body.items.length + 2);
++    expect(after.count).toBe(before.count);
++    const countsFor = (id: string) =>
++      after.body.items.find((item) => item.id === id)?.taskCounts;
++    expect(countsFor("prj_extra_1")).toEqual({
++      todo: 0,
++      in_progress: 0,
++      done: 1,
++    });
++    expect(countsFor("prj_extra_2")).toEqual({
++      todo: 0,
++      in_progress: 0,
++      done: 0,
++    });
++  });
++
+   it("creates a project and validates the name", async () => {
+     const { request } = await createTestContext();
+     const created = await request("POST", "/api/projects", {
+diff -ruN a/src/routes/projects.ts b/src/routes/projects.ts
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -2,7 +2,7 @@
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { projects, tasks, users } from "../db/schema";
++import { projects, tasks, type TaskStatus, users } from "../db/schema";
+ import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+@@ -19,23 +19,38 @@
+           .from(projects)
+           .where(eq(projects.orgId, user.orgId))
+           .orderBy(asc(projects.name));
+-        const items = [];
+-        for (const project of rows) {
+-          const counts = await db
+-            .select({ status: tasks.status, total: count() })
+-            .from(tasks)
+-            .where(eq(tasks.projectId, project.id))
+-            .groupBy(tasks.status);
+-          const taskCounts = { todo: 0, in_progress: 0, done: 0 };
+-          for (const row of counts) taskCounts[row.status] = row.total;
+-          items.push({
+-            id: project.id,
+-            name: project.name,
+-            description: project.description,
+-            createdAt: project.createdAt.toISOString(),
+-            taskCounts,
+-          });
++        // One grouped query for every project's counts, scoped through the
++        // projects join so the query count stays fixed as projects grow.
++        const counts = await db
++          .select({
++            projectId: tasks.projectId,
++            status: tasks.status,
++            total: count(),
++          })
++          .from(tasks)
++          .innerJoin(projects, eq(tasks.projectId, projects.id))
++          .where(eq(projects.orgId, user.orgId))
++          .groupBy(tasks.projectId, tasks.status);
++        const countsByProject = new Map<string, Record<TaskStatus, number>>();
++        for (const row of counts) {
++          let taskCounts = countsByProject.get(row.projectId);
++          if (!taskCounts) {
++            taskCounts = { todo: 0, in_progress: 0, done: 0 };
++            countsByProject.set(row.projectId, taskCounts);
++          }
++          taskCounts[row.status] = row.total;
+         }
++        const items = rows.map((project) => ({
++          id: project.id,
++          name: project.name,
++          description: project.description,
++          createdAt: project.createdAt.toISOString(),
++          taskCounts: countsByProject.get(project.id) ?? {
++            todo: 0,
++            in_progress: 0,
++            done: 0,
++          },
++        }));
+         return { items };
+       },
+       { requireAuth: true },

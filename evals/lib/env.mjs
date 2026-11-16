@@ -15,14 +15,75 @@ export const TELEMETRY_OFF = Object.freeze({
   NEXT_TELEMETRY_DISABLED: '1'
 });
 
-export function baseEnv(home) {
+/** `tmp`, when given, becomes the process's TMPDIR/TMP/TEMP so concurrent runs never share `/tmp` names. */
+export function baseEnv(home, tmp = null) {
   return {
     PATH: process.env.PATH,
     LANG: process.env.LANG ?? 'C.UTF-8',
     TERM: 'dumb',
     HOME: home,
+    ...(tmp ? { TMPDIR: tmp, TMP: tmp, TEMP: tmp } : {}),
     ...TELEMETRY_OFF
   };
+}
+
+export const DEFAULT_SANDBOX = '/var/tmp/agent-config-evals';
+
+/** Root of everything an agent process touches (arm homes, run homes, working copies, caches). */
+export const sandboxRoot = (env = process.env) => path.resolve(env.AGENT_CONFIG_EVALS_SANDBOX || DEFAULT_SANDBOX);
+
+/** Whether `child` is `parent` or sits below it. */
+export function isInside(child, parent) {
+  const relative = path.relative(path.resolve(parent), path.resolve(child));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+/**
+ * Reasons the sandbox can't isolate agents: it sits under the real home, or the sandbox or one of its
+ * ancestors holds agent config that Claude Code would load as project config for every run.
+ */
+export function sandboxProblems(sandbox, home = os.homedir()) {
+  const problems = [];
+  if (isInside(sandbox, home)) problems.push(`the sandbox ${sandbox} is inside the home directory ${home}`);
+  const found = ancestorAgentConfig(path.join(sandbox, 'probe'));
+  if (found.length) problems.push(`agent config sits above the sandbox: ${found.join(', ')}`);
+  return problems;
+}
+
+/**
+ * Kills what a run left behind: processes whose environment carries one of `markers` (e.g.
+ * `HOME=<run home>`, inherited by everything the agent spawned, even after `setsid`) or whose cwd sits
+ * under `root`. `pkill -f <app>` missed servers started with relative paths. Linux only (reads /proc).
+ * Returns the killed processes' command lines.
+ */
+export function killStrays({ root, markers }) {
+  if (!fs.existsSync('/proc/self/environ')) return [];
+  const killed = [];
+  for (const pid of fs.readdirSync('/proc').filter((name) => /^\d+$/.test(name)).map(Number)) {
+    if (pid === process.pid) continue;
+    let environ;
+    let cwd = '';
+    try {
+      environ = fs.readFileSync(`/proc/${pid}/environ`, 'utf8').split('\0');
+      cwd = fs.readlinkSync(`/proc/${pid}/cwd`);
+    } catch {
+      if (!environ) continue; // another user's process, or already gone
+    }
+    if (!markers.some((marker) => environ.includes(marker)) && !(cwd && isInside(cwd, root))) continue;
+    let command = String(pid);
+    try {
+      command = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').join(' ').trim() || command;
+    } catch {
+      // gone already
+    }
+    try {
+      process.kill(pid, 'SIGKILL');
+      killed.push(command.slice(0, 200));
+    } catch {
+      // gone already
+    }
+  }
+  return killed;
 }
 
 /**

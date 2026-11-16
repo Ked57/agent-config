@@ -1,0 +1,72 @@
+{
+  "task": "B10-task-service-layer",
+  "baselinePasses": true,
+  "references": [
+    {
+      "file": "reference-shakeout-A-r1.patch",
+      "source": "validation-ts-backend-shakeout A r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-token-refactor.patch",
+      "wrong": "only the transition table moves to src/services/; every rule stays in the route",
+      "violates": "so the route only deals with HTTP",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-tenant-check-lost.patch",
+      "wrong": "the organization filter is dropped from the task lookup",
+      "violates": "Behaviour must not change.",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-updatedAt-not-bumped.patch",
+      "wrong": "updatedAt is no longer set",
+      "violates": "Behaviour must not change.",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-error-messages-changed.patch",
+      "wrong": "error bodies change",
+      "violates": "Behaviour must not change.",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-done-with-assignee-in-same-patch.patch",
+      "wrong": "assigning and finishing in one request now gets 409",
+      "violates": "Behaviour must not change.",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-role-check-before-transition.patch",
+      "wrong": "a member's impossible transition gets 403 instead of 409",
+      "violates": "Behaviour must not change.",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-done-rule-dropped.patch",
+      "wrong": "the \"assign before done\" rule is gone",
+      "violates": "Behaviour must not change.",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-due-date-clear-rejected-on-done.patch",
+      "wrong": "clearing the due date of a finished task now gets 409",
+      "violates": "Behaviour must not change.",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-fields-dropped.patch",
+      "wrong": "isUrgent is no longer stored",
+      "violates": "Behaviour must not change.",
+      "expect": "killed"
+    },
+    {
+      "file": "m10-renotify-same-assignee.patch",
+      "wrong": "re-sending the current assignee sends another email",
+      "violates": "Behaviour must not change.",
+      "expect": "killed"
+    }
+  ]
+}

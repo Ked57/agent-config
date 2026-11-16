@@ -23,8 +23,8 @@ export function claudeAuthEnv(env = process.env, home = os.homedir()) {
   throw new Error('No Claude credentials: set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN, or log in with `claude`.');
 }
 
-const claudeEnv = (home, extra = {}) => ({
-  ...baseEnv(home),
+const claudeEnv = (home, extra = {}, tmp = null) => ({
+  ...baseEnv(home, tmp),
   CLAUDE_CONFIG_DIR: path.join(home, '.claude'),
   ...claudeAuthEnv(),
   ...extra
@@ -84,6 +84,8 @@ export function parseTranscript(text) {
   return result;
 }
 
+export const PROBE_MODEL = 'claude-haiku-5-5';
+
 const runProcess = ({ args, cwd, env, stdoutFile, stderrFile, stdin, timeoutMs }) => new Promise((resolve) => {
   const started = Date.now();
   const out = stdoutFile ? fs.openSync(stdoutFile, 'w') : 'pipe';
@@ -99,6 +101,8 @@ const runProcess = ({ args, cwd, env, stdoutFile, stderrFile, stdin, timeoutMs }
   }, timeoutMs);
   const finish = (code) => {
     clearTimeout(timer);
+    // The agent's own children (dev servers, watchers) share its process group: stop them with it.
+    try { process.kill(-child.pid, 'SIGKILL'); } catch { /* group already empty */ }
     if (typeof out === 'number') fs.closeSync(out);
     if (typeof err === 'number') fs.closeSync(err);
     resolve({ exitCode: code, timedOut, wallMs: Date.now() - started, stdout });
@@ -112,10 +116,25 @@ export const claudeProvider = {
   parseTranscript,
   transcriptFile: 'transcript.jsonl',
 
-  async runAgent({ home, cwd, prompt, model, effort, transcriptPath, stderrPath, timeoutMs, env = {} }) {
+  /** Where Claude Code keeps session logs for a config home (one jsonl per session, subagents below). */
+  sessionRoot: (home) => path.join(home, '.claude', 'projects'),
+
+  async runAgent({ home, cwd, tmp, prompt, model, effort, transcriptPath, stderrPath, timeoutMs, env = {} }) {
     const args = ['-p', prompt, '--model', model, '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions', '--strict-mcp-config'];
     if (effort) args.push('--effort', effort);
-    return runProcess({ args, cwd, env: claudeEnv(home, env), stdoutFile: transcriptPath, stderrFile: stderrPath, timeoutMs });
+    return runProcess({ args, cwd, env: claudeEnv(home, env, tmp), stdoutFile: transcriptPath, stderrFile: stderrPath, timeoutMs });
+  },
+
+  /**
+   * One cheap session that only reports what loaded: its init event lists the skills, plugins, agents
+   * and MCP servers a run under this home will see. Returns the stream-json text.
+   */
+  async probe({ home, cwd, tmp, transcriptPath, model = PROBE_MODEL, timeoutMs = 3 * 60 * 1000 }) {
+    const args = ['-p', 'Reply with the single word ok.', '--model', model, '--output-format', 'stream-json', '--verbose', '--strict-mcp-config', '--max-turns', '1'];
+    const result = await runProcess({ args, cwd, env: claudeEnv(home, {}, tmp), stdoutFile: transcriptPath, timeoutMs });
+    const text = fs.existsSync(transcriptPath) ? fs.readFileSync(transcriptPath, 'utf8') : '';
+    if (result.exitCode !== 0) throw new Error(`probe session in ${home} exited ${result.exitCode}${result.timedOut ? ' (timeout)' : ''}: ${text.slice(-300)}`);
+    return text;
   },
 
   async ask({ home, prompt, model, effort, timeoutMs = 10 * 60 * 1000 }) {

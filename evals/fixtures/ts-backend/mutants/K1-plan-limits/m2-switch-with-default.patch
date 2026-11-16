@@ -1,0 +1,127 @@
+diff -ruN a/src/app.ts b/src/app.ts
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -5,6 +5,7 @@
+ import { requestLogger } from "./plugins/request-logger";
+ import { authRoutes } from "./routes/auth";
+ import { healthRoutes } from "./routes/health";
++import { organizationRoutes } from "./routes/organization";
+ import { projectRoutes } from "./routes/projects";
+ import { taskRoutes } from "./routes/tasks";
+ import { webhookRoutes } from "./routes/webhooks";
+@@ -24,6 +25,7 @@
+     })
+     .use(healthRoutes)
+     .use(authRoutes(db))
++    .use(organizationRoutes(db))
+     .use(projectRoutes(db))
+     .use(taskRoutes(db))
+     .use(webhookRoutes(db));
+diff -ruN a/src/lib/plans.ts b/src/lib/plans.ts
+--- /dev/null
++++ b/src/lib/plans.ts
+@@ -0,0 +1,12 @@
++import type { organizations } from "../db/schema";
++
++export type Plan = (typeof organizations.$inferSelect)["plan"];
++
++export function projectLimitFor(plan: Plan): number {
++  switch (plan) {
++    case "free":
++      return 2;
++    default:
++      return 50;
++  }
++}
+diff -ruN a/src/routes/organization.test.ts b/src/routes/organization.test.ts
+--- /dev/null
++++ b/src/routes/organization.test.ts
+@@ -0,0 +1,26 @@
++import { describe, expect, it } from "vitest";
++
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++
++describe("plan limits", () => {
++  it("stops a free organization at its project limit", async () => {
++    const { request } = await createTestContext();
++    const token = SEED_TOKENS.globexAdmin;
++    expect(
++      (await request("POST", "/api/projects", { token, body: { name: "B" } }))
++        .status,
++    ).toBe(201);
++    const refused = await request("POST", "/api/projects", {
++      token,
++      body: { name: "C" },
++    });
++    expect(refused.status).toBe(403);
++    expect(await refused.json()).toMatchObject({ code: "plan_limit" });
++    const usage = await request("GET", "/api/organization", { token });
++    expect(await usage.json()).toEqual({
++      plan: "free",
++      projectLimit: 2,
++      projectCount: 2,
++    });
++  });
++});
+diff -ruN a/src/routes/organization.ts b/src/routes/organization.ts
+--- /dev/null
++++ b/src/routes/organization.ts
+@@ -0,0 +1,33 @@
++import { count, eq } from "drizzle-orm";
++import { Elysia } from "elysia";
++
++import type { Db } from "../db/client";
++import { organizations, projects } from "../db/schema";
++import { projectLimitFor } from "../lib/plans";
++import { authGuard } from "../plugins/auth";
++
++export async function projectUsage(db: Db, orgId: string) {
++  const org = await db
++    .select({ plan: organizations.plan })
++    .from(organizations)
++    .where(eq(organizations.id, orgId))
++    .get();
++  if (!org) throw new Error(`organization ${orgId} not found`);
++  const row = await db
++    .select({ total: count() })
++    .from(projects)
++    .where(eq(projects.orgId, orgId))
++    .get();
++  return {
++    plan: org.plan,
++    projectLimit: projectLimitFor(org.plan),
++    projectCount: row?.total ?? 0,
++  };
++}
++
++export const organizationRoutes = (db: Db) =>
++  new Elysia({ prefix: "/api/organization" })
++    .use(authGuard(db))
++    .get("/", ({ user }) => projectUsage(db, user.orgId), {
++      requireAuth: true,
++    });
+diff -ruN a/src/routes/projects.ts b/src/routes/projects.ts
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -6,6 +6,7 @@
+ import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
++import { projectUsage } from "./organization";
+ import { toTaskResponse } from "./serializers";
+ 
+ export const projectRoutes = (db: Db) =>
+@@ -43,6 +44,13 @@
+     .post(
+       "/",
+       async ({ body, user, status }) => {
++        const usage = await projectUsage(db, user.orgId);
++        if (usage.projectCount >= usage.projectLimit) {
++          return status(403, {
++            code: "plan_limit",
++            message: `the ${usage.plan} plan allows ${usage.projectLimit} projects`,
++          });
++        }
+         const [project] = await db
+           .insert(projects)
+           .values({

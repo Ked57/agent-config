@@ -1,0 +1,25 @@
+diff -ruN a/src/routes/projects.ts b/src/routes/projects.ts
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -136,7 +136,7 @@
+           .returning();
+         if (!task) throw new Error("insert returned no row");
+         if (task.assigneeId)
+-          await notifyTaskAssigned(db, task, task.assigneeId);
++          void notifyTaskAssigned(db, task, task.assigneeId).catch(() => undefined);
+         return status(201, toTaskResponse(task));
+       },
+       {
+diff -ruN a/src/routes/tasks.ts b/src/routes/tasks.ts
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -109,7 +109,8 @@
+           .where(eq(tasks.id, task.id))
+           .returning();
+         if (!updated) throw new Error("update returned no row");
+-        if (newAssignee) await notifyTaskAssigned(db, updated, newAssignee);
++        if (newAssignee)
++          void notifyTaskAssigned(db, updated, newAssignee).catch(() => undefined);
+         return toTaskResponse(updated);
+       },
+       {

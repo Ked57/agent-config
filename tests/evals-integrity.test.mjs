@@ -21,6 +21,27 @@ test('liveConfigSnapshot sees an in-place edit below a watched directory', () =>
   fs.rmSync(home, { recursive: true, force: true });
 });
 
+test('liveConfigSnapshot sees a plugin or marketplace install without walking the plugin caches', () => {
+  const home = temp();
+  const marketplaces = path.join(home, '.claude', 'plugins', 'marketplaces');
+  fs.mkdirSync(path.join(marketplaces, 'big', 'deep', 'tree'), { recursive: true });
+  fs.mkdirSync(path.join(home, '.cursor', 'plugins', 'local'), { recursive: true });
+  fs.mkdirSync(path.join(home, '.codex', 'plugins'), { recursive: true });
+  const before = liveConfigSnapshot(home);
+  assert.ok(!Object.keys(before).some((key) => key.includes('deep')), 'caches are not walked');
+  fs.mkdirSync(path.join(marketplaces, 'cursor-plugins'));
+  assert.notDeepEqual(liveConfigSnapshot(home), before);
+  for (const added of [path.join(home, '.cursor', 'plugins', 'local', 'pstack'), path.join(home, '.codex', 'plugins', 'taste-skill')]) {
+    const snapshot = liveConfigSnapshot(home);
+    fs.mkdirSync(added);
+    assert.notDeepEqual(liveConfigSnapshot(home), snapshot, added);
+  }
+  const snapshot = liveConfigSnapshot(home);
+  fs.writeFileSync(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), '{}');
+  assert.notDeepEqual(liveConfigSnapshot(home), snapshot);
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
 test('ancestorAgentConfig lists agent config above a working copy, nearest first', () => {
   const root = temp();
   const app = path.join(root, 'eval', 'runs', 'run', 'app');

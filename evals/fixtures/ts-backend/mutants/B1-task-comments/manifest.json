@@ -1,0 +1,41 @@
+{
+  "task": "B1-task-comments",
+  "references": [
+    {
+      "file": "reference-shakeout-A-r1.patch",
+      "source": "validation-ts-backend-shakeout A r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-no-org-scope.patch",
+      "wrong": "task lookup is not scoped to the caller's organization",
+      "violates": "Only members of the task's organization can see or add comments.",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-no-trim.patch",
+      "wrong": "length is checked without trimming, so a whitespace-only body is accepted",
+      "violates": "(1 to 2000 characters after trimming)",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-leaks-across-tasks.patch",
+      "wrong": "GET lists every comment in the organization, not the task's",
+      "violates": "GET /api/tasks/:id/comments should return {items: [...]}",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-no-created-at.patch",
+      "wrong": "the created comment has no createdAt",
+      "violates": "return 201 with {id, taskId, authorId, body, createdAt}",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-length-before-trim.patch",
+      "wrong": "the 2000-character limit is applied before trimming",
+      "violates": "(1 to 2000 characters after trimming)",
+      "expect": "killed"
+    }
+  ]
+}

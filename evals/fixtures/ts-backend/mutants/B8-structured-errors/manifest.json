@@ -1,0 +1,77 @@
+{
+  "task": "B8-structured-errors",
+  "references": [
+    {
+      "file": "reference-shakeout-A-r1.patch",
+      "source": "validation-ts-backend-shakeout A r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-unknown-route-plain-text.patch",
+      "wrong": "unknown routes still answer plain-text \"Not Found\"",
+      "violates": "404 not found (including unknown routes)",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-validation-raw-dump.patch",
+      "wrong": "validation errors keep the framework's raw dump",
+      "violates": "and the framework's raw validation dump",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-500-leaks-message.patch",
+      "wrong": "the 500 message is the internal error message",
+      "violates": "500 for unexpected errors without leaking internal error messages",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-malformed-json-wrong-code.patch",
+      "wrong": "malformed JSON gets code not_found instead of validation_error",
+      "violates": "400 for invalid input (code \"validation_error\", including malformed JSON)",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-login-401-old-shape.patch",
+      "wrong": "a wrong password still returns {error: string}",
+      "violates": "Make every error response JSON shaped as {\"error\": {\"code\", \"message\"}}",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-blank-title-400-old-shape.patch",
+      "wrong": "PATCH with a blank title still returns {error: string}",
+      "violates": "Make every error response JSON shaped as {\"error\": {\"code\", \"message\"}}",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-task-404-old-shape.patch",
+      "wrong": "GET /api/tasks/:id 404 still returns {error: string}",
+      "violates": "Make every error response JSON shaped as {\"error\": {\"code\", \"message\"}}",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-validation-422.patch",
+      "wrong": "validation errors use status 422",
+      "violates": "400 for invalid input",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-reopen-403-old-shape.patch",
+      "wrong": "a member reopening a finished task still gets {error: string}",
+      "violates": "Make every error response JSON shaped as {\"error\": {\"code\", \"message\"}}",
+      "expect": "killed"
+    },
+    {
+      "file": "m10-500-leaks-in-details.patch",
+      "wrong": "the 500 leaks the internal message through details.cause",
+      "violates": "without leaking internal error messages",
+      "expect": "killed"
+    },
+    {
+      "file": "m11-project-tasks-404-plain-text.patch",
+      "wrong": "GET /api/projects/:id/tasks 404 is still plain text",
+      "violates": "Make every error response JSON",
+      "expect": "killed"
+    }
+  ]
+}

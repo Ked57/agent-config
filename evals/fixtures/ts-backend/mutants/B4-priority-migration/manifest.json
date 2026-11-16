@@ -1,0 +1,41 @@
+{
+  "task": "B4-priority-migration",
+  "references": [
+    {
+      "file": "reference-shakeout-A-r1.patch",
+      "source": "validation-ts-backend-shakeout A r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-no-backfill.patch",
+      "wrong": "the column is added but existing rows are not backfilled",
+      "violates": "backfills existing rows (urgent tasks become 'urgent', all others 'normal')",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-create-accepts-any-priority.patch",
+      "wrong": "POST accepts any string as priority (only PATCH validates)",
+      "violates": "a priority column ('low' | 'normal' | 'high' | 'urgent', default 'normal')",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-no-column-default.patch",
+      "wrong": "the column has no database default, only an application default",
+      "violates": "default 'normal'",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-rebuild-loses-data.patch",
+      "wrong": "the table rebuild drops description, status, due date and assignee",
+      "violates": "Add a migration that backfills existing rows",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-backfill-low.patch",
+      "wrong": "non-urgent rows become 'low' instead of 'normal'",
+      "violates": "all others 'normal'",
+      "expect": "killed"
+    }
+  ]
+}

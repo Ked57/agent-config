@@ -1,0 +1,65 @@
+{
+  "task": "B9-background-notifications",
+  "references": [
+    {
+      "file": "reference-shakeout-A-r1.patch",
+      "source": "validation-ts-backend-shakeout A r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-inline-try-catch.patch",
+      "wrong": "the send stays inline with the error swallowed: no background job, no retry",
+      "violates": "Send these notifications from a background job in the same process instead",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-fire-and-forget-no-retry.patch",
+      "wrong": "sent fire-and-forget with no retry",
+      "violates": "retried with exponential backoff",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-notification-removed.patch",
+      "wrong": "the notification is deleted",
+      "violates": "Send these notifications from a background job",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-retry-no-backoff.patch",
+      "wrong": "retries 5 times without any delay",
+      "violates": "exponential backoff starting at about a second",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-fixed-1s-delay.patch",
+      "wrong": "retries every second, not exponentially",
+      "violates": "exponential backoff",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-three-attempts.patch",
+      "wrong": "gives up after 3 attempts",
+      "violates": "up to 5 attempts",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-unlimited-retries.patch",
+      "wrong": "never gives up",
+      "violates": "up to 5 attempts",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-sent-twice.patch",
+      "wrong": "sends once inline and again from the job",
+      "violates": "Send these notifications from a background job ... instead",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-backoff-100ms.patch",
+      "wrong": "backoff starts at 100 ms",
+      "violates": "starting at about a second",
+      "expect": "killed"
+    }
+  ]
+}

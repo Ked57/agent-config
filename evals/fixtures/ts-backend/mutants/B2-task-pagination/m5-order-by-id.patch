@@ -1,0 +1,254 @@
+diff -ruN a/src/routes/projects.test.ts b/src/routes/projects.test.ts
+--- a/src/routes/projects.test.ts
++++ b/src/routes/projects.test.ts
+@@ -1,5 +1,6 @@
+ import { describe, expect, it } from "vitest";
+ 
++import { tasks } from "../db/schema";
+ import { createTestContext, SEED_TOKENS } from "../test/helpers";
+ 
+ describe("projects", () => {
+@@ -56,9 +57,141 @@
+     const response = await request("GET", "/api/projects/prj_web/tasks", {
+       token: SEED_TOKENS.acmeMember,
+     });
+-    const { items } = (await response.json()) as {
+-      items: Array<{ id: string }>;
+-    };
++    const { items, nextCursor } = (await response.json()) as TaskPage;
+     expect(items.map((item) => item.id)).toEqual(["tsk_1", "tsk_2", "tsk_3"]);
++    expect(nextCursor).toBeNull();
++  });
++
++  it("pages through a project's tasks with a cursor", async () => {
++    const { db, request } = await createTestContext();
++    const created = Array.from({ length: 22 }, (_, i) => `tsk_page_${i}`);
++    await db.insert(tasks).values(
++      created.map((id, i) => ({
++        id,
++        orgId: "org_acme",
++        projectId: "prj_app",
++        title: id,
++        // Ids sort differently from creation order (tsk_page_10 < tsk_page_2), so the order must come from createdAt.
++        createdAt: new Date(Date.parse("2026-10-02T00:00:00Z") + i * 1000),
++      })),
++    );
++    const all = ["tsk_4", ...created];
++
++    const firstPage = await request("GET", "/api/projects/prj_app/tasks", {
++      token: SEED_TOKENS.acmeMember,
++    });
++    const first = (await firstPage.json()) as TaskPage;
++    expect(first.items.map((item) => item.id)).toEqual(all.slice(0, 20));
++    expect(first.nextCursor).toEqual(expect.any(String));
++
++    const secondPage = await request(
++      "GET",
++      `/api/projects/prj_app/tasks?cursor=${first.nextCursor}`,
++      { token: SEED_TOKENS.acmeMember },
++    );
++    const second = (await secondPage.json()) as TaskPage;
++    expect(second.items.map((item) => item.id)).toEqual(all.slice(20));
++    expect(second.nextCursor).toBeNull();
++  });
++
++  it("honours an explicit limit and ends with a null cursor", async () => {
++    const { request } = await createTestContext();
++    const seen: string[] = [];
++    let cursor: string | null = null;
++    do {
++      const query: string = cursor ? `&cursor=${cursor}` : "";
++      const response = await request(
++        "GET",
++        `/api/projects/prj_web/tasks?limit=2${query}`,
++        { token: SEED_TOKENS.acmeMember },
++      );
++      expect(response.status).toBe(200);
++      const page = (await response.json()) as TaskPage;
++      expect(page.items.length).toBeLessThanOrEqual(2);
++      seen.push(...page.items.map((item) => item.id));
++      cursor = page.nextCursor;
++    } while (cursor);
++    expect(seen).toEqual(["tsk_1", "tsk_2", "tsk_3"]);
++  });
++
++  it("breaks createdAt ties by id so no task is skipped", async () => {
++    const { db, request } = await createTestContext();
++    const sameTime = new Date("2026-10-02T00:00:00Z");
++    await db.insert(tasks).values(
++      ["tsk_tie_a", "tsk_tie_b", "tsk_tie_c"].map((id) => ({
++        id,
++        orgId: "org_acme",
++        projectId: "prj_billing",
++        title: id,
++        createdAt: sameTime,
++        updatedAt: sameTime,
++      })),
++    );
++    const first = (await (
++      await request("GET", "/api/projects/prj_billing/tasks?limit=2", {
++        token: SEED_TOKENS.acmeMember,
++      })
++    ).json()) as TaskPage;
++    const second = (await (
++      await request(
++        "GET",
++        `/api/projects/prj_billing/tasks?limit=2&cursor=${first.nextCursor}`,
++        { token: SEED_TOKENS.acmeMember },
++      )
++    ).json()) as TaskPage;
++    expect([...first.items, ...second.items].map((item) => item.id)).toEqual([
++      "tsk_5",
++      "tsk_tie_a",
++      "tsk_tie_b",
++      "tsk_tie_c",
++    ]);
++    expect(second.nextCursor).toBeNull();
++  });
++
++  it("filters tasks by status and assignee", async () => {
++    const { request } = await createTestContext();
++    const list = async (query: string) =>
++      (
++        (await (
++          await request("GET", `/api/projects/prj_web/tasks?${query}`, {
++            token: SEED_TOKENS.acmeMember,
++          })
++        ).json()) as TaskPage
++      ).items.map((item) => item.id);
++    expect(await list("status=in_progress")).toEqual(["tsk_2"]);
++    expect(await list("assigneeId=usr_ada")).toEqual(["tsk_3"]);
++    expect(await list("status=done&assigneeId=usr_ada")).toEqual([]);
++  });
++
++  it.each([
++    "limit=0",
++    "limit=101",
++    "limit=abc",
++    "status=blocked",
++    "cursor=not-a-cursor",
++  ])("rejects an invalid query (%s)", async (query) => {
++    const { request } = await createTestContext();
++    const response = await request(
++      "GET",
++      `/api/projects/prj_web/tasks?${query}`,
++      { token: SEED_TOKENS.acmeMember },
++    );
++    expect(response.status).toBeGreaterThanOrEqual(400);
++    expect(response.status).toBeLessThan(500);
++  });
++
++  it("accepts the maximum limit", async () => {
++    const { request } = await createTestContext();
++    const response = await request(
++      "GET",
++      "/api/projects/prj_web/tasks?limit=100",
++      { token: SEED_TOKENS.acmeMember },
++    );
++    expect(response.status).toBe(200);
+   });
+ });
++
++interface TaskPage {
++  items: Array<{ id: string }>;
++  nextCursor: string | null;
++}
+diff -ruN a/src/routes/projects.ts b/src/routes/projects.ts
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -1,13 +1,30 @@
+-import { and, asc, count, eq } from "drizzle-orm";
++import { and, asc, count, eq, gt } from "drizzle-orm";
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { projects, tasks, users } from "../db/schema";
++import { projects, tasks, users, type Task } from "../db/schema";
+ import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+ 
++/** Opaque page cursor: the position (createdAt, id) of the last task on the previous page. */
++function encodeTaskCursor(task: Pick<Task, "createdAt" | "id">): string {
++  return Buffer.from(`${task.createdAt.getTime()}:${task.id}`).toString(
++    "base64url",
++  );
++}
++
++function decodeTaskCursor(
++  cursor: string,
++): { createdAt: Date; id: string } | null {
++  const match = /^(\d+):(.+)$/.exec(
++    Buffer.from(cursor, "base64url").toString("utf8"),
++  );
++  if (!match?.[1] || !match[2]) return null;
++  return { createdAt: new Date(Number(match[1])), id: match[2] };
++}
++
+ export const projectRoutes = (db: Db) =>
+   new Elysia({ prefix: "/api/projects" })
+     .use(authGuard(db))
+@@ -79,7 +96,7 @@
+     )
+     .get(
+       "/:id/tasks",
+-      async ({ params, user, status }) => {
++      async ({ params, query, user, status }) => {
+         const project = await db
+           .select()
+           .from(projects)
+@@ -88,14 +105,49 @@
+           )
+           .get();
+         if (!project) return status(404, "Project not found");
++
++        const filters = [eq(tasks.projectId, project.id)];
++        if (query.status) filters.push(eq(tasks.status, query.status));
++        if (query.assigneeId)
++          filters.push(eq(tasks.assigneeId, query.assigneeId));
++        if (query.cursor !== undefined) {
++          const after = decodeTaskCursor(query.cursor);
++          if (!after) return status(400, { error: "invalid cursor" });
++          // Keyset on (createdAt, id): ids break ties between tasks created in the same millisecond.
++          filters.push(gt(tasks.id, after.id));
++        }
++
++        const limit = query.limit ?? 20;
++        // One extra row tells us whether another page exists.
+         const rows = await db
+           .select()
+           .from(tasks)
+-          .where(eq(tasks.projectId, project.id))
+-          .orderBy(asc(tasks.createdAt));
+-        return { items: rows.map(toTaskResponse) };
++          .where(and(...filters))
++          .orderBy(asc(tasks.id))
++          .limit(limit + 1);
++        const page = rows.slice(0, limit);
++        const last = page.at(-1);
++        return {
++          items: page.map(toTaskResponse),
++          nextCursor:
++            rows.length > limit && last ? encodeTaskCursor(last) : null,
++        };
++      },
++      {
++        requireAuth: true,
++        query: t.Object({
++          limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
++          cursor: t.Optional(t.String()),
++          status: t.Optional(
++            t.Union([
++              t.Literal("todo"),
++              t.Literal("in_progress"),
++              t.Literal("done"),
++            ]),
++          ),
++          assigneeId: t.Optional(t.String()),
++        }),
+       },
+-      { requireAuth: true },
+     )
+     .post(
+       "/:id/tasks",

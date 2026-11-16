@@ -1,0 +1,383 @@
+diff -ruN a/src/routes/tasks.test.ts b/src/routes/tasks.test.ts
+--- a/src/routes/tasks.test.ts
++++ b/src/routes/tasks.test.ts
+@@ -70,6 +70,140 @@
+     expect(transport).toHaveBeenCalledTimes(1);
+   });
+ 
++  it("hides tasks from other organizations on update", async () => {
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_6", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { title: "Mine now" },
++    });
++    expect(response.status).toBe(404);
++    expect(await response.json()).toEqual({ error: "task not found" });
++  });
++
++  it("trims titles and rejects blank ones", async () => {
++    const { request } = await createTestContext();
++    const blank = await request("PATCH", "/api/tasks/tsk_4", {
++      token: SEED_TOKENS.acmeMember,
++      body: { title: "   " },
++    });
++    expect(blank.status).toBe(400);
++    expect(await blank.json()).toEqual({ error: "title cannot be blank" });
++    const trimmed = await request("PATCH", "/api/tasks/tsk_4", {
++      token: SEED_TOKENS.acmeMember,
++      body: { title: "  Push alerts  ", description: null, isUrgent: true },
++    });
++    expect(trimmed.status).toBe(200);
++    expect(await trimmed.json()).toMatchObject({
++      title: "Push alerts",
++      description: null,
++      isUrgent: true,
++    });
++  });
++
++  it("returns the task untouched when nothing changes", async () => {
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_3", {
++      token: SEED_TOKENS.acmeMember,
++      body: { status: "todo", assigneeId: "usr_ada" },
++    });
++    expect(response.status).toBe(200);
++    expect(await response.json()).toMatchObject({
++      status: "todo",
++      updatedAt: "2026-10-01T09:03:00.000Z",
++    });
++  });
++
++  it("requires an assignee before a task is done", async () => {
++    const transport = vi.fn(async () => undefined);
++    setMailTransport(transport);
++    const { request } = await createTestContext();
++    const started = await request("PATCH", "/api/tasks/tsk_4", {
++      token: SEED_TOKENS.acmeMember,
++      body: { status: "in_progress" },
++    });
++    expect(started.status).toBe(200);
++    const unassigned = await request("PATCH", "/api/tasks/tsk_4", {
++      token: SEED_TOKENS.acmeMember,
++      body: { status: "done" },
++    });
++    expect(unassigned.status).toBe(409);
++    expect(await unassigned.json()).toEqual({
++      error: "assign the task before marking it done",
++    });
++    const assignedInSameRequest = await request("PATCH", "/api/tasks/tsk_4", {
++      token: SEED_TOKENS.acmeMember,
++      body: { status: "done", assigneeId: "usr_bob" },
++    });
++    expect(assignedInSameRequest.status).toBe(200);
++    expect(await assignedInSameRequest.json()).toMatchObject({
++      status: "done",
++      assigneeId: "usr_bob",
++    });
++    expect(transport).toHaveBeenCalledTimes(1);
++  });
++
++  it("reports the rejected status transition", async () => {
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_1", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { status: "in_progress" },
++    });
++    expect(response.status).toBe(409);
++    expect(await response.json()).toEqual({
++      error: "cannot move a task from done to in_progress",
++    });
++  });
++
++  it("rejects reassignment outside the organization", async () => {
++    const transport = vi.fn(async () => undefined);
++    setMailTransport(transport);
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_4", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { assigneeId: "usr_gina" },
++    });
++    expect(response.status).toBe(400);
++    expect(await response.json()).toEqual({
++      error: "assignee must be a member of your organization",
++    });
++    expect(transport).not.toHaveBeenCalled();
++  });
++
++  it("unassigns without sending mail", async () => {
++    const transport = vi.fn(async () => undefined);
++    setMailTransport(transport);
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_2", {
++      token: SEED_TOKENS.acmeMember,
++      body: { assigneeId: null },
++    });
++    expect(response.status).toBe(200);
++    expect(await response.json()).toMatchObject({ assigneeId: null });
++    expect(transport).not.toHaveBeenCalled();
++  });
++
++  it("only clears due dates on finished tasks", async () => {
++    const { request } = await createTestContext();
++    const newDate = await request("PATCH", "/api/tasks/tsk_1", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { dueDate: "2026-12-24" },
++    });
++    expect(newDate.status).toBe(409);
++    expect(await newDate.json()).toEqual({
++      error: "finished tasks cannot get a new due date",
++    });
++    const cleared = await request("PATCH", "/api/tasks/tsk_1", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { dueDate: null },
++    });
++    expect(cleared.status).toBe(200);
++    const moved = await request("PATCH", "/api/tasks/tsk_4", {
++      token: SEED_TOKENS.acmeMember,
++      body: { dueDate: "2026-12-24" },
++    });
++    expect(await moved.json()).toMatchObject({ dueDate: "2026-12-24" });
++  });
++
+   it("only lets admins delete tasks", async () => {
+     const { request } = await createTestContext();
+     expect(
+diff -ruN a/src/routes/tasks.ts b/src/routes/tasks.ts
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -2,11 +2,18 @@
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { tasks, users, type TaskStatus } from "../db/schema";
++import { tasks } from "../db/schema";
+ import { authGuard } from "../plugins/auth";
+-import { notifyTaskAssigned } from "../services/notifications";
++import { updateTask, type TaskUpdateFailure } from "../services/task-updates";
+ import { toTaskResponse } from "./serializers";
+ 
++const failureStatus = {
++  not_found: 404,
++  invalid: 400,
++  forbidden: 403,
++  conflict: 409,
++} as const satisfies Record<TaskUpdateFailure, number>;
++
+ export const taskRoutes = (db: Db) =>
+   new Elysia({ prefix: "/api/tasks" })
+     .use(authGuard(db))
+@@ -26,91 +33,9 @@
+     .patch(
+       "/:id",
+       async ({ params, body, user, status }) => {
+-        const task = await db
+-          .select()
+-          .from(tasks)
+-          .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
+-          .get();
+-        if (!task) return status(404, { error: "task not found" });
+-
+-        const changes: Partial<typeof tasks.$inferInsert> = {};
+-
+-        if (body.title !== undefined) {
+-          const title = body.title.trim();
+-          if (title.length === 0)
+-            return status(400, { error: "title cannot be blank" });
+-          changes.title = title;
+-        }
+-        if (body.description !== undefined)
+-          changes.description = body.description;
+-        if (body.isUrgent !== undefined) changes.isUrgent = body.isUrgent;
+-
+-        if (body.status !== undefined && body.status !== task.status) {
+-          const allowed: Record<TaskStatus, TaskStatus[]> = {
+-            todo: ["in_progress"],
+-            in_progress: ["todo", "done"],
+-            done: ["todo"],
+-          };
+-          if (!allowed[task.status].includes(body.status)) {
+-            return status(409, {
+-              error: `cannot move a task from ${task.status} to ${body.status}`,
+-            });
+-          }
+-          if (task.status === "done" && user.role !== "admin") {
+-            return status(403, {
+-              error: "only admins can reopen finished tasks",
+-            });
+-          }
+-          if (body.status === "done" && !(body.assigneeId ?? task.assigneeId)) {
+-            return status(409, {
+-              error: "assign the task before marking it done",
+-            });
+-          }
+-          changes.status = body.status;
+-        }
+-
+-        let newAssignee: string | null = null;
+-        if (
+-          body.assigneeId !== undefined &&
+-          body.assigneeId !== task.assigneeId
+-        ) {
+-          if (body.assigneeId !== null) {
+-            const assignee = await db
+-              .select()
+-              .from(users)
+-              .where(
+-                and(eq(users.id, body.assigneeId), eq(users.orgId, user.orgId)),
+-              )
+-              .get();
+-            if (!assignee)
+-              return status(400, {
+-                error: "assignee must be a member of your organization",
+-              });
+-            newAssignee = assignee.id;
+-          }
+-          changes.assigneeId = body.assigneeId;
+-        }
+-
+-        if (body.dueDate !== undefined) {
+-          if (body.dueDate !== null && task.status === "done") {
+-            return status(409, {
+-              error: "finished tasks cannot get a new due date",
+-            });
+-          }
+-          changes.dueDate = body.dueDate;
+-        }
+-
+-        if (Object.keys(changes).length === 0) return toTaskResponse(task);
+-        changes.updatedAt = new Date();
+-
+-        const [updated] = await db
+-          .update(tasks)
+-          .set(changes)
+-          .where(eq(tasks.id, task.id))
+-          .returning();
+-        if (!updated) throw new Error("update returned no row");
+-        if (newAssignee) await notifyTaskAssigned(db, updated, newAssignee);
+-        return toTaskResponse(updated);
++        const result = await updateTask(db, user, params.id, body);
++        if (result.ok) return toTaskResponse(result.task);
++        return status(failureStatus[result.reason], { error: result.message });
+       },
+       {
+         requireAuth: true,
+diff -ruN a/src/services/task-updates.ts b/src/services/task-updates.ts
+--- /dev/null
++++ b/src/services/task-updates.ts
+@@ -0,0 +1,116 @@
++import { and, eq } from "drizzle-orm";
++
++import type { Db } from "../db/client";
++import { tasks, users, type Task, type TaskStatus } from "../db/schema";
++import type { AuthUser } from "../plugins/auth";
++import { notifyTaskAssigned } from "./notifications";
++
++export interface TaskUpdateInput {
++  title?: string;
++  description?: string | null;
++  status?: TaskStatus;
++  isUrgent?: boolean;
++  assigneeId?: string | null;
++  dueDate?: string | null;
++}
++
++export type TaskUpdateFailure =
++  "not_found" | "invalid" | "forbidden" | "conflict";
++
++export type TaskUpdateResult =
++  | { ok: true; task: Task }
++  | { ok: false; reason: TaskUpdateFailure; message: string };
++
++const allowedTransitions: Record<TaskStatus, TaskStatus[]> = {
++  todo: ["in_progress"],
++  in_progress: ["todo", "done"],
++  done: ["todo"],
++};
++
++const fail = (
++  reason: TaskUpdateFailure,
++  message: string,
++): TaskUpdateResult => ({ ok: false, reason, message });
++
++/**
++ * Applies a partial update to a task in the user's organization. Rules are checked in a
++ * fixed order, so the first violated rule decides the failure. Emails a newly assigned
++ * user after the update is stored.
++ */
++export async function updateTask(
++  db: Db,
++  user: AuthUser,
++  taskId: string,
++  input: TaskUpdateInput,
++): Promise<TaskUpdateResult> {
++  const task = await db
++    .select()
++    .from(tasks)
++    .where(and(eq(tasks.id, taskId), eq(tasks.orgId, user.orgId)))
++    .get();
++  if (!task) return fail("not_found", "task not found");
++
++  const changes: Partial<typeof tasks.$inferInsert> = {};
++
++  if (input.title !== undefined) {
++    const title = input.title.trim();
++    if (title.length === 0) return fail("invalid", "title cannot be blank");
++    changes.title = title;
++  }
++  if (input.description !== undefined) changes.description = input.description;
++  if (input.isUrgent !== undefined) changes.isUrgent = input.isUrgent;
++
++  if (input.status !== undefined && input.status !== task.status) {
++    if (task.status === "done" && user.role !== "admin") {
++      return fail("forbidden", "only admins can reopen finished tasks");
++    }
++    if (!allowedTransitions[task.status].includes(input.status)) {
++      return fail(
++        "conflict",
++        `cannot move a task from ${task.status} to ${input.status}`,
++      );
++    }
++    if (input.status === "done" && !(input.assigneeId ?? task.assigneeId)) {
++      return fail("conflict", "assign the task before marking it done");
++    }
++    changes.status = input.status;
++  }
++
++  let newAssignee: string | null = null;
++  if (input.assigneeId !== undefined && input.assigneeId !== task.assigneeId) {
++    if (input.assigneeId !== null) {
++      const assignee = await db
++        .select()
++        .from(users)
++        .where(and(eq(users.id, input.assigneeId), eq(users.orgId, user.orgId)))
++        .get();
++      if (!assignee) {
++        return fail(
++          "invalid",
++          "assignee must be a member of your organization",
++        );
++      }
++      newAssignee = assignee.id;
++    }
++    changes.assigneeId = input.assigneeId;
++  }
++
++  if (input.dueDate !== undefined) {
++    if (input.dueDate !== null && task.status === "done") {
++      return fail("conflict", "finished tasks cannot get a new due date");
++    }
++    changes.dueDate = input.dueDate;
++  }
++
++  if (Object.keys(changes).length === 0) return { ok: true, task };
++  changes.updatedAt = new Date();
++
++  const [updated] = await db
++    .update(tasks)
++    .set(changes)
++    .where(eq(tasks.id, task.id))
++    .returning();
++  if (!updated) throw new Error("update returned no row");
++  if (newAssignee) await notifyTaskAssigned(db, updated, newAssignee);
++  return { ok: true, task: updated };
++}

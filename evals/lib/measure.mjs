@@ -1,8 +1,9 @@
 // Turns a finished run directory into a run record (impure: runs diff, gates and reads files).
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { countFeatures, detectPolicies, evaluateChecks, newDependencies, parseUnifiedDiff } from './checks.mjs';
+import { commandTags, countFeatures, detectPolicies, evaluateChecks, newDependencies, parseUnifiedDiff, parseVitestJson, scoreRun } from './checks.mjs';
 import { matchesAny } from './config.mjs';
 import { TELEMETRY_OFF } from './env.mjs';
 
@@ -17,12 +18,18 @@ export function runGate(command, app, timeoutMs = GATE_TIMEOUT_MS) {
     env: { ...process.env, ...TELEMETRY_OFF, CI: '1', NO_COLOR: '1', PATH: `${path.join(app, 'node_modules', '.bin')}${path.delimiter}${process.env.PATH}` }
   });
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
-  return { ok: result.status === 0, tail: result.status === 0 ? '' : output.split('\n').slice(-30).join('\n') };
+  const timedOut = result.error?.code === 'ETIMEDOUT';
+  return { ok: result.status === 0, timedOut, tail: result.status === 0 ? '' : `${timedOut ? `timed out after ${Math.round(timeoutMs / 1000)}s\n` : ''}${output.split('\n').slice(-30).join('\n')}` };
 }
 
 /**
  * Runs a task's `command` check: copies hidden files from the fixture into the app (after the diff
  * was taken, so neither the agent nor the judge sees them), runs the command, then removes them.
+ * Without a reporter the score is 1 for a pass and 0 for a fail. With `"reporter": "vitest-json"`
+ * the command (which must end with the `vitest run ...` invocation) gets `--reporter=json
+ * --outputFile=<file outside the app>` appended; CLI flags override any reporter the agent put in its
+ * Vitest config. The score is then passed / total test cases, and 0 when a test file failed to load,
+ * no test ran, the report is missing or the command timed out.
  */
 export function runCommandCheck(check, { fixture, app }) {
   const copied = [];
@@ -33,15 +40,38 @@ export function runCommandCheck(check, { fixture, app }) {
     copied.push(target);
   }
   try {
+    const base = { id: check.id, label: check.label ?? check.id, level: check.level ?? 'required' };
+    if (check.reporter === 'vitest-json') return vitestCheck(check, app, base);
     const result = runGate(check.run, app, (check.timeoutSec ?? 600) * 1000);
     const pass = check.expect === 'fail' ? !result.ok : result.ok;
-    return { id: check.id, label: check.label ?? check.id, level: check.level ?? 'required', pass, detail: pass ? '' : result.tail.slice(-600) };
+    return { ...base, pass, score: pass ? 1 : 0, detail: pass ? '' : result.tail.slice(-600) };
   } finally {
     for (const target of copied) {
       fs.rmSync(target, { recursive: true, force: true });
       const parent = path.dirname(target);
       if (fs.existsSync(parent) && fs.readdirSync(parent).length === 0) fs.rmSync(parent, { recursive: true, force: true });
     }
+  }
+}
+
+function vitestCheck(check, app, base) {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-vitest-'));
+  try {
+    const outputFile = path.join(scratch, 'report.json');
+    const result = runGate(`${check.run} --reporter=json --outputFile=${JSON.stringify(outputFile)}`, app, (check.timeoutSec ?? 600) * 1000);
+    const report = !result.timedOut && fs.existsSync(outputFile) ? parseVitestJson(fs.readFileSync(outputFile, 'utf8')) : null;
+    if (!report) return { ...base, pass: false, score: 0, passed: 0, total: 0, detail: (result.timedOut ? result.tail : `no Vitest JSON report\n${result.tail}`).slice(-600) };
+    const loaded = !report.loadFailed.length && report.total > 0;
+    const pass = result.ok && loaded && report.passed === report.total;
+    const notes = [
+      ...report.loadFailed.map((file) => `failed to load ${file.file}: ${file.message}`),
+      ...(report.total ? [] : ['no test ran']),
+      ...report.failed.map((name) => `failed: ${name}`),
+      ...(!result.ok && loaded && !report.failed.length ? [`command failed outside test cases\n${result.tail}`] : [])
+    ];
+    return { ...base, pass, score: loaded ? report.passed / report.total : 0, passed: report.passed, total: report.total, detail: notes.join('\n').slice(0, 1200) };
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
   }
 }
 
@@ -77,7 +107,10 @@ const finalFiles = (app, ignored) => (globs) => {
   return out;
 };
 
-export function measureRun({ job, fixture, pristine, runDir, app, taskSet, task, provider, armsInfo, agentResult }) {
+const pluginNames = (arm) => (arm?.plugins ?? []).map((plugin) => (typeof plugin === 'string' ? plugin : plugin.name ?? plugin.id)).filter(Boolean).map((name) => name.split('@')[0]);
+
+/** `prompt` is the exact prompt sent (with any arm prefix); it defaults to the job's or the task's. */
+export function measureRun({ job, fixture, pristine, runDir, app, taskSet, task, provider, armsInfo, agentResult, prompt = job.prompt ?? task.prompt }) {
   const patch = diffAgainstPristine(fixture, pristine, app);
   fs.writeFileSync(path.join(runDir, 'diff.patch'), patch);
   const diff = parseUnifiedDiff(patch);
@@ -92,14 +125,18 @@ export function measureRun({ job, fixture, pristine, runDir, app, taskSet, task,
     deps = { added: newDependencies(readJson(path.join(pristine, fixture.dependencies.file)), readJson(path.join(app, fixture.dependencies.file))) };
   }
   const transcriptPath = path.join(runDir, provider.transcriptFile);
-  const transcript = provider.parseTranscript(fs.existsSync(transcriptPath) ? fs.readFileSync(transcriptPath, 'utf8') : '');
+  const transcriptText = fs.existsSync(transcriptPath) ? fs.readFileSync(transcriptPath, 'utf8') : '';
+  const transcript = provider.parseTranscript(transcriptText);
   const telemetry = detectPolicies(transcript.events, {
-    policies: [...new Set([...armsInfo.A.policies, ...armsInfo.B.policies])],
-    skills: [...new Set([...armsInfo.A.skills, ...armsInfo.B.skills])],
-    signals: taskSet.policySignals ?? {}
+    policies: [...new Set([...(armsInfo.A.policies ?? []), ...(armsInfo.B.policies ?? [])])],
+    skills: [...new Set([...(armsInfo.A.skills ?? []), ...(armsInfo.B.skills ?? [])])],
+    plugins: [...new Set([...pluginNames(armsInfo.A), ...pluginNames(armsInfo.B)])],
+    signals: taskSet.policySignals ?? {},
+    prompt,
+    commandTags: commandTags(transcriptText)
   });
   const completed = agentResult.exitCode === 0 && !agentResult.timedOut && transcript.subtype === 'success';
-  return {
+  const record = {
     id: job.id,
     task: job.task,
     category: task.category,
@@ -116,13 +153,18 @@ export function measureRun({ job, fixture, pristine, runDir, app, taskSet, task,
     checks,
     deps,
     diff: { changedFiles: diff.changedFiles, addedLines: diff.addedLines, removedLines: diff.removedLines },
-    features: countFeatures(taskSet.featurePatterns, diff.added),
+    features: countFeatures(taskSet.featurePatterns, diff.code),
     telemetry: { ...telemetry, commands: transcript.events.commands.filter((command) => Object.values(taskSet.policySignals ?? {}).some((signal) => new RegExp(signal.commandPattern).test(command))) },
     resultExcerpt: transcript.resultText.slice(-2000)
   };
+  return { ...record, ...scoreRun(record) };
 }
 
-/** Re-scores a finished run's task checks against the current task definition (no agent, no gates). */
+/**
+ * Re-scores a finished run's task checks against the current task definition (no agent, no gates).
+ * Returns the check list (scored the same way as measureRun); recompute the run's `score` and
+ * `allPass` with `scoreRun` afterwards. The aggregate always rescores from the checks.
+ */
 export function recheckRun({ fixture, app, runDir, task }) {
   const diff = parseUnifiedDiff(fs.readFileSync(path.join(runDir, 'diff.patch'), 'utf8'));
   const staticResults = evaluateChecks(task.checks, diff, finalFiles(app, ['node_modules', 'dist', '.git']));

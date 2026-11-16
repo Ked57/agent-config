@@ -1,0 +1,69 @@
+{
+  "name": "components-backend",
+  "description": "Backend tasks where one agent-config component (a policy rule or a skill) should change the outcome, each scored by hidden tests or a deterministic check (see evals/INVENTORY.md, section 6).",
+  "fixture": "ts-backend",
+  "categories": {
+    "policy": { "label": "Policy rules (typescript, domain-module)" },
+    "skill": { "label": "Skills (manual-qa, quality tooling, diagnosis)" }
+  },
+  "smoke": ["K1-plan-limits", "K5-token-cli", "K7-done-without-assignee"],
+  "featurePatterns": {
+    "satisfies": "\\bsatisfies\\b",
+    "neverCheck": ":\\s*never\\b",
+    "typeAssertion": "\\bas (?!const\\b)[A-Za-z{(\\[]",
+    "nonNullAssertion": "[\\w)\\]]!(\\.|\\[|;|,|\\))",
+    "typeboxValidation": "\\bt\\.(Object|String|Integer|Number|Union|Literal|Optional)\\(",
+    "spawnedServerOrCli": "bun run (src/index\\.ts|scripts/)|Bun\\.spawn|spawnSync\\(",
+    "stryker": "@stryker-mutator",
+    "knip": "\\bknip\\b"
+  },
+  "tasks": [
+    {
+      "id": "K1-plan-limits",
+      "category": "policy",
+      "prompt": "Free organizations are getting a project limit: the free plan allows 2 projects and the pro plan 50. When an organization is already at its limit, POST /api/projects should return 403 with {\"code\": \"plan_limit\", \"message\": \"...\"} and create nothing. Also add GET /api/organization (any signed-in user), returning the caller's organization as {\"plan\": ..., \"projectLimit\": ..., \"projectCount\": ...}. We're adding an enterprise plan soon, so set the limits up in a way that whoever adds a new plan can't forget to give it a limit. Add tests.",
+      "expectsPolicies": ["typescript"],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden plan-limit tests pass",
+          "type": "command",
+          "copy": { "hidden/components/plan-limits.test.ts": "src/__hidden__/plan-limits.test.ts" },
+          "run": "vitest run src/__hidden__/plan-limits.test.ts",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "plan-exhaustive",
+          "label": "Adding a plan variant breaks the build until it gets a limit (typescript.md: exhaustive unions)",
+          "type": "command",
+          "copy": { "hidden/components/add-variant.mjs": ".eval-hidden/add-variant.mjs" },
+          "run": "node .eval-hidden/add-variant.mjs '\\[\\s*\"free\",\\s*\"pro\",?\\s*\\]' '[\"free\", \"pro\", \"enterprise\"]' '\"free\"\\s*\\|\\s*\"pro\"(?!\\s*\\|)' '\"free\" | \"pro\" | \"enterprise\"'",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "strict-types",
+          "label": "No type assertions, non-null assertions, any, floating promises or non-exhaustive switches in production code (typescript.md)",
+          "type": "command",
+          "copy": { "hidden/components/strict.eslint.config.js": ".eval-hidden/strict.eslint.config.js" },
+          "run": "eslint -c .eval-hidden/strict.eslint.config.js src scripts",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or changes a test",
+          "type": "changed",
+          "files": ["src/**/*.test.ts"],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    }
+  ]
+}

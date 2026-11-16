@@ -100,5 +100,6 @@
       }
     ]
   },
+  "judgeDimensions": ["correctness", "tests", "fit", "scope", "maintainability"],
   "judgeContext": "The codebase is a multi-tenant tasks API on Bun + Elysia (TypeBox `t` validation, a `requireAuth` macro), Drizzle ORM over SQLite/libSQL with drizzle-kit SQL migrations, Vitest tests against a real temp database, ESLint and Prettier. Reward correct tenant scoping, real migrations, tests that cover the change, and following the existing route/plugin patterns; penalise unnecessary dependencies and scope creep."
 }

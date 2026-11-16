@@ -1,0 +1,30 @@
+diff -ruN a/src/routes/webhooks.ts b/src/routes/webhooks.ts
+--- a/src/routes/webhooks.ts
++++ b/src/routes/webhooks.ts
+@@ -5,15 +5,19 @@
+ import { organizations } from "../db/schema";
+ import { logger } from "../lib/logger";
+ 
++const processedEventIds = new Set<string>();
++
+ /** Billing provider webhooks, authenticated with a shared secret header. */
+-export const webhookRoutes = (db: Db) =>
+-  new Elysia({ prefix: "/api/webhooks" }).post(
++export const webhookRoutes = (db: Db) => {
++  return new Elysia({ prefix: "/api/webhooks" }).post(
+     "/billing",
+     async ({ body, headers, status }) => {
+       const secret = process.env.WEBHOOK_SECRET;
+       if (!secret || headers["x-webhook-secret"] !== secret) {
+         return status(401, "invalid webhook secret");
+       }
++      if (processedEventIds.has(body.id)) return { received: true };
++      processedEventIds.add(body.id);
+       if (body.type === "payment.succeeded") {
+         const credits = body.data.credits ?? 0;
+         await db
+@@ -39,3 +43,4 @@
+       }),
+     },
+   );
++};

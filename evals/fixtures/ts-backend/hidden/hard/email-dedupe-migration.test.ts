@@ -46,29 +46,48 @@ async function migrateLegacyDatabase() {
   return db;
 }
 
-describe("hidden: email normalisation migration", () => {
-  it("normalises emails and keeps the earliest account of each duplicate group", async () => {
+type UserRow = { id: string; email: string; name: string; role: string };
+const usersOf = (db: Awaited<ReturnType<typeof migrateLegacyDatabase>>) => db.all<UserRow>(sql`SELECT id, email, name, role FROM users ORDER BY id`);
+const assignees = async (db: Awaited<ReturnType<typeof migrateLegacyDatabase>>) =>
+  Object.fromEntries((await db.all<{ id: string; assignee_id: string | null }>(sql`SELECT id, assignee_id FROM tasks ORDER BY id`)).map((row) => [row.id, row.assignee_id]));
+
+describe("hidden: email normalisation migration", { timeout: 30_000 }, () => {
+  it("stores the emails of accounts without duplicates trimmed and lower-cased", async () => {
     const db = await migrateLegacyDatabase();
-    const users = await db.all<{ id: string; email: string }>(sql`SELECT id, email FROM users ORDER BY id`);
-    expect(users).toEqual([
-      { id: "u_ada1", email: "ada@example.test" },
-      { id: "u_bob", email: "bob@example.test" },
-      { id: "u_cy", email: "cy@example.test" },
-      { id: "u_dee_b", email: "dee@example.test" },
-    ]);
+    const users = await usersOf(db);
+    expect(users.find((user) => user.id === "u_bob")?.email).toBe("bob@example.test");
+    expect(users.find((user) => user.id === "u_cy")?.email).toBe("cy@example.test");
+  });
+
+  it("keeps the earliest-created account of a group that differs by letter case", async () => {
+    const db = await migrateLegacyDatabase();
+    const ada = (await usersOf(db)).filter((user) => user.email.includes("ada"));
+    expect(ada).toEqual([{ id: "u_ada1", email: "ada@example.test", name: "Ada first", role: "admin" }]);
+  });
+
+  it("merges accounts whose emails differ only by surrounding spaces", async () => {
+    const db = await migrateLegacyDatabase();
+    const dee = (await usersOf(db)).filter((user) => user.email.includes("dee"));
+    expect(dee).toEqual([{ id: "u_dee_b", email: "dee@example.test", name: "Dee early", role: "member" }]);
+  });
+
+  it("leaves exactly one account per person", async () => {
+    const db = await migrateLegacyDatabase();
+    expect((await usersOf(db)).map((user) => user.id)).toEqual(["u_ada1", "u_bob", "u_cy", "u_dee_b"]);
   });
 
   it("hands the removed accounts' tasks to the kept account", async () => {
     const db = await migrateLegacyDatabase();
-    const tasks = await db.all<{ id: string; assignee_id: string | null }>(sql`SELECT id, assignee_id FROM tasks ORDER BY id`);
-    expect(tasks).toEqual([
-      { id: "t1", assignee_id: "u_ada1" },
-      { id: "t2", assignee_id: "u_ada1" },
-      { id: "t3", assignee_id: "u_ada1" },
-      { id: "t4", assignee_id: "u_bob" },
-      { id: "t5", assignee_id: null },
-      { id: "t6", assignee_id: "u_dee_b" },
-    ]);
+    const tasks = await assignees(db);
+    expect([tasks.t1, tasks.t2, tasks.t3]).toEqual(["u_ada1", "u_ada1", "u_ada1"]);
+    expect(tasks.t6).toBe("u_dee_b");
+  });
+
+  it("leaves other tasks' assignees alone", async () => {
+    const db = await migrateLegacyDatabase();
+    const tasks = await assignees(db);
+    expect(tasks.t4).toBe("u_bob");
+    expect(tasks.t5).toBeNull();
   });
 
   it("makes the database refuse a second account that differs only by letter case", async () => {
@@ -81,9 +100,16 @@ describe("hidden: email normalisation migration", () => {
     expect(count?.total).toBe(5);
   });
 
+  it("refuses a case variant on a freshly migrated database too", async () => {
+    const { db } = await createTestContext();
+    await expect(db.run(sql`INSERT INTO users (id, org_id, email, name, password_hash, role, created_at) VALUES ('u_x', 'org_acme', 'BOB@acme.test', 'N', 'x', 'member', 9000)`)).rejects.toThrow();
+  });
+
   it("still migrates and seeds a fresh database, and logs in whatever the letter case", async () => {
     const { request } = await createTestContext();
     const login = await request("POST", "/api/auth/token", { body: { email: "Ada@ACME.test", password: SEED_PASSWORD } });
     expect(login.status).toBe(200);
+    const plain = await request("POST", "/api/auth/token", { body: { email: "bob@acme.test", password: SEED_PASSWORD } });
+    expect(plain.status).toBe(200);
   });
 });

@@ -1,0 +1,56 @@
+diff -ruN a/src/routes/tasks.test.ts b/src/routes/tasks.test.ts
+--- a/src/routes/tasks.test.ts
++++ b/src/routes/tasks.test.ts
+@@ -70,6 +70,35 @@
+     expect(transport).toHaveBeenCalledTimes(1);
+   });
+ 
++  it("hides tasks of other organizations as not found", async () => {
++    const { request } = await createTestContext();
++    const token = SEED_TOKENS.acmeAdmin;
++    const calls = [
++      ["GET", undefined],
++      ["PATCH", { title: "Hijacked" }],
++      ["DELETE", undefined],
++    ] as const;
++    for (const [method, body] of calls) {
++      const foreign = await request(method, "/api/tasks/tsk_6", {
++        token,
++        body,
++      });
++      const missing = await request(method, "/api/tasks/tsk_missing", {
++        token,
++        body,
++      });
++      expect(foreign.status, method).toBe(404);
++      expect(await foreign.json(), method).toEqual(await missing.json());
++    }
++    const own = await request("GET", "/api/tasks/tsk_6", {
++      token: SEED_TOKENS.globexAdmin,
++    });
++    expect(own.status).toBe(200);
++    expect(await own.json()).toMatchObject({
++      title: "Rotate database credentials",
++    });
++  });
++
+   it("only lets admins delete tasks", async () => {
+     const { request } = await createTestContext();
+     expect(
+diff -ruN a/src/routes/tasks.ts b/src/routes/tasks.ts
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -12,11 +12,11 @@
+     .use(authGuard(db))
+     .get(
+       "/:id",
+-      async ({ params, status }) => {
++      async ({ params, user, status }) => {
+         const task = await db
+           .select()
+           .from(tasks)
+-          .where(eq(tasks.id, params.id))
++          .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
+           .get();
+         if (!task) return status(404, { error: "task not found" });
+         return toTaskResponse(task);
