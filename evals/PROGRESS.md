@@ -282,3 +282,21 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
 - Problems seen: GitHub 429 while cloning plugin marketplaces during arm builds (two failed launches); an expired OAuth token recorded as a run error. Next: a small suite fix (arm build cache, auth errors as transient), then R4.
 - Round 2 calibration spend so far: $0.90 (R1 probes) + $0.64 (R3a probe) + $12.34 (design) = $13.88 of about $40.
 - 22:37 UTC: suite fix done (arm build cache under `~/agent-config-evals/.cache/arms`, 24 h; auth failures discarded and retried; `--redo`; discarded spend persisted). D1 calibration redone: see the calibration dir (total with the discarded run $15.05). Design calibration spend $15.05; round 2 calibration total $16.59. R4a (RacePlanr replay feasibility) started.
+- 23:00 UTC: R4a feasibility done (report: `~/agent-config-evals/round2/r4a-raceplanr-feasibility.md`, kept out
+  of this public repo). Verdict: feasible with about a day of harness work. The poteto-mode work in
+  RacePlanr is Rust (telemetry crates) and the Tauri/Vue desktop app, not the API; no Postgres needed;
+  cargo tests run offline (415 pass, 16 s warm, 51 s cold, 3 GB target dir per run). PR-test dry checks
+  on three issues fail before and pass after. Needs: fixtures loaded from a private path, a Rust
+  toolchain in the scrubbed run env, a per-run target dir, spec amendments. Candidates: two small
+  single-test fixes, one medium part of a spec issue, one large whole spec issue.
+- **Lead decision on the backend design (R4):**
+  1. R4b builds a synthetic **`ts-backend-legacy`** fixture (bigger, messier, older patterns, dead code,
+     partial docs) with 7–8 tasks whose difficulty comes from finding the cause, not from longer
+     requirement lists: two symptom-only bug reports, money/rounding and timezone invariants, a
+     tenant-isolation sweep (find every IDOR), a measured query/latency budget on a seeded large
+     dataset, OpenAPI conformance, and two spec-sized features for poteto-mode. Mutation-checked,
+     calibrated to 30–60% of hidden cases failing (cap $20).
+  2. R4c (only if a usage window remains before the comparisons): 3 private RacePlanr replay tasks
+     (medium and large spec issue plus one small fix), kept outside this repo. Otherwise reported as
+     feasible, not built.
+  Calibration runs are `--a main` single-arm, so with reuse they double as arm A of R5.2 and R5.3.
