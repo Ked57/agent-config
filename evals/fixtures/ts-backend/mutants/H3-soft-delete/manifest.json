@@ -1,0 +1,59 @@
+{
+  "task": "H3-soft-delete",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-counts-include-deleted.patch",
+      "wrong": "Per-status counts in GET /api/projects still count deleted tasks",
+      "violates": "left out of ... the per-status task counts in GET /api/projects",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-patch-still-edits-deleted.patch",
+      "wrong": "PATCH still finds and edits deleted tasks",
+      "violates": "GET, PATCH and DELETE on it answer 404 and change nothing",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-delete-twice-succeeds.patch",
+      "wrong": "DELETE of an already deleted task answers 204 again and restamps it",
+      "violates": "GET, PATCH and DELETE on it answer 404",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-restore-not-admin-only.patch",
+      "wrong": "Members can restore",
+      "violates": "403 for non-admins",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-restore-not-tenant-scoped.patch",
+      "wrong": "Restore finds tasks of any organization",
+      "violates": "404 for unknown tasks and for tasks of other organizations",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-restore-of-live-task-is-200.patch",
+      "wrong": "Restoring a task that is not deleted answers 200",
+      "violates": "409 if the task is not deleted",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-get-still-shows-deleted.patch",
+      "wrong": "GET /api/tasks/:id still returns deleted tasks",
+      "violates": "GET ... on it answer 404",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-task-list-shows-deleted.patch",
+      "wrong": "Project task lists still include deleted tasks",
+      "violates": "it is left out of project task lists",
+      "expect": "killed"
+    }
+  ]
+}

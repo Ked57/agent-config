@@ -1,0 +1,13 @@
+diff -ruN a/src/views/ProjectsView.vue b/src/views/ProjectsView.vue
+--- a/src/views/ProjectsView.vue
++++ b/src/views/ProjectsView.vue
+@@ -37,7 +37,8 @@
+           </li>
+         </ul>
+       </aside>
+-      <div class="grid flex-1 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
++      <!-- Columns come from the grid's own width (not the viewport), so opening the sidebar drops a column instead of squeezing cards. auto-fill keeps card width stable when a tag filter leaves few results. -->
++      <div class="grid min-w-0 flex-1 grid-cols-[repeat(auto-fill,minmax(min(18rem,100%),1fr))] gap-4">
+         <ProjectCard v-for="project in visible" :key="project.id" :project="project" />
+       </div>
+     </div>

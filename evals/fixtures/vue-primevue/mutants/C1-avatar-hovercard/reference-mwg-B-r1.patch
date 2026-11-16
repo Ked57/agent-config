@@ -1,0 +1,259 @@
+diff -ruN a/src/components/UserHoverCard.vue b/src/components/UserHoverCard.vue
+--- /dev/null
++++ b/src/components/UserHoverCard.vue
+@@ -0,0 +1,114 @@
++<script setup lang="ts">
++import { onBeforeUnmount, useId, useTemplateRef } from 'vue'
++import UserAvatar from '@/components/UserAvatar.vue'
++import { formatRelativeTime } from '@/utils/format'
++import { placeHovercard } from '@/utils/hovercard'
++import type { User } from '@/types'
++
++defineProps<{ user: User; size?: 'normal' | 'large' | 'xlarge' }>()
++
++// The open delay stops cards flashing while the pointer or Tab passes over the list; the
++// close delay lets the pointer cross the gap from the avatar onto the card.
++const OPEN_DELAY_MS = 300
++const CLOSE_DELAY_MS = 150
++
++const cardId = useId()
++const root = useTemplateRef<HTMLElement>('root')
++const card = useTemplateRef<HTMLElement>('card')
++
++let hovered = false
++let focused = false
++let timer: ReturnType<typeof setTimeout> | undefined
++
++function setHovered(value: boolean) {
++  hovered = value
++  scheduleToggle()
++}
++
++function setFocused(value: boolean) {
++  focused = value
++  scheduleToggle()
++}
++
++function scheduleToggle() {
++  clearTimeout(timer)
++  const wanted = hovered || focused
++  timer = setTimeout(wanted ? open : close, wanted ? OPEN_DELAY_MS : CLOSE_DELAY_MS)
++}
++
++function isOpen(): boolean {
++  return card.value?.matches(':popover-open') ?? false
++}
++
++function open() {
++  if (!root.value || !card.value || isOpen()) return
++  card.value.showPopover()
++  const placement = placeHovercard(root.value.getBoundingClientRect(), card.value.getBoundingClientRect(), {
++    width: document.documentElement.clientWidth,
++    height: document.documentElement.clientHeight,
++  })
++  card.value.style.top = `${placement.top}px`
++  card.value.style.left = `${placement.left}px`
++  card.value.style.transformOrigin = placement.side === 'above' ? 'bottom left' : 'top left'
++  document.addEventListener('keydown', onKeydown)
++  // The card is fixed to where the avatar was, so close it rather than let it drift on scroll.
++  window.addEventListener('scroll', close, { capture: true, passive: true })
++}
++
++function close() {
++  clearTimeout(timer)
++  document.removeEventListener('keydown', onKeydown)
++  window.removeEventListener('scroll', close, { capture: true })
++  if (isOpen()) card.value?.hidePopover()
++}
++
++// Escape dismisses the card whether it was opened by focus or by hover (WCAG 1.4.13).
++function onKeydown(event: KeyboardEvent) {
++  if (event.key === 'Escape') close()
++}
++
++onBeforeUnmount(close)
++</script>
++
++<template>
++  <div
++    ref="root"
++    class="inline-flex"
++    @mouseenter="setHovered(true)"
++    @mouseleave="setHovered(false)"
++    @focusin="setFocused(true)"
++    @focusout="setFocused(false)"
++  >
++    <RouterLink
++      :to="{ name: 'user', params: { id: user.id } }"
++      :aria-label="user.name"
++      :aria-describedby="cardId"
++      class="inline-flex rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
++    >
++      <UserAvatar :user="user" :size="size" />
++    </RouterLink>
++    <div
++      :id="cardId"
++      ref="card"
++      popover="manual"
++      role="tooltip"
++      class="inset-auto m-0 w-72 rounded-xl border border-surface-200 bg-surface-0 p-4 text-surface-900 shadow-lg ease-out starting:open:scale-95 starting:open:opacity-0 motion-safe:transition-[opacity,scale] motion-safe:duration-150"
++    >
++      <div class="flex items-center gap-3">
++        <UserAvatar :user="user" size="large" aria-hidden="true" />
++        <div class="min-w-0">
++          <p class="truncate font-semibold">{{ user.name }}</p>
++          <p class="truncate text-sm text-surface-500">{{ user.title }}</p>
++        </div>
++      </div>
++      <dl class="mt-3 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
++        <dt class="text-surface-500">Location</dt>
++        <dd>{{ user.location }}</dd>
++        <dt class="text-surface-500">Email</dt>
++        <dd class="break-all">{{ user.email }}</dd>
++        <dt class="text-surface-500">Last active</dt>
++        <dd><time :datetime="user.lastActiveAt">{{ formatRelativeTime(user.lastActiveAt) }}</time></dd>
++      </dl>
++    </div>
++  </div>
++</template>
+diff -ruN a/src/utils/format.test.ts b/src/utils/format.test.ts
+--- a/src/utils/format.test.ts
++++ b/src/utils/format.test.ts
+@@ -1,5 +1,5 @@
+ import { describe, expect, it } from 'vitest'
+-import { formatCurrency, initials } from './format'
++import { formatCurrency, formatRelativeTime, initials } from './format'
+ 
+ describe('formatCurrency', () => {
+   it('formats USD by default', () => {
+@@ -16,3 +16,22 @@
+     expect(initials('')).toBe('')
+   })
+ })
++
++describe('formatRelativeTime', () => {
++  const now = new Date('2026-11-15T12:00:00Z')
++
++  it('uses the largest whole unit that has elapsed', () => {
++    expect(formatRelativeTime('2026-11-15T09:12:00Z', now)).toBe('2 hours ago')
++    expect(formatRelativeTime('2026-11-10T11:05:00Z', now)).toBe('5 days ago')
++    expect(formatRelativeTime('2026-11-01T18:22:00Z', now)).toBe('last week')
++  })
++
++  it('uses words for the nearest day', () => {
++    expect(formatRelativeTime('2026-11-14T09:12:00Z', now)).toBe('yesterday')
++  })
++
++  it('falls back to seconds for very recent activity', () => {
++    expect(formatRelativeTime('2026-11-15T12:00:00Z', now)).toBe('now')
++    expect(formatRelativeTime('2026-11-15T11:59:30Z', now)).toBe('30 seconds ago')
++  })
++})
+diff -ruN a/src/utils/format.ts b/src/utils/format.ts
+--- a/src/utils/format.ts
++++ b/src/utils/format.ts
+@@ -14,3 +14,23 @@
+     .map((part) => part[0]?.toUpperCase() ?? '')
+     .join('')
+ }
++
++const RELATIVE_TIME_UNITS: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, number]> = [
++  ['year', 365 * 24 * 60 * 60],
++  ['month', 30 * 24 * 60 * 60],
++  ['week', 7 * 24 * 60 * 60],
++  ['day', 24 * 60 * 60],
++  ['hour', 60 * 60],
++  ['minute', 60],
++]
++
++export function formatRelativeTime(iso: string, now = new Date(), locale = 'en-US'): string {
++  const seconds = (new Date(iso).getTime() - now.getTime()) / 1000
++  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
++  for (const [unit, unitSeconds] of RELATIVE_TIME_UNITS) {
++    if (Math.abs(seconds) >= unitSeconds) {
++      return formatter.format(Math.trunc(seconds / unitSeconds), unit)
++    }
++  }
++  return formatter.format(Math.trunc(seconds), 'second')
++}
+diff -ruN a/src/utils/hovercard.test.ts b/src/utils/hovercard.test.ts
+--- /dev/null
++++ b/src/utils/hovercard.test.ts
+@@ -0,0 +1,25 @@
++import { describe, expect, it } from 'vitest'
++import { placeHovercard } from './hovercard'
++
++const viewport = { width: 1000, height: 800 }
++const card = { width: 288, height: 160 }
++
++describe('placeHovercard', () => {
++  it('places the card below the trigger, aligned to its left edge', () => {
++    expect(placeHovercard({ top: 100, bottom: 148, left: 40 }, card, viewport)).toEqual({ top: 156, left: 40, side: 'below' })
++  })
++
++  it('flips above the trigger when there is no room below', () => {
++    expect(placeHovercard({ top: 700, bottom: 748, left: 40 }, card, viewport)).toEqual({ top: 532, left: 40, side: 'above' })
++  })
++
++  it('stays below when there is no room above either', () => {
++    const shortViewport = { width: 1000, height: 300 }
++    expect(placeHovercard({ top: 100, bottom: 148, left: 40 }, card, shortViewport).side).toBe('below')
++  })
++
++  it('keeps the card inside the viewport horizontally', () => {
++    expect(placeHovercard({ top: 100, bottom: 148, left: 900 }, card, viewport).left).toBe(704)
++    expect(placeHovercard({ top: 100, bottom: 148, left: -20 }, card, viewport).left).toBe(8)
++  })
++})
+diff -ruN a/src/utils/hovercard.ts b/src/utils/hovercard.ts
+--- /dev/null
++++ b/src/utils/hovercard.ts
+@@ -0,0 +1,27 @@
++export interface HovercardPlacement {
++  top: number
++  left: number
++  side: 'below' | 'above'
++}
++
++const GAP = 8
++const VIEWPORT_MARGIN = 8
++
++/**
++ * Places a card below its trigger, aligned to the trigger's left edge. Flips above when it
++ * would overflow the bottom of the viewport and there is room above, and keeps it inside
++ * the viewport horizontally.
++ */
++export function placeHovercard(
++  trigger: { top: number; bottom: number; left: number },
++  card: { width: number; height: number },
++  viewport: { width: number; height: number },
++): HovercardPlacement {
++  const belowTop = trigger.bottom + GAP
++  const aboveTop = trigger.top - GAP - card.height
++  const overflowsBelow = belowTop + card.height > viewport.height - VIEWPORT_MARGIN
++  const side = overflowsBelow && aboveTop >= VIEWPORT_MARGIN ? 'above' : 'below'
++  const maxLeft = viewport.width - card.width - VIEWPORT_MARGIN
++  const left = Math.max(VIEWPORT_MARGIN, Math.min(trigger.left, maxLeft))
++  return { top: side === 'above' ? aboveTop : belowTop, left, side }
++}
+diff -ruN a/src/views/UsersView.vue b/src/views/UsersView.vue
+--- a/src/views/UsersView.vue
++++ b/src/views/UsersView.vue
+@@ -5,7 +5,7 @@
+ import InputIcon from 'primevue/inputicon'
+ import InputText from 'primevue/inputtext'
+ import Tag from 'primevue/tag'
+-import UserAvatar from '@/components/UserAvatar.vue'
++import UserHoverCard from '@/components/UserHoverCard.vue'
+ import { useUsersStore } from '@/stores/users'
+ 
+ const usersStore = useUsersStore()
+@@ -28,7 +28,7 @@
+     <p v-if="loading" class="text-surface-500">Loading…</p>
+     <ul v-else class="divide-y divide-surface-200 rounded-xl border border-surface-200 bg-surface-0">
+       <li v-for="user in filteredUsers" :key="user.id" class="flex items-center gap-4 p-4">
+-        <UserAvatar :user="user" size="large" />
++        <UserHoverCard :user="user" size="large" />
+         <div class="flex-1">
+           <RouterLink :to="{ name: 'user', params: { id: user.id } }" class="font-medium hover:underline">{{ user.name }}</RouterLink>
+           <p class="text-sm text-surface-500">{{ user.title }}</p>

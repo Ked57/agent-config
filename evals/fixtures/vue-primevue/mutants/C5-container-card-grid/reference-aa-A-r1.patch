@@ -1,0 +1,17 @@
+diff -ruN a/src/views/ProjectsView.vue b/src/views/ProjectsView.vue
+--- a/src/views/ProjectsView.vue
++++ b/src/views/ProjectsView.vue
+@@ -37,8 +37,11 @@
+           </li>
+         </ul>
+       </aside>
+-      <div class="grid flex-1 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+-        <ProjectCard v-for="project in visible" :key="project.id" :project="project" />
++      <!-- Size the columns from the space left beside the filters, not the viewport. -->
++      <div class="@container min-w-0 flex-1">
++        <div class="grid grid-cols-1 gap-4 @xl:grid-cols-2 @4xl:grid-cols-3">
++          <ProjectCard v-for="project in visible" :key="project.id" :project="project" />
++        </div>
+       </div>
+     </div>
+   </section>

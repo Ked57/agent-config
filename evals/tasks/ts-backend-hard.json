@@ -1,0 +1,345 @@
+{
+  "name": "ts-backend-hard",
+  "description": "Harder backend tasks on the ts-backend fixture whose prompts state requirements with easy-to-miss implications (concurrency, boundaries, tenant scoping on every path, duplicates and ties, messy existing data). Scored per hidden test case, so a run gets partial credit.",
+  "fixture": "ts-backend",
+  "categories": {
+    "api": {
+      "label": "API features"
+    },
+    "data": {
+      "label": "Data and migrations"
+    },
+    "reliability": {
+      "label": "Concurrency and idempotency"
+    },
+    "safety": {
+      "label": "Access control and sessions"
+    }
+  },
+  "smoke": [
+    "H1-credit-spend",
+    "H5-viewer-role"
+  ],
+  "featurePatterns": {
+    "transaction": "\\.transaction\\(",
+    "batch": "\\.batch\\(",
+    "uniqueConstraint": "unique\\(|\\.unique\\(\\)|uniqueIndex\\(|UNIQUE",
+    "onConflict": "onConflictDo(Nothing|Update)|ON CONFLICT|INSERT OR IGNORE",
+    "conditionalWrite": "\\.update\\([\\s\\S]{0,400}?\\.where\\([\\s\\S]{0,400}?(version|credits|>=|gt\\(|gte\\()",
+    "migrationFile": "CREATE TABLE|ALTER TABLE|CREATE (UNIQUE )?INDEX|UPDATE `?(tasks|users)`?",
+    "typeboxValidation": "\\bt\\.(Object|String|Integer|Number|Union|Literal|Optional)\\("
+  },
+  "tasks": [
+    {
+      "id": "H1-credit-spend",
+      "category": "reliability",
+      "prompt": "Organizations need to spend their credits. Add POST /api/credits/spend for any signed-in member of an organization, with a JSON body {\"amount\": <positive whole number>, \"reason\"?: <string>}. Deduct the amount from the organization's credits and answer 200 with {\"credits\": <remaining balance>}, or 402 when the balance is too low (spending down to exactly 0 is fine; the balance must never go negative). Without a valid token it is 401, and an invalid amount is a 4xx. Clients retry on timeouts, so support an optional Idempotency-Key header: repeating a key already used in the same organization (by any of its users) must not spend again and must return exactly the same status and body as the first request with that key, even if that one was refused or the balance has changed since; the same key in another organization is unrelated. This endpoint gets bursts of traffic: requests that arrive at the same time, including retries with the same key, must each get a proper 200 or 402 (never an error) and must never overdraw or double-spend.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/credit-spend.test.ts": "src/__hidden__/credit-spend.test.ts"
+          },
+          "run": "vitest run src/__hidden__/credit-spend.test.ts",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "migration-added",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H2-stable-pagination",
+      "category": "api",
+      "prompt": "GET /api/projects/:id/tasks returns every task at once, and big imports have made some projects huge. Change it to return tasks newest first (by createdAt) with cursor pagination: ?limit (default 20, allowed 1 to 100, anything else is rejected with a 4xx) and ?cursor (the previous page's nextCursor), responding {items, nextCursor}, where nextCursor is null on the last page, also when that page is exactly full. Imports create many tasks with the very same createdAt, and people create and delete tasks while others are paging, so following nextCursor must return every task that exists for the whole walk exactly once, never repeat one, and keep the newest-first order, even when the task the cursor points at has been deleted in between. A garbled cursor is rejected with a 4xx. Other organizations' projects stay 404.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/stable-pagination.test.ts": "src/__hidden__/stable-pagination.test.ts"
+          },
+          "run": "vitest run src/__hidden__/stable-pagination.test.ts",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H3-soft-delete",
+      "category": "data",
+      "prompt": "Deleting a task should no longer destroy it. Make DELETE /api/tasks/:id (still admin-only, still 204) a soft delete: keep the row and record when it was deleted in a new `deleted_at` column. A deleted task must behave as if it did not exist: GET, PATCH and DELETE on it answer 404 and change nothing, and it is left out of project task lists and of the per-status task counts in GET /api/projects. Add POST /api/tasks/:id/restore so admins of the task's organization can bring a deleted task back exactly as it was (200 with the task); it answers 401 without a token, 403 for non-admins, 404 for unknown tasks and for tasks of other organizations, and 409 if the task is not deleted.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/soft-delete.test.ts": "src/__hidden__/soft-delete.test.ts"
+          },
+          "run": "vitest run src/__hidden__/soft-delete.test.ts",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "migration-added",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H4-email-dedupe-migration",
+      "category": "data",
+      "prompt": "Login looks emails up lower-cased, but older rows were stored as typed, so some people ended up with several accounts whose emails differ only by letter case or surrounding spaces. Write a migration that cleans up existing databases: store every email trimmed and lower-cased, and where that makes accounts collide, keep the account that was created first and delete the others, handing every task assigned to a deleted account over to the kept one (other tasks stay as they are). After the migration the database itself must refuse a second account whose email differs from an existing one only by letter case. Fresh databases must still migrate and seed, and login must keep working whatever the letter case of the email.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/email-dedupe-migration.test.ts": "src/__hidden__/email-dedupe-migration.test.ts"
+          },
+          "run": "vitest run src/__hidden__/email-dedupe-migration.test.ts",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "migration-added",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H5-viewer-role",
+      "category": "safety",
+      "prompt": "Add a read-only `viewer` role next to `admin` and `member` (stored as role = 'viewer' in the users table). Viewers log in and can read everything in their organization as usual, but every endpoint that creates, changes or deletes something must answer them 403 and change nothing. Tasks cannot be assigned to viewers: assigning one, when creating a task or when updating one, is a 400. Add PATCH /api/users/:id with {\"role\": \"admin\" | \"member\" | \"viewer\"} for admins to change roles in their own organization: it answers 200 with exactly {\"id\", \"role\"}, 403 for non-admins, 404 for users of other organizations, and a 4xx for an unknown role. A new role takes effect on the user's existing tokens immediately. An organization must never end up without an admin: a change that would leave none is a 409, and that must hold even when two admins demote each other at the same time.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/viewer-role.test.ts": "src/__hidden__/viewer-role.test.ts"
+          },
+          "run": "vitest run src/__hidden__/viewer-role.test.ts",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H6-token-sessions",
+      "category": "safety",
+      "prompt": "Users cannot log out, so a leaked token stays valid until it expires. Add POST /api/auth/logout, which revokes the token used for the request (204; from then on that token gets 401 everywhere, while the user's other tokens keep working), and POST /api/auth/logout-all, which revokes every token of the current user (204). Both need a valid token (401 otherwise). Also make expiry sliding: every successfully authenticated request moves the token's expiry to TOKEN_TTL_HOURS from now, but never later than 7 days after the token was issued, and GET /api/me should include that updated expiry as `expiresAt` (an ISO 8601 string). A token is rejected from the exact moment it expires, and nothing may bring an expired or revoked token back, not even requests that were already in flight when it was revoked.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/token-sessions.test.ts": "src/__hidden__/token-sessions.test.ts"
+          },
+          "run": "vitest run src/__hidden__/token-sessions.test.ts",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H7-task-versioning",
+      "category": "reliability",
+      "prompt": "Two people editing the same task keep overwriting each other's changes. Add optimistic concurrency to tasks: every task gets a `version` (1 for new and existing tasks, +1 on every PATCH that actually changes something), included in every task response, and GET /api/tasks/:id and PATCH /api/tasks/:id send it as an ETag header in the form \"<version>\" (with the double quotes, e.g. \"3\"). PATCH must send that value back in If-Match: without the header answer 428, with an outdated one answer 412 with the current task as the body, and apply nothing in either case. When several PATCHes with the same If-Match arrive at the same time, exactly one may win and the others get 412, and only the winner may send the assignment email. A PATCH that changes nothing (empty, or only values the task already has) or that the existing rules reject must not bump the version. Other organizations' tasks stay 404.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/task-versioning.test.ts": "src/__hidden__/task-versioning.test.ts"
+          },
+          "run": "vitest run src/__hidden__/task-versioning.test.ts",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "migration-added",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H8-task-search",
+      "category": "api",
+      "prompt": "Add GET /api/tasks/search?q=... that returns {items} (the usual task objects) for the tasks in the caller's organization whose title or description contains q, ignoring letter case, also for non-English letters (searching \"ÜBERSETZUNG\" finds \"Übersetzung prüfen\"). q is plain text: characters such as %, _ and \\ only match themselves. q is required and must be 1 to 100 characters after trimming (otherwise a 4xx). An optional ?projectId= narrows the search to that project and is a 404 if the project is not in the caller's organization. Return at most 50 tasks, most recently updated first, with ties broken by task id ascending.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/task-search.test.ts": "src/__hidden__/task-search.test.ts"
+          },
+          "run": "vitest run src/__hidden__/task-search.test.ts",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    }
+  ]
+}

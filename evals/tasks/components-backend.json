@@ -172,6 +172,88 @@
           "level": "info"
         }
       ]
+    },
+    {
+      "id": "K4-labels-domain-module",
+      "category": "policy",
+      "prompt": "Add labels for tasks. Admins create labels for their organization with POST /api/labels {\"name\": \"...\", \"color\": \"#rrggbb\"} (201 with {\"id\", \"name\", \"color\"}; other members get 403; a name that already exists in the organization, ignoring case, is a 409 with {\"code\": \"label_exists\", \"message\": \"...\"}). Any member can list them with GET /api/labels ({\"items\": [...]}, sorted by name) and attach or detach one with PUT and DELETE /api/tasks/:id/labels/:labelId (204 either way, also when nothing changes; 404 when the task or label isn't in the caller's organization). GET /api/tasks/:id should include the task's \"labels\". Put the labels code in a domain module, src/labels/ with labels.model.ts, labels.interface.ts, labels.service.ts and labels.mock.ts, and keep the routes thin. Add tests.",
+      "expectsPolicies": [
+        "typescript",
+        "domain-module"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden labels tests pass",
+          "type": "command",
+          "copy": {
+            "hidden/components/labels.test.ts": "src/__hidden__/labels.test.ts"
+          },
+          "run": "vitest run src/__hidden__/labels.test.ts",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "domain-files",
+          "label": "src/labels/labels.{model,interface,service,mock}.ts exist",
+          "type": "command",
+          "copy": {
+            "hidden/components/domain-structure.mjs": ".eval-hidden/domain-structure.mjs"
+          },
+          "run": "node .eval-hidden/domain-structure.mjs src/labels labels files",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 60
+        },
+        {
+          "id": "domain-interface",
+          "label": "labels.interface.ts declares contracts only (no runtime code after transpiling)",
+          "type": "command",
+          "copy": {
+            "hidden/components/domain-structure.mjs": ".eval-hidden/domain-structure.mjs"
+          },
+          "run": "node .eval-hidden/domain-structure.mjs src/labels labels interface-types-only",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 60
+        },
+        {
+          "id": "domain-layers",
+          "label": "labels.model.ts imports no data/transport code; labels.service.ts depends on labels.interface and not on Elysia, routes or the mock",
+          "type": "command",
+          "copy": {
+            "hidden/components/domain-structure.mjs": ".eval-hidden/domain-structure.mjs"
+          },
+          "run": "node .eval-hidden/domain-structure.mjs src/labels labels layers",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 60
+        },
+        {
+          "id": "domain-mock",
+          "label": "labels.mock.ts is typed against the model or interface and no production file imports it",
+          "type": "command",
+          "copy": {
+            "hidden/components/domain-structure.mjs": ".eval-hidden/domain-structure.mjs"
+          },
+          "run": "node .eval-hidden/domain-structure.mjs src/labels labels mock-not-in-production",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 60
+        },
+        {
+          "id": "migration",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
     }
   ]
 }

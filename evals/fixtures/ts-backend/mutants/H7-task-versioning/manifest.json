@@ -1,0 +1,65 @@
+{
+  "task": "H7-task-versioning",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-version-checked-in-js-only.patch",
+      "wrong": "Compares the version in JS and updates by id only, so simultaneous PATCHes all win",
+      "violates": "exactly one may win and the others get 412",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-if-match-optional.patch",
+      "wrong": "PATCH without If-Match is applied",
+      "violates": "without the header answer 428",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-bumps-on-unchanged-values.patch",
+      "wrong": "Fields sent with their current value count as changes and bump the version",
+      "violates": "A PATCH that changes nothing (empty, or only values the task already has) ... must not bump the version",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-412-without-current-task.patch",
+      "wrong": "412 body is an error object instead of the current task",
+      "violates": "with an outdated one answer 412 with the current task as the body",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-no-etag-on-get.patch",
+      "wrong": "GET /api/tasks/:id sends no ETag",
+      "violates": "GET /api/tasks/:id and PATCH /api/tasks/:id send it as an ETag header",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-unquoted-etag.patch",
+      "wrong": "ETag is sent without the double quotes",
+      "violates": "in the form \"<version>\" (with the double quotes, e.g. \"3\")",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-losers-still-notify.patch",
+      "wrong": "Requests that lose the race still send the assignment email",
+      "violates": "only the winner may send the assignment email",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-precondition-before-tenant-check.patch",
+      "wrong": "The If-Match check runs before the organization check, so another organization gets 412 and sees the task",
+      "violates": "Other organizations' tasks stay 404",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-rule-rejection-still-bumps.patch",
+      "wrong": "The version is bumped before the existing rules run",
+      "violates": "or that the existing rules reject must not bump the version",
+      "expect": "killed"
+    }
+  ]
+}

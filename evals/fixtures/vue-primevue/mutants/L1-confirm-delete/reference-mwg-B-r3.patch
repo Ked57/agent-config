@@ -1,0 +1,66 @@
+diff -ruN a/src/main.ts b/src/main.ts
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -1,6 +1,7 @@
+ import { createApp } from 'vue'
+ import { createPinia } from 'pinia'
+ import PrimeVue from 'primevue/config'
++import ConfirmationService from 'primevue/confirmationservice'
+ import Aura from '@primeuix/themes/aura'
+ import 'primeicons/primeicons.css'
+ import './style.css'
+@@ -24,4 +25,6 @@
+   },
+ })
+ 
++app.use(ConfirmationService)
++
+ app.mount('#app')
+diff -ruN a/src/views/DashboardView.vue b/src/views/DashboardView.vue
+--- a/src/views/DashboardView.vue
++++ b/src/views/DashboardView.vue
+@@ -3,13 +3,16 @@
+ import { storeToRefs } from 'pinia'
+ import Button from 'primevue/button'
+ import Column from 'primevue/column'
++import ConfirmDialog from 'primevue/confirmdialog'
+ import DataTable from 'primevue/datatable'
+ import Tag from 'primevue/tag'
++import { useConfirm } from 'primevue/useconfirm'
+ import StatCard from '@/components/StatCard.vue'
+ import { useOrdersStore } from '@/stores/orders'
+ import { formatCurrency, formatDate } from '@/utils/format'
+ import type { Order, OrderStatus } from '@/types'
+ 
++const confirm = useConfirm()
+ const ordersStore = useOrdersStore()
+ const { orders, loading, revenue, pendingCount } = storeToRefs(ordersStore)
+ 
+@@ -21,7 +24,18 @@
+ }
+ 
+ function removeOrder(order: Order) {
+-  void ordersStore.remove(order.id)
++  confirm.require({
++    header: 'Delete order?',
++    message: `Delete order ${order.id} for ${order.customer}? This can't be undone.`,
++    icon: 'pi pi-exclamation-triangle',
++    rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
++    acceptProps: { label: 'Delete', severity: 'danger' },
++    // Focus Cancel so an accidental Enter doesn't confirm the delete.
++    defaultFocus: 'reject',
++    accept: () => {
++      void ordersStore.remove(order.id)
++    },
++  })
+ }
+ 
+ onMounted(() => {
+@@ -31,6 +45,7 @@
+ 
+ <template>
+   <section class="flex flex-col gap-6">
++    <ConfirmDialog />
+     <h1 class="text-2xl font-semibold">Dashboard</h1>
+     <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+       <StatCard label="Revenue" :value="formatCurrency(revenue)" icon="pi pi-dollar" />

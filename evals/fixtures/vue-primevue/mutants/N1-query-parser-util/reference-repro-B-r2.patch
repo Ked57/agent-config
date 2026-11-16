@@ -1,0 +1,151 @@
+diff -ruN a/src/utils/orderQuery.test.ts b/src/utils/orderQuery.test.ts
+--- /dev/null
++++ b/src/utils/orderQuery.test.ts
+@@ -0,0 +1,73 @@
++import { describe, expect, it } from 'vitest'
++import { parseOrderQuery } from './orderQuery'
++
++describe('parseOrderQuery', () => {
++  it('parses status, a total bound, and free text together', () => {
++    expect(parseOrderQuery('status:paid total>100 northwind')).toEqual({
++      status: 'paid',
++      minTotal: { value: 100, inclusive: false },
++      terms: ['northwind'],
++    })
++  })
++
++  it('returns no filters for empty or whitespace-only input', () => {
++    expect(parseOrderQuery('')).toEqual({ terms: [] })
++    expect(parseOrderQuery('   \t\n ')).toEqual({ terms: [] })
++  })
++
++  it('splits free text on any run of whitespace', () => {
++    expect(parseOrderQuery('  acme \t corp\n')).toEqual({ terms: ['acme', 'corp'] })
++  })
++
++  it('accepts every order status case-insensitively', () => {
++    expect(parseOrderQuery('status:pending').status).toBe('pending')
++    expect(parseOrderQuery('status:shipped').status).toBe('shipped')
++    expect(parseOrderQuery('STATUS:Refunded').status).toBe('refunded')
++  })
++
++  it('keeps an unknown or empty status as free text', () => {
++    expect(parseOrderQuery('status:lost')).toEqual({ terms: ['status:lost'] })
++    expect(parseOrderQuery('status:')).toEqual({ terms: ['status:'] })
++  })
++
++  it('does not treat inherited object keys as statuses', () => {
++    expect(parseOrderQuery('status:constructor')).toEqual({ terms: ['status:constructor'] })
++  })
++
++  it('parses exclusive and inclusive total bounds', () => {
++    expect(parseOrderQuery('total>=50 total<200')).toEqual({
++      minTotal: { value: 50, inclusive: true },
++      maxTotal: { value: 200, inclusive: false },
++      terms: [],
++    })
++    expect(parseOrderQuery('total<=75.5').maxTotal).toEqual({ value: 75.5, inclusive: true })
++  })
++
++  it('treats total= and total: as an exact total', () => {
++    const exact = { minTotal: { value: 42, inclusive: true }, maxTotal: { value: 42, inclusive: true }, terms: [] }
++    expect(parseOrderQuery('total=42')).toEqual(exact)
++    expect(parseOrderQuery('TOTAL:42')).toEqual(exact)
++  })
++
++  it('keeps malformed totals as free text', () => {
++    expect(parseOrderQuery('total>abc total> total>-5 total>1e3 total>1. total>>5')).toEqual({
++      terms: ['total>abc', 'total>', 'total>-5', 'total>1e3', 'total>1.', 'total>>5'],
++    })
++  })
++
++  it('lets a later qualifier override an earlier one', () => {
++    expect(parseOrderQuery('status:paid total>10 status:pending total>20')).toEqual({
++      status: 'pending',
++      minTotal: { value: 20, inclusive: false },
++      terms: [],
++    })
++  })
++
++  it('does not treat qualifiers inside larger words as filters', () => {
++    expect(parseOrderQuery('substatus:paid grandtotal>5')).toEqual({ terms: ['substatus:paid', 'grandtotal>5'] })
++  })
++
++  it('preserves the casing of free-text terms', () => {
++    expect(parseOrderQuery('Northwind Traders').terms).toEqual(['Northwind', 'Traders'])
++  })
++})
+diff -ruN a/src/utils/orderQuery.ts b/src/utils/orderQuery.ts
+--- /dev/null
++++ b/src/utils/orderQuery.ts
+@@ -0,0 +1,70 @@
++import type { OrderStatus } from '@/types'
++
++export interface TotalBound {
++  value: number
++  inclusive: boolean
++}
++
++export interface OrderQuery {
++  status?: OrderStatus
++  minTotal?: TotalBound
++  maxTotal?: TotalBound
++  terms: string[]
++}
++
++// A Record keyed by OrderStatus forces this list to stay in sync when a status is added.
++const ORDER_STATUSES: Record<OrderStatus, true> = { pending: true, paid: true, shipped: true, refunded: true }
++
++const STATUS_TOKEN = /^status:(.+)$/i
++const TOTAL_TOKEN = /^total(>=|<=|>|<|=|:)(\d+(?:\.\d+)?)$/i
++
++function isOrderStatus(value: string): value is OrderStatus {
++  return Object.hasOwn(ORDER_STATUSES, value)
++}
++
++function applyTotal(query: OrderQuery, operator: string, value: number): void {
++  switch (operator) {
++    case '>':
++    case '>=':
++      query.minTotal = { value, inclusive: operator === '>=' }
++      break
++    case '<':
++    case '<=':
++      query.maxTotal = { value, inclusive: operator === '<=' }
++      break
++    default:
++      // '=' and ':' both mean an exact total.
++      query.minTotal = { value, inclusive: true }
++      query.maxTotal = { value, inclusive: true }
++  }
++}
++
++/**
++ * Parses an order search string such as `status:paid total>100 northwind`.
++ *
++ * Keys are case-insensitive. A repeated qualifier overrides the earlier one.
++ * Tokens that look like qualifiers but carry an unknown status or a non-numeric
++ * total are kept as free-text terms rather than silently dropped.
++ */
++export function parseOrderQuery(query: string): OrderQuery {
++  const result: OrderQuery = { terms: [] }
++
++  for (const token of query.split(/\s+/).filter(Boolean)) {
++    const statusMatch = STATUS_TOKEN.exec(token)
++    const status = statusMatch?.[1]?.toLowerCase()
++    if (status !== undefined && isOrderStatus(status)) {
++      result.status = status
++      continue
++    }
++
++    const totalMatch = TOTAL_TOKEN.exec(token)
++    if (totalMatch?.[1] !== undefined && totalMatch[2] !== undefined) {
++      applyTotal(result, totalMatch[1], Number(totalMatch[2]))
++      continue
++    }
++
++    result.terms.push(token)
++  }
++
++  return result
++}

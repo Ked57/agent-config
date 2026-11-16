@@ -13,7 +13,7 @@ for (const { taskSet, fixture } of loadTaskSets()) {
     const found = taskMutants(fixture, task);
     if (!found && !withHiddenTests(task)) continue;
     test(`mutation gate manifest: ${taskSet.name}/${task.id}`, () => {
-      assert.ok(found, `${task.id} has hidden tests but no ${task.mutants ?? `mutants/${task.id}`}/manifest.json`);
+      assert.ok(found, `${task.id} has hidden tests but no mutants/${task.id}/manifest.json`);
       assert.deepEqual(validateManifest(found.manifest, task.id, found.files), []);
       const minimum = taskSet.categories?.[task.category]?.control ? 3 : 5;
       assert.ok(found.manifest.mutants.length >= minimum, `${task.id}: ${found.manifest.mutants.length} mutants, need at least ${minimum}`);

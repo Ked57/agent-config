@@ -1,0 +1,48 @@
+diff -ruN a/src/App.vue b/src/App.vue
+--- a/src/App.vue
++++ b/src/App.vue
+@@ -6,7 +6,11 @@
+   <div class="min-h-screen">
+     <AppHeader />
+     <main class="mx-auto max-w-6xl px-4 py-8">
+-      <RouterView />
++      <RouterView v-slot="{ Component }">
++        <Transition name="page" mode="out-in">
++          <component :is="Component" />
++        </Transition>
++      </RouterView>
+     </main>
+   </div>
+ </template>
+diff -ruN a/src/style.css b/src/style.css
+--- a/src/style.css
++++ b/src/style.css
+@@ -7,3 +7,28 @@
+   @apply bg-surface-50 text-surface-900 antialiased;
+   font-family: 'Inter', system-ui, sans-serif;
+ }
++
++/*
++ * Route change: enter-only fade with a small lift. The old page leaves instantly
++ * (no leave classes) so navigation never waits on an exit animation.
++ */
++.page-enter-active {
++  transition:
++    opacity 200ms cubic-bezier(0.23, 1, 0.32, 1),
++    transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
++}
++
++.page-enter-from {
++  opacity: 0;
++  transform: translateY(4px);
++}
++
++@media (prefers-reduced-motion: reduce) {
++  .page-enter-active {
++    transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
++  }
++
++  .page-enter-from {
++    transform: none;
++  }
++}

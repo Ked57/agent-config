@@ -1,0 +1,65 @@
+{
+  "task": "K4-labels-domain-module",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written by agent-f: src/labels/ with model (types, result union, pure helpers), interface (LabelRepository contract), service (use cases over the interface), mock (builder and in-memory repository for the service test), plus a Drizzle repository and a thin route"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-implementation-in-interface.patch",
+      "wrong": "the Drizzle repository implementation lives in labels.interface.ts",
+      "violates": "domain-module.md: <domain>.interface.ts declares capabilities, not implementations",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-service-throws-http-errors.patch",
+      "wrong": "the service throws Elysia's NotFoundError for a foreign task",
+      "violates": "domain-module.md: keep transport/UI concerns out of the service",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-production-uses-mock-builder.patch",
+      "wrong": "the service builds new labels with buildLabel from labels.mock.ts",
+      "violates": "domain-module.md: production code must not import <domain>.mock.ts",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-service-bypasses-interface.patch",
+      "wrong": "the service types its dependency as the Drizzle repository instead of the interface",
+      "violates": "domain-module.md: the service orchestrates through interfaces",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-model-imports-db-schema.patch",
+      "wrong": "the Label model is derived from the Drizzle table type",
+      "violates": "domain-module.md: keep API/data access out of <domain>.model.ts",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-no-mock-file.patch",
+      "wrong": "no labels.mock.ts (and no service test using it)",
+      "violates": "the requested four-file layout",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-duplicate-check-case-sensitive.patch",
+      "wrong": "duplicate names compared case-sensitively",
+      "violates": "duplicate names in an organization are refused ignoring case",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-labels-unsorted.patch",
+      "wrong": "GET /api/labels returns labels in insertion order",
+      "violates": "labels are listed sorted by name",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-label-org-not-checked.patch",
+      "wrong": "attaching does not check that the label belongs to the caller's organization",
+      "violates": "404 for a label outside the caller's organization",
+      "expect": "killed"
+    }
+  ]
+}

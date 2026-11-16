@@ -1,216 +1,180 @@
 {
   "name": "vue-primevue",
-  "description": "Everyday front-end work on a Vue 3 + PrimeVue 4 + Tailwind 4 admin console, plus non-web controls for false-trigger measurement.",
+  "description": "Everyday front-end work on a Vue 3 + PrimeVue 4 + Tailwind 4 admin console, plus non-UI TypeScript controls for false-trigger measurement.",
   "fixture": "vue-primevue",
   "categories": {
     "library": { "label": "Library-covered (PrimeVue has a fitting component)" },
-    "custom": { "label": "Custom UI / native platform fits better" },
+    "custom": { "label": "Custom UI (no single PrimeVue component covers it)" },
     "forms-perf": { "label": "Forms, accessibility, performance" },
-    "control": { "label": "Non-web controls", "control": true }
+    "control": { "label": "Non-UI TypeScript controls", "control": true }
   },
-  "smoke": ["L1-confirm-delete", "C5-container-card-grid", "F2-gallery-performance", "N1-query-parser-util"],
-  "policySignals": {
-    "modern-web": { "commandPattern": "modern-web-guidance@\\S+\\s+(search|retrieve)" }
-  },
+  "smoke": ["L1-confirm-delete","C5-container-card-grid","F2-gallery-performance","N1-query-parser-util"],
   "featurePatterns": {
-    "popover": "(?<![\\/\\w-])popover(target|targetaction)?(?=[\\s=>\"'])|showPopover|hidePopover|togglePopover|:popover-open",
-    "dialogElement": "<dialog\\b|showModal\\(",
-    "commandfor": "\\bcommandfor\\b|\\bcommand=",
-    "interestfor": "\\binterestfor\\b",
-    "anchorPositioning": "anchor-name|position-anchor|\\banchor\\(|position-area|position-try",
+    "primevueImport": "from ['\"]primevue/",
+    "primevueService": "ConfirmationService|ToastService|DialogService",
+    "nativeDialog": "<dialog\\b|showModal\\(",
+    "windowConfirm": "window\\.confirm\\(|(^|[^\\w.])confirm\\(",
     "containerQueries": "@container|container-type|container-name|\\bcq[iw]\\b|(^|[\\s\"'`])@(3xs|2xs|xs|sm|md|lg|xl|[2-7]xl|\\[[^\\]]+\\]):",
-    "viewTransitions": "startViewTransition|view-transition",
-    "startingStyle": "@starting-style|starting:",
-    "scrollDriven": "scroll-timeline|animation-timeline|view-timeline|animation-range",
-    "detailsName": "<details\\b[^>]*\\bname=",
-    "clipboardApi": "navigator\\??\\.clipboard",
-    "colorScheme": "color-scheme|light-dark\\(|prefers-color-scheme",
-    "fetchpriority": "fetchpriority|fetchPriority",
-    "lazyLoading": "loading=\"lazy\"",
-    "imgDimensions": "<img\\b[^>]*\\b(width|height)=|:width=|:height=|\\bwidth=\"\\d+\"",
-    "aspectRatio": "aspect-ratio|aspect-\\[|aspect-(square|video)",
+    "vueTransition": "<Transition\\b|<TransitionGroup\\b",
+    "reducedMotion": "prefers-reduced-motion|motion-reduce|motion-safe",
     "ariaInvalid": "aria-invalid|ariaInvalid",
     "ariaDescribedby": "aria-describedby|aria-errormessage",
-    "ariaLive": "aria-live|role=\"status\"|role=\"alert\"",
-    "hasSelector": ":has\\(|has-\\[",
-    "intersectionObserver": "IntersectionObserver",
-    "reducedMotion": "prefers-reduced-motion|motion-reduce|motion-safe",
-    "vueTransition": "<Transition\\b|<TransitionGroup\\b",
-    "useId": "\\buseId\\(",
-    "windowConfirm": "window\\.confirm\\(|(^|[^\\w.])confirm\\("
+    "ariaLive": "aria-live|role=\"status\"|role=\"alert\""
   },
   "tasks": [
     {
       "id": "L1-confirm-delete",
       "category": "library",
       "prompt": "On the dashboard, clicking the trash icon on an order deletes it immediately. That's too easy to do by accident. Make people confirm before an order is deleted.",
-      "expectsPolicies": ["vue-primevue", "modern-web"],
+      "expectsPolicies": ["vue-primevue","typescript","emil-design-eng","manual-qa"],
       "checks": [
-        { "id": "primevue-confirm", "label": "Uses a PrimeVue confirm/dialog component", "type": "pattern", "in": "added", "pattern": "primevue/(confirmdialog|confirmpopup|dialog)|useConfirm", "expect": "present" },
-        { "id": "confirm-rendered", "label": "The confirm/dialog component is rendered", "type": "pattern", "in": "final", "files": ["src/**/*.vue"], "pattern": "<(ConfirmDialog|ConfirmPopup|Dialog)\\b", "expect": "present" },
-        { "id": "no-window-confirm", "label": "No window.confirm", "type": "pattern", "in": "added", "pattern": "\\b(window|globalThis|self)\\.confirm\\(|(^|[^\\w.])confirm\\(", "expect": "absent" },
-        { "id": "no-native-dialog", "label": "No hand-rolled native <dialog>", "type": "pattern", "in": "added", "pattern": "<dialog\\b|showModal\\(", "expect": "absent" }
+        {"id":"hidden","label":"Hidden behaviour tests: delete waits for a named confirmation; cancel keeps, confirm removes","type":"command","copy":{"hidden/confirm-delete.test.ts":"src/__hidden__/confirm-delete.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/confirm-delete.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":240},
+        {"id":"primevue-confirm","label":"Uses a PrimeVue confirm/dialog component","type":"pattern","in":"added","pattern":"primevue/(confirmdialog|confirmpopup|dialog)|useConfirm","expect":"present"},
+        {"id":"no-window-confirm","label":"No window.confirm","type":"pattern","in":"added","pattern":"\\b(window|globalThis|self)\\.confirm\\(|(^|[^\\w.])confirm\\(","expect":"absent"},
+        {"id":"no-native-dialog","label":"No hand-rolled native <dialog>","type":"pattern","in":"added","pattern":"<dialog\\b|showModal\\(","expect":"absent"}
       ]
     },
     {
       "id": "L2-settings-tabs",
       "category": "library",
       "prompt": "The settings page is getting long. Split it into tabs: Profile, Preferences, Notifications and API. Saving should still save everything.",
-      "expectsPolicies": ["vue-primevue", "modern-web"],
+      "expectsPolicies": ["vue-primevue","typescript","emil-design-eng","manual-qa"],
       "checks": [
-        { "id": "primevue-tabs", "label": "Uses PrimeVue Tabs", "type": "pattern", "in": "added", "pattern": "primevue/(tabs|tablist|tabview)", "expect": "present" },
-        { "id": "tabs-rendered", "label": "The tabs component is rendered", "type": "pattern", "in": "final", "files": ["src/**/*.vue"], "pattern": "<(Tabs|TabView)\\b", "expect": "present" },
-        { "id": "settings-changed", "label": "Settings view changed", "type": "changed", "files": ["src/views/SettingsView.vue"], "expect": "any" }
+        {"id":"hidden","label":"Hidden behaviour tests: four tabs switch sections; one save sends every tab","type":"command","copy":{"hidden/settings-tabs.test.ts":"src/__hidden__/settings-tabs.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/settings-tabs.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":240},
+        {"id":"primevue-tabs","label":"Uses PrimeVue Tabs","type":"pattern","in":"added","pattern":"primevue/(tabs|tablist|tabview)","expect":"present"}
       ]
     },
     {
       "id": "L3-table-sort-filter",
       "category": "library",
       "prompt": "On the dashboard orders table, let me sort by total and by created date, and filter the rows by status.",
-      "expectsPolicies": ["vue-primevue", "modern-web"],
+      "expectsPolicies": ["vue-primevue","typescript","emil-design-eng","manual-qa"],
       "checks": [
-        { "id": "datatable-sortable", "label": "DataTable columns made sortable", "type": "pattern", "in": "final", "files": ["src/**/*.vue"], "pattern": "\\bsortable\\b", "expect": "present" },
-        { "id": "status-filter", "label": "Adds filtering", "type": "pattern", "in": "added", "pattern": "[Ff]ilter", "expect": "present" },
-        { "id": "no-native-table", "label": "DataTable not replaced by a native <table>", "type": "pattern", "in": "added", "pattern": "<table\\b", "expect": "absent" }
+        {"id":"hidden","label":"Hidden behaviour tests: Total and Created headers sort both ways; status filter narrows rows","type":"command","copy":{"hidden/table-sort-filter.test.ts":"src/__hidden__/table-sort-filter.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/table-sort-filter.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":240},
+        {"id":"datatable-sortable","label":"DataTable columns made sortable (info)","type":"pattern","in":"final","files":["src/**/*.vue"],"pattern":"\\bsortable\\b","expect":"present","level":"info"},
+        {"id":"no-native-table","label":"DataTable not replaced by a native <table>","type":"pattern","in":"added","pattern":"<table\\b","expect":"absent"}
       ]
     },
     {
       "id": "L4-save-toast",
       "category": "library",
       "prompt": "When I click Save changes on the settings page there's no feedback at all. Show a short confirmation toast when the save succeeds and an error one if it fails.",
-      "expectsPolicies": ["vue-primevue", "modern-web"],
+      "expectsPolicies": ["vue-primevue","typescript","emil-design-eng","manual-qa"],
       "checks": [
-        { "id": "primevue-toast", "label": "Uses PrimeVue Toast", "type": "pattern", "in": "added", "pattern": "useToast|primevue/toast", "expect": "present" },
-        { "id": "toast-rendered", "label": "<Toast> is mounted", "type": "pattern", "in": "final", "files": ["src/**/*.vue"], "pattern": "<Toast\\b", "expect": "present" },
-        { "id": "toast-service", "label": "ToastService is installed", "type": "pattern", "in": "final", "files": ["src/**/*.ts"], "pattern": "ToastService", "expect": "present" },
-        { "id": "error-toast", "label": "Shows an error toast on failure", "type": "pattern", "in": "added", "pattern": "severity:\\s*['\"`]error['\"`]", "expect": "present" },
-        { "id": "no-handrolled-toast", "label": "No hand-rolled popover/dialog toast", "type": "pattern", "in": "added", "pattern": "(?<![\\/\\w-])popover(?=[\\s=>\"'])|<dialog\\b", "expect": "absent" }
+        {"id":"hidden","label":"Hidden behaviour tests: success toast that goes away; error toast when saveSettings rejects","type":"command","copy":{"hidden/save-toast.test.ts":"src/__hidden__/save-toast.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/save-toast.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":300},
+        {"id":"primevue-toast","label":"Uses PrimeVue Toast","type":"pattern","in":"added","pattern":"useToast|primevue/toast","expect":"present"},
+        {"id":"no-handrolled-toast","label":"No hand-rolled popover/dialog toast","type":"pattern","in":"added","pattern":"(?<![\\/\\w-])popover(?=[\\s=>\"'])|<dialog\\b","expect":"absent"}
       ]
     },
     {
       "id": "C1-avatar-hovercard",
       "category": "custom",
       "prompt": "On the users list, hovering or focusing a user's avatar should show a small card with their name, title, location, email and when they were last active. It should also work for keyboard users.",
-      "expectsPolicies": ["vue-primevue", "modern-web"],
+      "expectsPolicies": ["vue-primevue","typescript","emil-design-eng","manual-qa"],
       "checks": [
-        { "id": "users-ui-changed", "label": "Users list or avatar changed", "type": "changed", "files": ["src/views/UsersView.vue", "src/components/**"], "expect": "any" },
-        { "id": "keyboard-trigger", "label": "Opens on focus as well as hover", "type": "pattern", "in": "added", "pattern": "focus|tabindex", "expect": "present" },
-        { "id": "card-fields", "label": "Card shows when the user was last active", "type": "pattern", "in": "added", "pattern": "lastActiveAt", "expect": "present" },
-        { "id": "uses-primevue-popover", "label": "Uses PrimeVue Popover (info)", "type": "pattern", "in": "added", "pattern": "primevue/popover", "expect": "present", "level": "info" }
+        {"id":"hidden","label":"Hidden behaviour tests: hover and Tab focus show the card fields; leaving, blur and Escape hide it","type":"command","copy":{"hidden/avatar-hovercard.test.ts":"src/__hidden__/avatar-hovercard.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/avatar-hovercard.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":240},
+        {"id":"uses-primevue-popover","label":"Uses PrimeVue Popover (info)","type":"pattern","in":"added","pattern":"primevue/popover","expect":"present","level":"info"}
       ]
     },
     {
       "id": "C2-faq-accordion",
       "category": "custom",
       "prompt": "Make the FAQ on the Help page behave like a proper accordion: only one answer can be open at a time, and it should work with the keyboard and screen readers.",
-      "expectsPolicies": ["vue-primevue", "modern-web"],
+      "expectsPolicies": ["vue-primevue","typescript","emil-design-eng","manual-qa"],
       "checks": [
-        { "id": "accordion-primitive", "label": "Uses PrimeVue Accordion or native <details>", "type": "pattern", "in": "added", "pattern": "primevue/accordion|<details\\b", "expect": "present" },
-        { "id": "single-open", "label": "Only one panel open (Accordion default, <details name>, or a toggle handler)", "type": "pattern", "in": "added", "pattern": "primevue/accordion|(^|[\\s:])name=|@toggle", "expect": "present" }
+        {"id":"hidden","label":"Hidden behaviour tests: one answer open at a time; Tab, Enter and Space work; expanded state exposed","type":"command","copy":{"hidden/faq-accordion.test.ts":"src/__hidden__/faq-accordion.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/faq-accordion.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":240},
+        {"id":"accordion-primitive","label":"Uses PrimeVue Accordion or native <details> (info)","type":"pattern","in":"added","pattern":"primevue/accordion|<details\\b","expect":"present","level":"info"}
       ]
     },
     {
       "id": "C3-page-transition",
       "category": "custom",
       "prompt": "Navigating between pages feels abrupt. Add a subtle animated transition when moving between pages in the app.",
-      "expectsPolicies": ["vue-primevue", "modern-web"],
+      "expectsPolicies": ["vue-primevue","typescript","emil-design-eng","manual-qa","animate"],
       "checks": [
-        { "id": "transition-mechanism", "label": "Adds a Vue or View Transition", "type": "pattern", "in": "added", "pattern": "<Transition\\b|startViewTransition|view-transition", "expect": "present" },
-        { "id": "transition-styles", "label": "Defines the animation itself", "type": "pattern", "in": "added", "pattern": "-(enter|leave)-(active|from|to)|(enter|leave)-(active|from|to)-class|::view-transition|@keyframes|\\b(transition|animation)(-[a-z-]+)?\\s*:", "expect": "present" },
-        { "id": "reduced-motion", "label": "Respects reduced motion", "type": "pattern", "in": "added", "pattern": "prefers-reduced-motion|motion-reduce|motion-safe", "expect": "present", "level": "info" }
+        {"id":"hidden","label":"Hidden behaviour tests: navigation starts a transition and still renders the page","type":"command","copy":{"hidden/page-transition.test.ts":"src/__hidden__/page-transition.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/page-transition.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":240},
+        {"id":"transition-styles","label":"Defines the animation itself","type":"pattern","in":"added","pattern":"-(enter|leave)-(active|from|to)|(enter|leave)-(active|from|to)-class|::view-transition|@keyframes|\\b(transition|animation)(-[a-z-]+)?\\s*:","expect":"present"},
+        {"id":"reduced-motion","label":"Respects reduced motion","type":"pattern","in":"added","pattern":"prefers-reduced-motion|motion-reduce|motion-safe","expect":"present","level":"info"}
       ]
     },
     {
       "id": "C4-shrinking-header",
       "category": "custom",
       "prompt": "Make the top header shrink once the user scrolls down (less padding, smaller logo and title), and go back to full size when they scroll back to the top.",
-      "expectsPolicies": ["vue-primevue", "modern-web"],
+      "expectsPolicies": ["vue-primevue","typescript","emil-design-eng","manual-qa","animate"],
       "checks": [
-        { "id": "header-changed", "label": "Header component changed", "type": "changed", "files": ["src/components/AppHeader.vue"], "expect": "any" },
-        { "id": "scroll-driven", "label": "Reacts to scroll position", "type": "pattern", "in": "added", "pattern": "[sS]croll|IntersectionObserver", "expect": "present" }
+        {"id":"hidden","label":"Hidden behaviour tests: header state changes after scrolling down and returns at the top","type":"command","copy":{"hidden/shrinking-header.test.ts":"src/__hidden__/shrinking-header.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/shrinking-header.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":240}
       ]
     },
     {
       "id": "C5-container-card-grid",
       "category": "custom",
       "prompt": "On the projects page the cards get squeezed when the filters sidebar is open. Make the card grid adapt to the space it actually has rather than to the window width.",
-      "expectsPolicies": ["vue-primevue", "modern-web"],
+      "expectsPolicies": ["vue-primevue","typescript","emil-design-eng","manual-qa"],
       "checks": [
-        { "id": "container-sized", "label": "Sizes columns from the container (a container query or an intrinsic auto-fill/auto-fit grid)", "type": "pattern", "in": "added", "pattern": "@container\\b[^\\n{]*\\(|(^|[\\s\"'`])@(min-|max-)?(3xs|2xs|xs|sm|md|lg|xl|[2-7]xl|\\[[^\\]]+\\])(\\/[\\w-]+)?:|auto-(fill|fit)", "expect": "present" },
-        { "id": "no-viewport-columns", "label": "Card grid no longer switches columns on viewport breakpoints", "type": "pattern", "in": "final", "files": ["src/views/ProjectsView.vue"], "pattern": "(?<![@\\w-])(sm|md|lg|xl|2xl):grid-cols-", "expect": "absent" }
+        {"id":"container-sized","label":"Sizes columns from the container (a container query or an intrinsic auto-fill/auto-fit grid)","type":"pattern","in":"added","pattern":"@container\\b[^\\n{]*\\(|(^|[\\s\"'`])@(min-|max-)?(3xs|2xs|xs|sm|md|lg|xl|[2-7]xl|\\[[^\\]]+\\])(\\/[\\w-]+)?:|auto-(fill|fit)","expect":"present"},
+        {"id":"no-viewport-columns","label":"Card grid no longer switches columns on viewport breakpoints","type":"pattern","in":"final","files":["src/views/ProjectsView.vue"],"pattern":"(?<![@\\w-])(sm|md|lg|xl|2xl):grid-cols-","expect":"absent"}
       ]
     },
     {
       "id": "C6-copy-button",
       "category": "custom",
       "prompt": "Add a copy-to-clipboard button next to the API key on the settings page and next to the email on the user detail page, with some feedback that it was copied.",
-      "expectsPolicies": ["vue-primevue", "modern-web"],
+      "expectsPolicies": ["vue-primevue","typescript","emil-design-eng","manual-qa"],
       "checks": [
-        { "id": "clipboard-api", "label": "Uses the async Clipboard API", "type": "pattern", "in": "added", "pattern": "navigator\\??\\.clipboard|\\.writeText\\(", "expect": "present" },
-        { "id": "settings-changed", "label": "Settings page changed (API key)", "type": "changed", "files": ["src/views/SettingsView.vue"], "expect": "any" },
-        { "id": "user-detail-changed", "label": "User detail page changed (email)", "type": "changed", "files": ["src/views/UserDetailView.vue"], "expect": "any" },
-        { "id": "no-execcommand", "label": "No document.execCommand", "type": "pattern", "in": "added", "pattern": "execCommand\\(", "expect": "absent" }
+        {"id":"hidden","label":"Hidden behaviour tests: both buttons write the right value to the clipboard and say it was copied","type":"command","copy":{"hidden/copy-button.test.ts":"src/__hidden__/copy-button.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/copy-button.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":240},
+        {"id":"no-execcommand","label":"No document.execCommand","type":"pattern","in":"added","pattern":"execCommand\\(","expect":"absent"}
       ]
     },
     {
       "id": "C7-dark-mode",
       "category": "custom",
       "prompt": "Add a dark mode toggle in the header. It should default to the system setting, remember the user's choice, and switch both the PrimeVue components and our own Tailwind styles.",
-      "expectsPolicies": ["vue-primevue", "modern-web"],
+      "expectsPolicies": ["vue-primevue","typescript","emil-design-eng","manual-qa"],
       "checks": [
-        { "id": "primevue-dark-selector", "label": "Sets PrimeVue darkModeSelector to something other than false/system", "type": "pattern", "in": "added", "pattern": "darkModeSelector:\\s*(?!false\\b|['\"`]system['\"`])\\S", "expect": "present" },
-        { "id": "header-toggle", "label": "Header changed (toggle)", "type": "changed", "files": ["src/components/AppHeader.vue"], "expect": "any" },
-        { "id": "system-preference", "label": "Reads the system preference", "type": "pattern", "in": "added", "pattern": "prefers-color-scheme|usePreferredDark|usePreferredColorScheme|useDark\\(|useColorMode\\(", "expect": "present" },
-        { "id": "persists-choice", "label": "Persists the choice", "type": "pattern", "in": "added", "pattern": "localStorage|useLocalStorage|useStorage\\(|useDark\\(|useColorMode\\(", "expect": "present" },
-        { "id": "tailwind-dark-variant", "label": "Tailwind dark: variant follows the toggle (info)", "type": "pattern", "in": "added", "pattern": "@custom-variant\\s+dark", "expect": "present", "level": "info" }
+        {"id":"hidden","label":"Hidden behaviour tests: header toggle drives PrimeVue's dark selector; system default; choice survives a reload","type":"command","copy":{"hidden/dark-mode.test.ts":"src/__hidden__/dark-mode.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/dark-mode.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":240},
+        {"id":"tailwind-dark-variant","label":"Tailwind dark: variant follows the toggle","type":"pattern","in":"final","pattern":"@(custom-)?variant\\s+dark\\b","expect":"present","level":"required","files":["src/**/*.css","src/**/*.vue"]}
       ]
     },
     {
       "id": "F1-inline-validation",
       "category": "forms-perf",
       "prompt": "Add validation to the settings form: display name is required and must be 2 to 50 characters, and the email must be valid. Show errors inline next to the fields in an accessible way, and don't submit while the form is invalid.",
-      "expectsPolicies": ["vue-primevue", "modern-web"],
+      "expectsPolicies": ["vue-primevue","typescript","emil-design-eng","manual-qa"],
       "checks": [
-        { "id": "invalid-state", "label": "Marks invalid fields (invalid prop or aria-invalid)", "type": "pattern", "in": "added", "pattern": "(:|v-bind:)invalid=|aria-invalid|ariaInvalid", "expect": "present" },
-        { "id": "length-rule", "label": "Encodes the 50-character limit", "type": "pattern", "in": "added", "pattern": "\\b50\\b", "expect": "present" },
-        { "id": "error-association", "label": "Associates error text with the field", "type": "pattern", "in": "added", "pattern": "aria-describedby|aria-errormessage", "expect": "present" },
-        { "id": "primevue-message", "label": "Uses PrimeVue Message for errors (info)", "type": "pattern", "in": "added", "pattern": "primevue/message", "expect": "present", "level": "info" }
+        {"id":"hidden","label":"Hidden behaviour tests: name and email errors are inline and linked; invalid forms are not saved","type":"command","copy":{"hidden/inline-validation.test.ts":"src/__hidden__/inline-validation.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/inline-validation.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":300},
+        {"id":"primevue-message","label":"Uses PrimeVue Message for errors (info)","type":"pattern","in":"added","pattern":"primevue/message","expect":"present","level":"info"}
       ]
     },
     {
       "id": "F2-gallery-performance",
       "category": "forms-perf",
       "prompt": "The gallery page feels slow to load and the layout jumps around while the images come in. Fix the loading performance and the layout shift.",
-      "expectsPolicies": ["vue-primevue", "modern-web"],
+      "expectsPolicies": ["vue-primevue","typescript","emil-design-eng","manual-qa"],
       "checks": [
-        { "id": "hero-priority", "label": "Prioritises the LCP image", "type": "pattern", "in": "final", "files": ["src/**/*.vue", "index.html"], "pattern": "[fF]etch[pP]riority[^\\n]{0,40}high", "expect": "present" },
-        { "id": "hero-not-lazy", "label": "LCP image is not lazy-loaded", "type": "pattern", "in": "final", "files": ["src/**/*.vue"], "pattern": "<img\\b[^>]*hero[^>]*loading=\"lazy\"|<img\\b[^>]*loading=\"lazy\"[^>]*hero", "expect": "absent" },
-        { "id": "lazy-offscreen", "label": "Below-the-fold images are lazy-loaded", "type": "pattern", "in": "final", "files": ["src/**/*.vue"], "pattern": "loading=\"lazy\"", "expect": "present" },
-        { "id": "reserved-space", "label": "Reserves image space (dimensions or aspect-ratio)", "type": "pattern", "in": "added", "pattern": "\\b(width|height)=\"\\d+\"|:width=|:height=|aspect-ratio|aspect-\\[|aspect-(square|video)", "expect": "present" }
+        {"id":"hidden","label":"Hidden DOM tests: hero eager and high priority, lower photos lazy, every image reserves its box","type":"command","copy":{"hidden/gallery-performance.test.ts":"src/__hidden__/gallery-performance.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/gallery-performance.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":240}
       ]
     },
     {
       "id": "N1-query-parser-util",
       "category": "control",
-      "prompt": "Add a parseOrderQuery(query: string) utility in src/utils that parses search strings like 'status:paid total>100 northwind' into a typed filter object (status, min/max total, free-text terms). Add unit tests covering the edge cases. Don't wire it into the UI yet.",
+      "prompt": "Add a parseOrderQuery(query: string) utility in src/utils/orderQuery.ts that parses search strings like 'status:paid total>100 northwind' into a typed filter object: status (an order status), minTotal and maxTotal (each { value, inclusive }, so total>100 and total>=100 differ, and total<50 sets maxTotal), and terms (the remaining free-text words). Add unit tests covering the edge cases. Don't wire it into the UI yet.",
       "expectsPolicies": ["typescript"],
       "checks": [
-        { "id": "utils-changed", "label": "Adds the utility under src/utils", "type": "changed", "files": ["src/utils/**"], "expect": "any" },
-        { "id": "exports-parser", "label": "Exports parseOrderQuery from src/utils", "type": "pattern", "in": "final", "files": ["src/utils/**"], "pattern": "export\\s+(default\\s+)?(function|const)\\s+parseOrderQuery\\b|export\\s*\\{[^}]*\\bparseOrderQuery\\b", "expect": "present" },
-        { "id": "tests-call-parser", "label": "Tests exercise parseOrderQuery", "type": "pattern", "in": "added", "files": ["src/**/*.test.ts"], "pattern": "parseOrderQuery\\(", "expect": "present" },
-        { "id": "has-tests", "label": "Adds unit tests", "type": "changed", "files": ["src/**/*.test.ts"], "expect": "any" },
-        { "id": "ui-untouched", "label": "UI left alone", "type": "changed", "files": ["src/views/**", "src/components/**", "src/App.vue"], "expect": "none" }
+        {"id":"hidden","label":"Hidden unit tests of the stated parseOrderQuery contract","type":"command","copy":{"hidden/query-parser.test.ts":"src/__hidden__/query-parser.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/query-parser.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":180},
+        {"id":"tests-call-parser","label":"Tests exercise parseOrderQuery","type":"pattern","in":"added","files":["src/**/*.test.ts"],"pattern":"parseOrderQuery\\(","expect":"present"},
+        {"id":"ui-untouched","label":"UI left alone","type":"changed","files":["src/views/**","src/components/**","src/App.vue"],"expect":"none"}
       ]
     },
     {
       "id": "N2-pinia-store-refactor",
       "category": "control",
       "prompt": "Refactor the users Pinia store into a setup store (composition API style) and replace the three separate role count getters with a single countsByRole. Keep behaviour the same and update anything that uses it.",
-      "expectsPolicies": ["typescript"],
+      "expectsPolicies": ["typescript","vue-primevue"],
       "checks": [
-        { "id": "counts-by-role", "label": "Introduces countsByRole", "type": "pattern", "in": "final", "files": ["src/stores/users.ts"], "pattern": "countsByRole", "expect": "present" },
-        { "id": "old-getters-gone", "label": "Old per-role getters removed", "type": "pattern", "in": "final", "files": ["src/**/*.ts", "src/**/*.vue"], "pattern": "\\b(adminCount|editorCount|viewerCount)\\b", "expect": "absent" },
-        { "id": "setup-store", "label": "Uses a setup store", "type": "pattern", "in": "final", "files": ["src/stores/users.ts"], "pattern": "defineStore\\(\\s*['\"`]users['\"`]\\s*,\\s*[^{\\s]", "expect": "present" }
+        {"id":"hidden","label":"Hidden tests: countsByRole on fixture data and after changes; old getters gone; store behaviour kept","type":"command","copy":{"hidden/store-refactor.test.ts":"src/__hidden__/store-refactor.test.ts","hidden/harness.ts":"src/__hidden__/harness.ts","hidden/vitest.hidden.config.ts":"vitest.hidden.config.ts"},"run":"vitest run --config vitest.hidden.config.ts src/__hidden__/store-refactor.test.ts","reporter":"vitest-json","expect":"pass","level":"required","timeoutSec":180},
+        {"id":"old-getters-gone","label":"Old per-role getters removed","type":"pattern","in":"final","files":["src/**/*.ts","src/**/*.vue"],"pattern":"\\b(adminCount|editorCount|viewerCount)\\b","expect":"absent"},
+        {"id":"setup-store","label":"Uses a setup store","type":"pattern","in":"final","files":["src/stores/users.ts"],"pattern":"defineStore\\(\\s*['\"`]users['\"`]\\s*,\\s*[^{\\s]","expect":"present"}
       ]
     }
   ]

@@ -1,0 +1,500 @@
+diff -ruN a/drizzle/0001_labels.sql b/drizzle/0001_labels.sql
+--- /dev/null
++++ b/drizzle/0001_labels.sql
+@@ -0,0 +1,17 @@
++CREATE TABLE `labels` (
++	`id` text PRIMARY KEY NOT NULL,
++	`org_id` text NOT NULL,
++	`name` text NOT NULL,
++	`color` text NOT NULL,
++	`created_at` integer NOT NULL,
++	FOREIGN KEY (`org_id`) REFERENCES `organizations`(`id`) ON UPDATE no action ON DELETE cascade
++);
++--> statement-breakpoint
++CREATE INDEX `labels_org_idx` ON `labels` (`org_id`);--> statement-breakpoint
++CREATE TABLE `task_labels` (
++	`task_id` text NOT NULL,
++	`label_id` text NOT NULL,
++	PRIMARY KEY(`task_id`, `label_id`),
++	FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON UPDATE no action ON DELETE cascade,
++	FOREIGN KEY (`label_id`) REFERENCES `labels`(`id`) ON UPDATE no action ON DELETE cascade
++);
+diff -ruN a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794774883005,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794789034716,
++      "tag": "0001_labels",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff -ruN a/src/app.ts b/src/app.ts
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -5,6 +5,7 @@
+ import { requestLogger } from "./plugins/request-logger";
+ import { authRoutes } from "./routes/auth";
+ import { healthRoutes } from "./routes/health";
++import { labelRoutes } from "./routes/labels";
+ import { projectRoutes } from "./routes/projects";
+ import { taskRoutes } from "./routes/tasks";
+ import { webhookRoutes } from "./routes/webhooks";
+@@ -26,6 +27,7 @@
+     .use(authRoutes(db))
+     .use(projectRoutes(db))
+     .use(taskRoutes(db))
++    .use(labelRoutes(db))
+     .use(webhookRoutes(db));
+ }
+ 
+diff -ruN a/src/db/schema.ts b/src/db/schema.ts
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -1,4 +1,10 @@
+-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
++import {
++  index,
++  integer,
++  primaryKey,
++  sqliteTable,
++  text,
++} from "drizzle-orm/sqlite-core";
+ 
+ const createdAt = () =>
+   integer("created_at", { mode: "timestamp_ms" })
+@@ -93,3 +99,30 @@
+ 
+ export type Task = typeof tasks.$inferSelect;
+ export type User = typeof users.$inferSelect;
++
++export const labels = sqliteTable(
++  "labels",
++  {
++    id: text("id").primaryKey(),
++    orgId: text("org_id")
++      .notNull()
++      .references(() => organizations.id, { onDelete: "cascade" }),
++    name: text("name").notNull(),
++    color: text("color").notNull(),
++    createdAt: createdAt(),
++  },
++  (table) => [index("labels_org_idx").on(table.orgId)],
++);
++
++export const taskLabels = sqliteTable(
++  "task_labels",
++  {
++    taskId: text("task_id")
++      .notNull()
++      .references(() => tasks.id, { onDelete: "cascade" }),
++    labelId: text("label_id")
++      .notNull()
++      .references(() => labels.id, { onDelete: "cascade" }),
++  },
++  (table) => [primaryKey({ columns: [table.taskId, table.labelId] })],
++);
+diff -ruN a/src/labels/labels.interface.ts b/src/labels/labels.interface.ts
+--- /dev/null
++++ b/src/labels/labels.interface.ts
+@@ -0,0 +1,14 @@
++import type { Label } from "./labels.model";
++
++/** Storage the labels service needs; the Drizzle implementation lives in labels.repository.ts. */
++export interface LabelRepository {
++  listForOrg(orgId: string): Promise<Label[]>;
++  findById(orgId: string, labelId: string): Promise<Label | undefined>;
++  insert(label: Label): Promise<void>;
++  taskInOrg(orgId: string, taskId: string): Promise<boolean>;
++  attach(taskId: string, labelId: string): Promise<void>;
++  detach(taskId: string, labelId: string): Promise<void>;
++  listForTask(taskId: string): Promise<Label[]>;
++}
++
++export type IdGenerator = () => string;
+diff -ruN a/src/labels/labels.mock.ts b/src/labels/labels.mock.ts
+--- /dev/null
++++ b/src/labels/labels.mock.ts
+@@ -0,0 +1,43 @@
++import type { LabelRepository } from "./labels.interface";
++import type { Label } from "./labels.model";
++
++let sequence = 0;
++
++export function buildLabel(overrides: Partial<Label> = {}): Label {
++  sequence += 1;
++  return {
++    id: `lbl_${sequence}`,
++    orgId: "org_test",
++    name: `Label ${sequence}`,
++    color: "#336699",
++    ...overrides,
++  };
++}
++
++/** In-memory LabelRepository for service tests. `tasks` maps task id to organization id. */
++export function createFakeLabelRepository(
++  seed: { labels?: Label[]; tasks?: Record<string, string> } = {},
++): LabelRepository {
++  const stored = [...(seed.labels ?? [])];
++  const taskOrgs = new Map(Object.entries(seed.tasks ?? {}));
++  const links = new Set<string>();
++  const link = (taskId: string, labelId: string) => `${taskId}:${labelId}`;
++  return {
++    listForOrg: async (orgId) =>
++      stored.filter((label) => label.orgId === orgId),
++    findById: async (orgId, labelId) =>
++      stored.find((label) => label.id === labelId && label.orgId === orgId),
++    insert: async (label) => {
++      stored.push(label);
++    },
++    taskInOrg: async (orgId, taskId) => taskOrgs.get(taskId) === orgId,
++    attach: async (taskId, labelId) => {
++      links.add(link(taskId, labelId));
++    },
++    detach: async (taskId, labelId) => {
++      links.delete(link(taskId, labelId));
++    },
++    listForTask: async (taskId) =>
++      stored.filter((label) => links.has(link(taskId, label.id))),
++  };
++}
+diff -ruN a/src/labels/labels.model.ts b/src/labels/labels.model.ts
+--- /dev/null
++++ b/src/labels/labels.model.ts
+@@ -0,0 +1,33 @@
++export interface Label {
++  id: string;
++  orgId: string;
++  name: string;
++  color: string;
++}
++
++export interface NewLabel {
++  name: string;
++  color: string;
++}
++
++export type LabelResult<T> =
++  | { ok: true; value: T }
++  | { ok: false; error: "label_exists" | "task_not_found" | "label_not_found" };
++
++export interface LabelResponse {
++  id: string;
++  name: string;
++  color: string;
++}
++
++/** Label names compare case-insensitively within an organization. */
++export const labelNameKey = (name: string): string => name.trim();
++
++export const toLabelResponse = ({ id, name, color }: Label): LabelResponse => ({
++  id,
++  name,
++  color,
++});
++
++export const byName = (left: Label, right: Label): number =>
++  labelNameKey(left.name).localeCompare(labelNameKey(right.name));
+diff -ruN a/src/labels/labels.repository.ts b/src/labels/labels.repository.ts
+--- /dev/null
++++ b/src/labels/labels.repository.ts
+@@ -0,0 +1,55 @@
++import { and, eq } from "drizzle-orm";
++
++import type { Db } from "../db/client";
++import { labels, taskLabels, tasks } from "../db/schema";
++import type { LabelRepository } from "./labels.interface";
++
++const columns = {
++  id: labels.id,
++  orgId: labels.orgId,
++  name: labels.name,
++  color: labels.color,
++};
++
++export function createDrizzleLabelRepository(db: Db): LabelRepository {
++  return {
++    listForOrg: (orgId) =>
++      db.select(columns).from(labels).where(eq(labels.orgId, orgId)),
++    findById: (orgId, labelId) =>
++      db
++        .select(columns)
++        .from(labels)
++        .where(and(eq(labels.id, labelId), eq(labels.orgId, orgId)))
++        .get(),
++    async insert(label) {
++      await db.insert(labels).values(label);
++    },
++    async taskInOrg(orgId, taskId) {
++      const row = await db
++        .select({ id: tasks.id })
++        .from(tasks)
++        .where(and(eq(tasks.id, taskId), eq(tasks.orgId, orgId)))
++        .get();
++      return row !== undefined;
++    },
++    async attach(taskId, labelId) {
++      await db
++        .insert(taskLabels)
++        .values({ taskId, labelId })
++        .onConflictDoNothing();
++    },
++    async detach(taskId, labelId) {
++      await db
++        .delete(taskLabels)
++        .where(
++          and(eq(taskLabels.taskId, taskId), eq(taskLabels.labelId, labelId)),
++        );
++    },
++    listForTask: (taskId) =>
++      db
++        .select(columns)
++        .from(taskLabels)
++        .innerJoin(labels, eq(labels.id, taskLabels.labelId))
++        .where(eq(taskLabels.taskId, taskId)),
++  };
++}
+diff -ruN a/src/labels/labels.service.test.ts b/src/labels/labels.service.test.ts
+--- /dev/null
++++ b/src/labels/labels.service.test.ts
+@@ -0,0 +1,43 @@
++import { describe, expect, it } from "vitest";
++
++import { buildLabel, createFakeLabelRepository } from "./labels.mock";
++import { createLabelService } from "./labels.service";
++
++describe("label service", () => {
++  it("refuses a duplicate name regardless of case", async () => {
++    const repository = createFakeLabelRepository({
++      labels: [buildLabel({ orgId: "org_a", name: "Bug" })],
++    });
++    const service = createLabelService(repository, () => "lbl_new");
++    expect(
++      await service.create("org_a", { name: " bug ", color: "#ff0000" }),
++    ).toEqual({
++      ok: false,
++      error: "label_exists",
++    });
++    expect(
++      await service.create("org_b", { name: "Bug", color: "#ff0000" }),
++    ).toMatchObject({
++      ok: true,
++    });
++  });
++
++  it("only attaches labels and tasks of the same organization", async () => {
++    const label = buildLabel({ orgId: "org_a" });
++    const repository = createFakeLabelRepository({
++      labels: [label],
++      tasks: { tsk_a: "org_a", tsk_b: "org_b" },
++    });
++    const service = createLabelService(repository, () => "unused");
++    expect(await service.setAttached("org_a", "tsk_b", label.id, true)).toEqual(
++      {
++        ok: false,
++        error: "task_not_found",
++      },
++    );
++    expect(await service.setAttached("org_a", "tsk_a", label.id, true)).toEqual(
++      { ok: true, value: null },
++    );
++    expect(await service.forTask("tsk_a")).toEqual([label]);
++  });
++});
+diff -ruN a/src/labels/labels.service.ts b/src/labels/labels.service.ts
+--- /dev/null
++++ b/src/labels/labels.service.ts
+@@ -0,0 +1,56 @@
++import type { IdGenerator, LabelRepository } from "./labels.interface";
++import {
++  byName,
++  labelNameKey,
++  type Label,
++  type LabelResult,
++  type NewLabel,
++} from "./labels.model";
++
++export function createLabelService(
++  repository: LabelRepository,
++  newId: IdGenerator,
++) {
++  return {
++    async list(orgId: string): Promise<Label[]> {
++      return (await repository.listForOrg(orgId)).sort(byName);
++    },
++
++    async create(orgId: string, input: NewLabel): Promise<LabelResult<Label>> {
++      const key = labelNameKey(input.name);
++      const existing = await repository.listForOrg(orgId);
++      if (existing.some((label) => labelNameKey(label.name) === key)) {
++        return { ok: false, error: "label_exists" };
++      }
++      const label = {
++        id: newId(),
++        orgId,
++        name: input.name.trim(),
++        color: input.color,
++      };
++      await repository.insert(label);
++      return { ok: true, value: label };
++    },
++
++    async setAttached(
++      orgId: string,
++      taskId: string,
++      labelId: string,
++      attached: boolean,
++    ): Promise<LabelResult<null>> {
++      if (!(await repository.taskInOrg(orgId, taskId)))
++        return { ok: false, error: "task_not_found" };
++      if (!(await repository.findById(orgId, labelId)))
++        return { ok: false, error: "label_not_found" };
++      if (attached) await repository.attach(taskId, labelId);
++      else await repository.detach(taskId, labelId);
++      return { ok: true, value: null };
++    },
++
++    async forTask(taskId: string): Promise<Label[]> {
++      return (await repository.listForTask(taskId)).sort(byName);
++    },
++  };
++}
++
++export type LabelService = ReturnType<typeof createLabelService>;
+diff -ruN a/src/routes/labels.ts b/src/routes/labels.ts
+--- /dev/null
++++ b/src/routes/labels.ts
+@@ -0,0 +1,83 @@
++import { Elysia, t } from "elysia";
++
++import type { Db } from "../db/client";
++import { toLabelResponse, type LabelResult } from "../labels/labels.model";
++import { createDrizzleLabelRepository } from "../labels/labels.repository";
++import { createLabelService } from "../labels/labels.service";
++import { newId } from "../lib/ids";
++import { authGuard } from "../plugins/auth";
++
++function attachmentResponse(result: LabelResult<null>): Response {
++  if (result.ok) return new Response(null, { status: 204 });
++  return Response.json(
++    { code: result.error, message: result.error.replace("_", " ") },
++    { status: 404 },
++  );
++}
++
++export const labelRoutes = (db: Db) => {
++  const service = createLabelService(createDrizzleLabelRepository(db), () =>
++    newId("lbl"),
++  );
++  return new Elysia({ prefix: "/api" })
++    .use(authGuard(db))
++    .get(
++      "/labels",
++      async ({ user }) => ({
++        items: (await service.list(user.orgId)).map(toLabelResponse),
++      }),
++      { requireAuth: true },
++    )
++    .post(
++      "/labels",
++      async ({ body, user, status }) => {
++        if (user.role !== "admin") {
++          return status(403, {
++            code: "forbidden",
++            message: "only admins can create labels",
++          });
++        }
++        const result = await service.create(user.orgId, body);
++        if (!result.ok) {
++          return status(409, {
++            code: "label_exists",
++            message: "a label with this name exists",
++          });
++        }
++        return status(201, toLabelResponse(result.value));
++      },
++      {
++        requireAuth: true,
++        body: t.Object({
++          name: t.String({ minLength: 1, maxLength: 40, pattern: "\\S" }),
++          color: t.String({ pattern: "^#[0-9a-fA-F]{6}$" }),
++        }),
++      },
++    )
++    .put(
++      "/tasks/:id/labels/:labelId",
++      async ({ params, user }) =>
++        attachmentResponse(
++          await service.setAttached(
++            user.orgId,
++            params.id,
++            params.labelId,
++            true,
++          ),
++        ),
++      { requireAuth: true },
++    )
++    .delete(
++      "/tasks/:id/labels/:labelId",
++      async ({ params, user }) =>
++        attachmentResponse(
++          await service.setAttached(
++            user.orgId,
++            params.id,
++            params.labelId,
++            false,
++          ),
++        ),
++      { requireAuth: true },
++    );
++};
+diff -ruN a/src/routes/tasks.ts b/src/routes/tasks.ts
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -3,12 +3,20 @@
+ 
+ import type { Db } from "../db/client";
+ import { tasks, users, type TaskStatus } from "../db/schema";
++import { toLabelResponse } from "../labels/labels.model";
++import { createDrizzleLabelRepository } from "../labels/labels.repository";
++import { createLabelService } from "../labels/labels.service";
++import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+ 
+-export const taskRoutes = (db: Db) =>
+-  new Elysia({ prefix: "/api/tasks" })
++export const taskRoutes = (db: Db) => {
++  const labelService = createLabelService(
++    createDrizzleLabelRepository(db),
++    () => newId("lbl"),
++  );
++  return new Elysia({ prefix: "/api/tasks" })
+     .use(authGuard(db))
+     .get(
+       "/:id",
+@@ -19,7 +27,8 @@
+           .where(eq(tasks.id, params.id))
+           .get();
+         if (!task) return status(404, { error: "task not found" });
+-        return toTaskResponse(task);
++        const labels = await labelService.forTask(task.id);
++        return { ...toTaskResponse(task), labels: labels.map(toLabelResponse) };
+       },
+       { requireAuth: true },
+     )
+@@ -148,3 +157,4 @@
+       },
+       { requireAuth: true },
+     );
++};

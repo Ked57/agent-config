@@ -229,6 +229,40 @@ them. Each test exercises only the HTTP contract stated in the task prompt. On t
 fixture, `task-update-rules` passes (it checks that behaviour is preserved) and every other hidden
 test fails for the reason its task targets.
 
+### Mutation gate
+
+A hidden test or task check is only trusted once it tells right from wrong solutions.
+`fixtures/<fixture>/mutants/<task id>/` holds patches
+against the template and a `manifest.json`:
+
+```jsonc
+{
+  "task": "B5-webhook-idempotency",
+  "baselinePasses": false,  // true for behaviour-preservation tasks: the untouched fixture passes the hidden check
+  "references": [{ "file": "reference-aa-A-r2.patch", "source": "validation-ts-backend-aa A r2" }],
+  "knownFailing": [{ "file": "known-failing-aa-A-r1.patch", "source": "…", "reason": "why this real solution is wrong" }],
+  "mutants": [{ "file": "m4-wrong-key.patch", "wrong": "what is wrong", "violates": "the prompt sentence", "expect": "killed" }]
+}
+```
+
+`npm run eval:mutants` copies a prepared fixture once per patch (to
+`${AGENT_CONFIG_EVALS_SANDBOX:-/var/tmp/agent-config-evals}/mutants/`), applies it with `git apply` and
+scores the task's checks exactly as `--recheck` does. It fails when a reference fails a required
+check, a known-failing solution passes, the untouched fixture passes, a mutant marked `killed`
+survives, or a task kills fewer than 80% of its mutants (`expect: "survives"` mutants count against
+the rate and need a `why`). Options: `--set`, `--fixture`, `--task`, `--concurrency` (default 4),
+`--json <file>`, `--keep`. It makes no model calls. The full ts-backend run takes about 4.5 minutes
+at concurrency 4 (the B9 backoff and B11 startup tests dominate), so `npm run verify` runs only
+`tests/evals-mutants.test.mjs`: every task with a hidden test has a valid manifest, every patch
+applies to the template, at least 5 mutants per task (3 for controls) and a declared kill rate of
+at least 80%. Run the gate after changing any hidden test, check or prompt.
+
+Make a patch from a worked app (a saved run's `app/`, or a copy you broke by hand) with
+`npm run eval:mutants -- --fixture ts-backend --make-patch <app> > <task>/m7-….patch`. It diffs
+against the template with the fixture's `diffExclude` (so no drizzle snapshots) and strips
+timestamps. A mutant should differ from a real solution only in its bug: keep the solution's own
+tests in it, or a "tests added" check kills it for the wrong reason.
+
 ## Task sets
 
 `tasks/<name>.json` holds prompts written the way a user would ask, never naming the policy under

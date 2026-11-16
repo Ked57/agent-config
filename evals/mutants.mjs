@@ -30,7 +30,7 @@ const USAGE = `Usage: npm run eval:mutants -- [options]
 
 /** Reads the task's manifest and lists its directory; null when the task has no mutants. */
 export function taskMutants(fixture, task) {
-  const dir = path.join(fixture.dir, task.mutants ?? path.join('mutants', task.id));
+  const dir = path.join(fixture.dir, 'mutants', task.id);
   const file = path.join(dir, 'manifest.json');
   if (!fs.existsSync(file)) return null;
   return { dir, manifest: JSON.parse(fs.readFileSync(file, 'utf8')), files: fs.readdirSync(dir) };
