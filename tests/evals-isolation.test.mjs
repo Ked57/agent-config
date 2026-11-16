@@ -105,7 +105,23 @@ test('initProblems accepts a run that loads exactly what the arm probe saw', () 
   assert.equal(expected.plugins[1].path, '~/.claude/plugins/cache/cursor-plugins/pstack/0.15.42');
   const home = '/sandbox/e/runs/r1/home';
   const app = '/sandbox/e/runs/r1/app';
-  assert.deepEqual(initProblems({ expected, init: init(home, app), runHome: home, app }), []);
+  assert.deepEqual(initProblems({ expected, builtins: BUILTINS, init: init(home, app), runHome: home, app }), { problems: [], notes: [] });
+});
+
+test('initProblems notes absent built-ins but still fails extra or missing installed components', () => {
+  // The observed case: a rate-limited account's init event lacked three account-gated built-in skills.
+  const builtins = { ...BUILTINS, skills: [...BUILTINS.skills, 'design', 'design-sync', 'schedule'] };
+  const probeHome = '/p/home';
+  const expected = sessionComponents(init(probeHome, '/p/cwd', { skills: ['debug', 'design', 'design-sync', 'schedule', 'simplify', 'manual-qa', 'pstack:poteto-mode'] }), probeHome);
+  const home = '/s/runs/r1/home';
+  const app = '/s/runs/r1/app';
+  assert.deepEqual(initProblems({ expected, builtins, init: init(home, app), runHome: home, app }), { problems: [], notes: ['built-in skills absent: design, design-sync, schedule'] });
+  const noBuiltinAgent = init(home, app, { agents: ['general-purpose', 'pstack:poteto-agent'] });
+  assert.deepEqual(initProblems({ expected, builtins, init: noBuiltinAgent, runHome: home, app }).notes, ['built-in skills absent: design, design-sync, schedule', 'built-in agents absent: Explore']);
+  const leak = init(home, app, { skills: ['debug', 'simplify', 'manual-qa', 'pstack:poteto-mode', 'step-ssh'] });
+  assert.deepEqual(initProblems({ expected, builtins, init: leak, runHome: home, app }).problems, ['unexpected skills: step-ssh']);
+  const lost = init(home, app, { skills: ['debug', 'design', 'design-sync', 'schedule', 'simplify', 'pstack:poteto-mode'] });
+  assert.deepEqual(initProblems({ expected, builtins, init: lost, runHome: home, app }), { problems: ['missing skills: manual-qa'], notes: [] });
 });
 
 test('initProblems names every way a run can differ from its arm', () => {
@@ -119,11 +135,11 @@ test('initProblems names every way a run can differ from its arm', () => {
     mcp_servers: [{ name: 'paseo', status: 'connected' }],
     memory_paths: { auto: '/home/u/.claude/projects/x/memory/' }
   });
-  const problems = initProblems({ expected, init: leaky, runHome: home, app });
+  const { problems } = initProblems({ expected, builtins: BUILTINS, init: leaky, runHome: home, app });
   for (const pattern of [/unexpected skills: paseo, paseo-handoff, step-ssh, vault-run/, /unexpected plugins: pstack@0\.16\.0/, /missing plugins: pstack@0\.15\.42/, /missing agents: pstack:poteto-agent/, /MCP servers loaded: paseo/, /cwd \/home\/u\/evals\/app/, /memory path .* outside the run home/, /plugin pstack loaded from \/home\/u/]) {
     assert.ok(problems.some((problem) => pattern.test(problem)), `${pattern} in ${problems.join(' | ')}`);
   }
-  assert.deepEqual(initProblems({ expected, init: null, runHome: home, app }), ['no init event in the transcript']);
+  assert.deepEqual(initProblems({ expected, builtins: BUILTINS, init: null, runHome: home, app }).problems, ['no init event in the transcript']);
 });
 
 test('initEvent takes the first init event of a transcript', () => {
@@ -384,4 +400,23 @@ test('providerFailure tells a usage limit or overload from a task failure', asyn
   assert.equal(providerFailure('{"type":"result","is_error":false,"subtype":"success","result":"Done. Added a rate limit of 429 responses."}'), null, 'a successful run talking about rate limits is not a failure');
   assert.equal(providerFailure('{"type":"result","is_error":true,"subtype":"error_max_turns","result":""}'), null);
   assert.equal(providerFailure('', ''), null);
+});
+
+test('providerFailure treats a session that did no work as a refusal, but not a real failed run', async () => {
+  const { providerFailure } = await import('../evals/lib/providers/claude.mjs');
+  const initLine = { type: 'system', subtype: 'init', skills: [] };
+  const synthetic = { type: 'assistant', message: { model: '<synthetic>', content: [{ type: 'text', text: 'Please try again.' }] } };
+  const refused = (result) => providerFailure(jsonl(initLine, synthetic, result));
+  // No 429 text anywhere: an error result with $0 and one turn, or with a short duration.
+  assert.equal(refused({ type: 'result', is_error: true, subtype: 'success', num_turns: 1, total_cost_usd: 0, result: 'Something went wrong' }).kind, 'transient');
+  assert.equal(refused({ type: 'result', is_error: true, subtype: 'error_during_execution', num_turns: 3, duration_ms: 4000 }).kind, 'transient');
+  assert.equal(providerFailure(jsonl(initLine, synthetic)).kind, 'transient', 'a session with no result and no reply was refused');
+  // Real work still counts as a failed run: cost, tool calls, a model reply, or many turns.
+  assert.equal(refused({ type: 'result', is_error: true, num_turns: 1, total_cost_usd: 0.42, result: 'boom' }), null);
+  const tool = { type: 'assistant', message: { model: 'claude-opus-5-5', content: [{ type: 'tool_use', name: 'Bash', input: { command: 'ls' } }] } };
+  assert.equal(providerFailure(jsonl(initLine, tool, { type: 'result', is_error: true, num_turns: 1, total_cost_usd: 0, result: 'boom' })), null);
+  assert.equal(providerFailure(jsonl(initLine, tool)), null, 'a run killed mid-work is not a refusal');
+  assert.equal(providerFailure(jsonl(initLine, { type: 'assistant', message: { model: 'claude-opus-5-5', content: [{ type: 'text', text: 'thinking' }] } })), null);
+  assert.equal(refused({ type: 'result', is_error: true, subtype: 'error_max_turns', num_turns: 40, duration_ms: 600000, total_cost_usd: 0 }), null);
+  assert.equal(refused({ type: 'result', is_error: false, subtype: 'success', num_turns: 1, total_cost_usd: 0, result: 'ok' }), null, 'a successful result is never a refusal');
 });

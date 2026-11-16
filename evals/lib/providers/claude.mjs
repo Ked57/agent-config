@@ -93,14 +93,25 @@ const TRANSIENT_TEXT = /overloaded|api_error|internal server error|\b50[0-9]\b|s
  * Whether a session ended because of the provider, not the task: a usage or rate limit (429, "You've
  * hit your session limit · resets 9:40am (UTC)") or a transient API failure (overloaded, 5xx).
  * `output` is the stream-json transcript or a `--output-format json` envelope; `stderr` is checked
- * when there is no result. Returns `{ kind: 'usage-limit' | 'transient', message, resets }` or null.
+ * when there is no result. A session that started but produced no usable work (no result or an error
+ * result, $0, no tool calls, and at most one turn or under 20 s) was refused even without a 429 in the
+ * text, and counts as transient. Returns `{ kind: 'usage-limit' | 'transient', message, resets }` or null.
  */
 export function providerFailure(output = '', stderr = '') {
   let result = null;
+  let started = false;
+  let toolCalls = 0;
+  let replies = 0;
   for (const line of output.split('\n')) {
     try {
       const event = JSON.parse(line);
       if (event?.type === 'result') result = event;
+      if (event?.type === 'system' && event.subtype === 'init') started = true;
+      if (event?.type === 'assistant') {
+        toolCalls += (event.message?.content ?? []).filter((block) => block?.type === 'tool_use').length;
+        // Claude Code reports API errors as `<synthetic>` assistant messages; those are not replies.
+        if (event.message?.model !== '<synthetic>') replies += 1;
+      }
     } catch {
       // not JSON
     }
@@ -111,8 +122,20 @@ export function providerFailure(output = '', stderr = '') {
     const message = text.trim().split('\n')[0].slice(0, 300);
     return { kind: limited ? 'usage-limit' : 'transient', message, resets: /resets\s+([^\n·]+?)\s*$/im.exec(text)?.[1] ?? null };
   };
-  if (result) return result.is_error ? classify([result.api_error, result.result, result.error].filter(Boolean).join('\n'), result.api_error_status ?? null) : null;
-  return stderr ? classify(stderr, null) : null;
+  const explicit = result
+    ? (result.is_error ? classify([result.api_error, result.result, result.error].filter(Boolean).join('\n'), result.api_error_status ?? null) : null)
+    : (stderr ? classify(stderr, null) : null);
+  if (explicit) return explicit;
+  // Turns or duration must be reported as near zero: an error result without them (e.g. max turns
+  // with a missing count) is not taken for a refusal. Without a result, any real model reply is work.
+  const below = (value, max) => typeof value === 'number' && value <= max;
+  const noWork = !(result?.total_cost_usd > 0) && toolCalls === 0
+    && (result ? below(result.num_turns, 1) || below(result.duration_ms, 20000) : started && replies === 0);
+  if ((!result || result.is_error) && noWork) {
+    const what = result ? `an error result after ${result.num_turns ?? '?'} turn(s)` : 'no result';
+    return { kind: 'transient', message: `session ended with ${what}, $0 and no tool calls (provider refusal)`, resets: null };
+  }
+  return null;
 }
 
 const runProcess = ({ args, cwd, env, stdoutFile, stderrFile, stdin, timeoutMs }) => new Promise((resolve) => {

@@ -150,17 +150,22 @@ function collectSessions(root) {
  * The per-run isolation check: the run's init event against the arm's probe, and every instruction
  * file its sessions loaded against the run's own home and working copy.
  */
-function checkIsolation({ arm, runHome, app, runDir, provider, record, sessions, sessionText }) {
+function checkIsolation({ arm, builtins, runHome, app, runDir, provider, record, sessions, sessionText }) {
   const transcriptFile = path.join(runDir, provider.transcriptFile);
   const init = initEvent(fs.existsSync(transcriptFile) ? fs.readFileSync(transcriptFile, 'utf8') : '');
   const problems = [];
+  const notes = [];
   // A run that died before its session started has nothing to verify and is already an error.
-  if (init || record.status === 'ok') problems.push(...initProblems({ expected: arm.expected, init, runHome, app }));
+  if (init || record.status === 'ok') {
+    const checked = initProblems({ expected: arm.expected, builtins, init, runHome, app });
+    problems.push(...checked.problems);
+    notes.push(...checked.notes);
+  }
   if (init && !sessions.length) problems.push('no session log, so loaded instruction files could not be checked');
   const instructions = loadedInstructionFiles(sessionText);
   problems.push(...strayInstructionFiles(instructions, [runHome, app]).map((file) => `instruction file outside the run: ${file}`));
   const shown = (file) => file.split(runHome).join('~').split(app).join('<app>');
-  return { ok: problems.length === 0, problems, instructions: instructions.map(shown), commands: invokedCommands(sessionText) };
+  return { ok: problems.length === 0, problems, ...(notes.length ? { notes } : {}), instructions: instructions.map(shown), commands: invokedCommands(sessionText) };
 }
 
 /**
@@ -584,8 +589,9 @@ async function main() {
       // Stop browsers, then anything else the run left behind (the provider already killed its process group).
       spawnSync('agent-browser', ['close'], { env: { PATH: process.env.PATH, HOME: runHome, AGENT_BROWSER_SESSION: env.AGENT_BROWSER_SESSION }, timeout: 20000 });
       const strays = killStrays({ root: runRoot, markers: strayMarkers });
-      // A run the provider cut off (usage limit, overload) or that died from a signal without a result
-      // (service restart) says nothing about the task: record nothing, so --resume redoes it.
+      // A run the provider cut off or refused (usage limit, overload, an error or missing result with $0
+      // and no tool calls) or that died from a signal without a result (service restart) says nothing
+      // about the task: record nothing, so --resume redoes it. This runs before the isolation check.
       const readText = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '');
       const transcriptText = readText(path.join(runDir, provider.transcriptFile));
       const failure = provider.providerFailure?.(transcriptText, readText(path.join(runDir, 'stderr.log'))) ?? null;
@@ -618,7 +624,7 @@ async function main() {
         const usd = sessions.filter((session) => !session.relative.includes('/subagents/')).reduce((sum, session) => sum + (sessionCostUsd(session.text) ?? 0), 0);
         if (usd > 0) record.cost = { ...record.cost, usd, usdSource: 'session-log' };
       }
-      record.isolation = checkIsolation({ arm, runHome, app, runDir, provider, record, sessions, sessionText });
+      record.isolation = checkIsolation({ arm, builtins: armsInfo.builtins, runHome, app, runDir, provider, record, sessions, sessionText });
       if (!record.isolation.ok) {
         record.status = 'isolation';
         record.error = `isolation: ${record.isolation.problems.join('; ')}`;

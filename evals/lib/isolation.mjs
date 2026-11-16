@@ -32,31 +32,41 @@ export function sessionComponents(init, home) {
   };
 }
 
-const setDiff = (label, expected, actual) => {
+// Extra items are problems; missing items are problems unless built in, where they are only notes.
+const setDiff = (label, expected, actual, builtin) => {
   const want = new Set(expected);
   const have = new Set(actual);
   const missing = [...want].filter((item) => !have.has(item));
   const extra = [...have].filter((item) => !want.has(item));
-  return [
-    ...(extra.length ? [`unexpected ${label}: ${extra.join(', ')}`] : []),
-    ...(missing.length ? [`missing ${label}: ${missing.join(', ')}`] : [])
-  ];
+  const installed = missing.filter((item) => !builtin.has(item));
+  const absentBuiltins = missing.filter((item) => builtin.has(item));
+  return {
+    problems: [
+      ...(extra.length ? [`unexpected ${label}: ${extra.join(', ')}`] : []),
+      ...(installed.length ? [`missing ${label}: ${installed.join(', ')}`] : [])
+    ],
+    notes: absentBuiltins.length ? [`built-in ${label} absent: ${absentBuiltins.join(', ')}`] : []
+  };
 };
 const pluginKey = (plugin) => `${plugin.name}@${plugin.version ?? '?'}`;
 
 /**
- * Problems with a run's init event against the arm's expectation (from its probe): skills, plugins
- * (name and version) and agents must match exactly, no MCP server may load, the cwd must be the run's
- * working copy, and memory and plugin paths must sit under the run home.
+ * A run's init event against the arm's expectation (from its probe): no skill, plugin (name and
+ * version) or agent beyond the expectation, none the arm installed missing, no MCP server, the cwd is
+ * the run's working copy, and memory and plugin paths sit under the run home. Built-ins (the empty-home
+ * probe's `builtins`) vary with account state and CLI flags, so an absent one is a note, not a problem.
+ * Returns `{ problems, notes }`.
  */
-export function initProblems({ expected, init, runHome, app }) {
-  if (!init) return ['no init event in the transcript'];
+export function initProblems({ expected, builtins, init, runHome, app }) {
+  if (!init) return { problems: ['no init event in the transcript'], notes: [] };
   const actual = sessionComponents(init, runHome);
-  const problems = [
-    ...setDiff('skills', expected.skills, actual.skills),
-    ...setDiff('plugins', expected.plugins.map(pluginKey), actual.plugins.map(pluginKey)),
-    ...setDiff('agents', expected.agents, actual.agents)
+  const diffs = [
+    setDiff('skills', expected.skills, actual.skills, new Set(builtins.skills)),
+    setDiff('plugins', expected.plugins.map(pluginKey), actual.plugins.map(pluginKey), new Set(builtins.plugins.map(pluginKey))),
+    setDiff('agents', expected.agents, actual.agents, new Set(builtins.agents))
   ];
+  const problems = diffs.flatMap((diff) => diff.problems);
+  const notes = diffs.flatMap((diff) => diff.notes);
   if (actual.mcpServers.length) problems.push(`MCP servers loaded: ${actual.mcpServers.join(', ')}`);
   if (path.resolve(init.cwd ?? '') !== path.resolve(app)) problems.push(`cwd ${init.cwd} is not the run's working copy ${app}`);
   for (const [kind, memory] of Object.entries(init.memory_paths ?? {})) {
@@ -65,7 +75,7 @@ export function initProblems({ expected, init, runHome, app }) {
   for (const plugin of init.plugins ?? []) {
     if (plugin.path && plugin.path !== 'builtin' && !isInside(plugin.path, runHome)) problems.push(`plugin ${plugin.name} loaded from ${plugin.path}, outside the run home`);
   }
-  return problems;
+  return { problems, notes };
 }
 
 /**

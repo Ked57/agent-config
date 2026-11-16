@@ -131,7 +131,8 @@ copied to `<results>/runs/<id>/session/`, and the run's home and tmp are deleted
   plugin paths under the run home. Every instruction file the session log records as loaded
   (`attachment.type: "instructions"`, which lists CLAUDE.md and its `@` imports) must sit under the run
   home or the `app`. The result is the run record's `isolation` (`ok`, `problems`, `instructions`,
-  `commands`).
+  `commands`). An extra component or a missing one the arm installed fails the check, but a missing
+  built-in (account state and CLI flags can hide them) is only recorded in `isolation.notes`.
 - A run that fails gets `status: "isolation"` and an `error` naming the difference. It is excluded
   from aggregation and judging and listed in the report's integrity warnings. By default the eval stops
   at the first such run; `--no-strict-isolation` keeps going.
