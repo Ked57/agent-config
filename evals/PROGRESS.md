@@ -219,8 +219,8 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
 
 | # | Item | State |
 |---|---|---|
-| R1 | `fix/skill-bugs` from `origin/main` (worktree `../fix-skill-bugs`): Halstead package in `fullstack-typescript-static`; `emil-design-eng` never loading; regression tests; cherry-pick into `feat/repo-evals` | in flight (agent R1) |
-| R2 | Suite: arm result reuse ("reused from <dir>"), no bare arm in future comparisons, `"reporter": "json-score"` for continuous checks | not started |
+| R1 | `fix/skill-bugs` from `origin/main` (worktree `../fix-skill-bugs`): Halstead package in `fullstack-typescript-static`; `emil-design-eng` never loading; regression tests; cherry-pick into `feat/repo-evals` | done: `fix/skill-bugs` pushed (`baac20a`, `d7d0108`), cherry-picked into `feat/repo-evals` |
+| R2 | Suite: arm result reuse ("reused from <dir>"), no bare arm in future comparisons, `"reporter": "json-score"` for continuous checks | in flight (agent R2) |
 | R3 | `vue-design`: about 6 mockup screens (reference → Playwright PNGs), visual similarity + DOM layout + behaviour + axe, mutants, calibration | not started |
 | R4 | Harder backend set: RacePlanr replay feasibility first (time-boxed), else legacy fixture + symptom-only bugs + implied invariants + budgets + spec conformance; mutants; calibration to 30–60% failing | not started |
 | R5.1 | Comparison: `main` vs `fix/skill-bugs` on `vue-design` | not started |
@@ -242,3 +242,5 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
 ## Round 2 log
 
 - 15:35 UTC: heartbeat created; R1 started.
+- 16:00 UTC: R1 done ($0.90 of probes). Halstead: the package exists as `quality-metrics` (the skill never named it; agents guessed `eslint-plugin-quality-metrics`, which 404s); skill now names it and its install line; test `tests/skill-references.test.mjs` checks install lists against a verified allowlist. `emil-design-eng`: installed and listed fine; agents on a working Vue task read routing and the Vue policy but skipped the bare skill name. Fix: sharper routing line plus a load step in `policy/vue-primevue.md`. Haiku probes on a working Vue task: before 0 of 4 loaded it, routing line alone 0 of 9, final fix 2 of 5 (2 of 2 runs that read the Vue policy; sonnet 1 of 1); control prompt 0 of 2. About 45% of haiku runs never read `routing.md` at all: not fixed.
+- 16:02 UTC: R2 started (arm reuse, `json-score` reporter, telemetry undercount, concurrency default 1).
