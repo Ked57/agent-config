@@ -86,7 +86,7 @@ on the first check with `"browserTools": true`).
    Tailwind tokens, accessible names for icon-only controls). Check lint and `vue-tsc`.
 3. Save it as `mutants/D<n>-<screen>/reference.patch` against the template (`git diff` of the scratch copy, or
    `npm run eval:mutants -- --fixture vue-primevue --make-patch <app>`).
-4. Write `design/<screen>/screen.json`: `task`, `route`, `figma` (`fileKey` of 22 letters and digits, file and
+4. Write `design/<screen>/screen.json`: `task`, `route`, `service` (the seed module, when it is not `src/services/<screen>.ts`), `figma` (`fileKey` of 22 letters and digits, file and
    page name), `frames` (id, `nodeId` like `13-2`, designer-style `name`, `viewport`, optional `query`, `steps`,
    `masks`), `layout` (6–25 key elements per frame) and `behaviour` tests. Copy `analytics/screen.json`'s shape.
 5. Run `AGENT_CONFIG_EVALS_SANDBOX=<scratch sandbox> node evals/fixtures/vue-primevue/design/tools/export-frames.mjs <screen>`.
