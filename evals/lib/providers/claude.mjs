@@ -172,8 +172,9 @@ export const claudeProvider = {
   /** Where Claude Code keeps session logs for a config home (one jsonl per session, subagents below). */
   sessionRoot: (home) => path.join(home, '.claude', 'projects'),
 
-  async runAgent({ home, cwd, tmp, prompt, model, effort, transcriptPath, stderrPath, timeoutMs, env = {} }) {
-    const args = ['-p', prompt, '--model', model, '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions', '--strict-mcp-config'];
+  /** `mcpConfig`: a per-run `--mcp-config` file (an input mode's servers); `--strict-mcp-config` keeps every other server out. */
+  async runAgent({ home, cwd, tmp, prompt, model, effort, transcriptPath, stderrPath, timeoutMs, env = {}, mcpConfig = null }) {
+    const args = ['-p', prompt, '--model', model, '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions', ...(mcpConfig ? ['--mcp-config', mcpConfig] : []), '--strict-mcp-config'];
     if (effort) args.push('--effort', effort);
     return runProcess({ args, cwd, env: claudeEnv(home, env, tmp), stdoutFile: transcriptPath, stderrFile: stderrPath, timeoutMs });
   },

@@ -17,7 +17,7 @@ function armLine(arm, info, spec = {}) {
     ...(info.remove ?? spec.remove ?? []).map((path) => `−${path}`)
   ];
   const plugins = info.ref === 'BARE' ? 'none' : (info.plugins ?? []).map(pluginLabel).join('; ') || 'none';
-  return `| ${arm} | ${refLabel(info)} | ${cell(toggles.join(', ') || '–')} | ${spec.prefix ? `\`${cell(spec.prefix)}\`` : '–'} | ${info.pluginMode ?? '–'} | ${cell(plugins)} | ${(info.skills ?? []).length} | ${(info.policies ?? []).length} |`;
+  return `| ${arm} | ${refLabel(info)} | ${cell(toggles.join(', ') || '–')} | ${spec.prefix ? `\`${cell(spec.prefix)}\`` : '–'} | ${info.pluginMode ?? '–'} | ${cell(plugins)} | ${(info.skills ?? []).length} | ${(info.policies ?? []).length} | ${spec.mode ? `\`${cell(spec.mode)}\`` : '–'} |`;
 }
 
 function comparisonRow(label, c) {
@@ -51,11 +51,15 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture }) {
   }
 
   lines.push('## Setup', '');
-  lines.push('| Arm | Ref | Toggles | Prompt prefix | Plugin mode | Plugins (version, commit) | Skills | Policies |', '|---|---|---|---|---|---|---|---|');
+  lines.push('| Arm | Ref | Toggles | Prompt prefix | Plugin mode | Plugins (version, commit) | Skills | Policies | Input mode |', '|---|---|---|---|---|---|---|---|---|');
   lines.push(armLine('A', armsInfo.A, config.arms?.A), ...(single ? [] : [armLine('B', armsInfo.B, config.arms?.B)]), '');
   for (const arm of single ? ['A'] : ['A', 'B']) {
     const info = armsInfo[arm];
     lines.push(`- Arm ${arm} policies: ${(info.policies ?? []).join(', ') || '–'}; skills: ${(info.skills ?? []).join(', ') || '–'}.`);
+  }
+  for (const arm of single ? ['A'] : ['A', 'B']) {
+    const reuse = summary.reuse?.[arm];
+    if (reuse?.reused) lines.push(`- **Arm ${arm}: ${reuse.reused} of ${reuse.runs} runs reused** from ${reuse.sources.map((source) => `\`${source.dir}\` (${source.runs} run(s), made ${source.madeAt?.slice(0, 10) ?? 'date unknown'})`).join(', ')}: same inputsKey (arm install, plugin versions and commits, model, task, checks, fixture, rep), copied instead of run.`);
   }
   lines.push('- A task\'s own `promptPrefix` overrides the arm prefix; each run record keeps the exact prompt sent.');
   lines.push(`- Arms identical: **${armsInfo.identical ? 'yes (A/A control)' : 'no'}**. Changed between arms: ${armsInfo.changedFiles?.length ? `${armsInfo.changedFiles.length} file(s)${armsInfo.changedFiles.length > 12 ? ', first 12' : ''}: ${armsInfo.changedFiles.slice(0, 12).map((file) => `\`${file}\``).join(', ')}` : '–'}`);
@@ -68,7 +72,7 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture }) {
   }
   if (summary.stoppedEarly) lines.push(`- **Stopped early:** ${summary.stoppedEarly}. Results are partial.`);
   const spend = summary.spend;
-  if (spend) lines.push(`- Spend: agent runs $${fmt(spend.runsUsd)}, judge (\`${spend.judgeSet ?? 'n/a'}\`) $${fmt(spend.judgeUsd)}${Object.keys(spend.otherJudgeSetsUsd).length ? `, other judge sets $${fmt(Object.values(spend.otherJudgeSetsUsd).reduce((a, b) => a + b, 0))}` : ''}, total $${fmt(spend.totalUsd)}${config.maxUsd ? ` (cap $${config.maxUsd})` : ''}.`);
+  if (spend) lines.push(`- Spend: agent runs ${fmt(spend.runsUsd)}${spend.reusedRuns ? ` (new runs only; the ${spend.reusedRuns} reused run(s) recorded ${fmt((spend.reusedUsdByArm?.A ?? 0) + (spend.reusedUsdByArm?.B ?? 0))} in the evals that made them, not spent here)` : ''}, judge (\`${spend.judgeSet ?? 'n/a'}\`) $${fmt(spend.judgeUsd)}${Object.keys(spend.otherJudgeSetsUsd).length ? `, other judge sets $${fmt(Object.values(spend.otherJudgeSetsUsd).reduce((a, b) => a + b, 0))}` : ''}, total $${fmt(spend.totalUsd)}${config.maxUsd ? ` (cap $${config.maxUsd})` : ''}.`);
   for (const arm of ['A', 'B']) {
     const smoke = summary.runtimeSmoke?.[arm];
     if (smoke) lines.push(`- Runtime smoke (browser/HTTP) arm ${arm}: ${smoke.pass}/${smoke.runs} runs passed.`);
@@ -80,17 +84,27 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture }) {
     lines.push(`d = B − A per task, each arm's task value being the mean over its reps. CI: paired t over tasks (decides the verdict) and seeded task bootstrap (10,000 resamples). MDE: smallest true difference detected 80% of the time at two-sided α = 0.05, at the observed SD. Verdicts: "B better"/"A better" when the CI excludes 0, "no difference larger than ±0.10" when it lies inside ±0.10, else "cannot conclude"; fewer than 5 paired tasks always "cannot conclude".`, '');
     lines.push('| Metric | Mean A | Mean B | Mean d | SD(d) | Paired-t 95% CI | Bootstrap 95% CI | MDE | Tasks for MDE 0.10 / 0.20 | Ceiling / floor | Verdict |', '|---|---|---|---|---|---|---|---|---|---|---|');
     lines.push(comparisonRow('**Run score (primary)**', primary), comparisonRow('All-pass rate', summary.allPass), comparisonRow('Judge overall, 1–5 (secondary)', summary.judge), '');
+    if (summary.scoreComponents?.length) {
+      lines.push('### Score components (descriptive)', '', 'Continuous (`json-score`) checks that appear in at least 5 tasks, compared per task like the primary metric. Descriptive: no verdict.', '');
+      lines.push('| Check | Mean A | Mean B | Mean d | Paired-t 95% CI | Tasks |', '|---|---|---|---|---|---|');
+      for (const c of summary.scoreComponents) lines.push(`| \`${c.id}\` | ${fmt(c.meanA)} | ${fmt(c.meanB)} | ${fmtSigned(c.mean)} | ${ci(c.ci)} | ${c.tasks} |`);
+      lines.push('');
+    }
   }
 
   lines.push('## Per-task results', '');
   lines.push('Score = mean required-check score over reps (Vitest-scored checks count passed/total test cases; 0 when a gate failed or the run errored). All-pass = share of reps with every required check and gate passing. Judge = mean overall score on A/B pairs; Pref = judge preference A·B·tie.', '');
   lines.push('Hidden tests = test cases passed / run, summed over the task\'s Vitest-scored checks and reps.', '');
-  lines.push('| Task | Category | Score A | Score B | d | Hidden tests A / B | Reps A / B | All-pass A / B | Judge A / B | Pref A·B·tie | Cost $ A / B | Features A | Features B |');
-  lines.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|');
+  lines.push('Score checks = mean score per arm of each continuous (`json-score`) check. "reused" marks a task with runs copied from an earlier eval (count per arm).', '');
+  lines.push('| Task | Category | Score A | Score B | d | Hidden tests A / B | Score checks A / B | Reps A / B | All-pass A / B | Judge A / B | Pref A·B·tie | Cost $ A / B | Features A | Features B |');
+  lines.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
   const tests = (stats) => (stats.hiddenTests ? `${stats.hiddenTests.passed}/${stats.hiddenTests.total}` : '–');
+  const scoreChecks = (task) => [...new Set(['A', 'B'].flatMap((arm) => Object.entries(task[arm].checks ?? {}).filter(([, check]) => check.jsonScore).map(([id]) => id)))]
+    .map((id) => `${id} ${fmt(task.A.checks?.[id]?.score)} / ${fmt(task.B.checks?.[id]?.score)}`).join('; ') || '–';
+  const reusedMark = (task) => (task.A.reused || task.B.reused ? ` (reused: A ${task.A.reused}/${task.A.n}, B ${task.B.reused}/${task.B.n})` : '');
   for (const task of summary.perTask) {
     const p = task.judge.preference;
-    lines.push(`| ${task.id}${task.unscored ? ' (no required checks)' : ''} | ${task.category} | ${fmt(task.scoreA)} | ${fmt(task.scoreB)} | ${fmtSigned(task.d)} | ${tests(task.A)} / ${tests(task.B)} | ${task.A.n} / ${task.B.n} | ${pct(task.A.allPass)} / ${pct(task.B.allPass)} | ${fmt(task.judge.A.overall)} / ${fmt(task.judge.B.overall)} | ${p.A}·${p.B}·${p.tie} | ${fmt(task.A.costUsd)} / ${fmt(task.B.costUsd)} | ${cell(counts(task.A.features))} | ${cell(counts(task.B.features))} |`);
+    lines.push(`| ${task.id}${task.unscored ? ' (no required checks)' : ''}${reusedMark(task)} | ${task.category} | ${fmt(task.scoreA)} | ${fmt(task.scoreB)} | ${fmtSigned(task.d)} | ${tests(task.A)} / ${tests(task.B)} | ${cell(scoreChecks(task))} | ${task.A.n} / ${task.B.n} | ${pct(task.A.allPass)} / ${pct(task.B.allPass)} | ${fmt(task.judge.A.overall)} / ${fmt(task.judge.B.overall)} | ${p.A}·${p.B}·${p.tie} | ${fmt(task.A.costUsd)} / ${fmt(task.B.costUsd)} | ${cell(counts(task.A.features))} | ${cell(counts(task.B.features))} |`);
   }
   lines.push('');
 
@@ -126,6 +140,7 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture }) {
     const share = (value) => (spend.totalUsd ? pct(value / spend.totalUsd) : '–');
     lines.push(`| Agent runs, arm A | ${fmt(spend.runsUsdByArm.A)} | ${share(spend.runsUsdByArm.A)} |`);
     lines.push(`| Agent runs, arm B | ${fmt(spend.runsUsdByArm.B)} | ${share(spend.runsUsdByArm.B)} |`);
+    for (const arm of ['A', 'B']) if (spend.reusedUsdByArm?.[arm]) lines.push(`| Reused runs, arm ${arm} (recorded cost, paid by the eval that made them) | ${fmt(spend.reusedUsdByArm[arm])} | – |`);
     lines.push(`| Judge \`${spend.judgeSet ?? 'n/a'}\` (${summary.judgments} judgments, $${fmt(spend.judgeUsdPerJudgment, 3)} each) | ${fmt(spend.judgeUsd)} | ${share(spend.judgeUsd)} |`);
     for (const [id, usd] of Object.entries(spend.otherJudgeSetsUsd)) lines.push(`| Judge \`${id}\` (comparison set) | ${fmt(usd)} | ${share(usd)} |`);
     lines.push('');
@@ -151,6 +166,13 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture }) {
     lines.push(`| ${arm} | ${sub.runsWithAny}/${sub.runs} | ${subagentTypes.length ? subagentTypes.map((type) => `${sub.calls[type] ?? 0} (${sub.runsByType[type] ?? 0})`).join(' | ') : '0'} |`);
   }
   lines.push('');
+  const mcpTools = [...new Set(['A', 'B'].flatMap((arm) => Object.keys(overall[arm].mcp?.calls ?? {})))].sort();
+  if (mcpTools.length) {
+    lines.push('MCP tool calls (input-mode servers, by tool):', '');
+    lines.push(`| Arm | Runs using any | ${mcpTools.map((tool) => `\`${tool}\``).join(' | ')} |`, `|---|---|${mcpTools.map(() => '---|').join('')}`);
+    for (const arm of single ? ['A'] : ['A', 'B']) lines.push(`| ${arm} | ${overall[arm].mcp.runsWithAny}/${overall[arm].mcp.runs} | ${mcpTools.map((tool) => overall[arm].mcp.calls[tool] ?? 0).join(' | ')} |`);
+    lines.push('');
+  }
   if (summary.telemetry.watched.length) {
     lines.push('Watched components (changed between arms, or `--watch`). Expected = the task lists it in `expectsComponents`/`expectsPolicies`.', '');
     lines.push('| Watched | Arm | Fired in runs | Tasks fired on | False triggers on controls | Fired where not expected | Missed where expected |', '|---|---|---|---|---|---|---|');

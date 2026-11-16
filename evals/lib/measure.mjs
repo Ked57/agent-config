@@ -3,23 +3,23 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { commandTags, countFeatures, subagentCalls, detectPolicies, evaluateChecks, newDependencies, parseUnifiedDiff, parseVitestJson, scoreRun } from './checks.mjs';
+import { commandTags, countFeatures, mcpCalls, subagentCalls, detectPolicies, evaluateChecks, newDependencies, parseJsonScore, parseUnifiedDiff, parseVitestJson, scoreRun } from './checks.mjs';
 import { matchesAny } from './config.mjs';
 import { TELEMETRY_OFF } from './env.mjs';
 
 const GATE_TIMEOUT_MS = 10 * 60 * 1000;
 
-export function runGate(command, app, timeoutMs = GATE_TIMEOUT_MS) {
+export function runGate(command, app, timeoutMs = GATE_TIMEOUT_MS, extraEnv = {}) {
   const result = spawnSync('bash', ['-c', command], {
     cwd: app,
     encoding: 'utf8',
     timeout: timeoutMs,
     maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, ...TELEMETRY_OFF, CI: '1', NO_COLOR: '1', PATH: `${path.join(app, 'node_modules', '.bin')}${path.delimiter}${process.env.PATH}` }
+    env: { ...process.env, ...TELEMETRY_OFF, CI: '1', NO_COLOR: '1', PATH: `${path.join(app, 'node_modules', '.bin')}${path.delimiter}${process.env.PATH}`, ...extraEnv }
   });
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
   const timedOut = result.error?.code === 'ETIMEDOUT';
-  return { ok: result.status === 0, timedOut, tail: result.status === 0 ? '' : `${timedOut ? `timed out after ${Math.round(timeoutMs / 1000)}s\n` : ''}${output.split('\n').slice(-30).join('\n')}` };
+  return { ok: result.status === 0, timedOut, outputTail: output.split('\n').slice(-30).join('\n'), tail: result.status === 0 ? '' : `${timedOut ? `timed out after ${Math.round(timeoutMs / 1000)}s\n` : ''}${output.split('\n').slice(-30).join('\n')}` };
 }
 
 /**
@@ -29,7 +29,8 @@ export function runGate(command, app, timeoutMs = GATE_TIMEOUT_MS) {
  * the command (which must end with the `vitest run ...` invocation) gets `--reporter=json
  * --outputFile=<file outside the app>` appended; CLI flags override any reporter the agent put in its
  * Vitest config. The score is then passed / total test cases, and 0 when a test file failed to load,
- * no test ran, the report is missing or the command timed out.
+ * no test ran, the report is missing or the command timed out. With `"reporter": "json-score"` the
+ * command gets `EVAL_SCORE_FILE` (see `jsonScoreCheck`).
  */
 export function runCommandCheck(check, { fixture, app }) {
   const copied = [];
@@ -42,6 +43,7 @@ export function runCommandCheck(check, { fixture, app }) {
   try {
     const base = { id: check.id, label: check.label ?? check.id, level: check.level ?? 'required' };
     if (check.reporter === 'vitest-json') return vitestCheck(check, app, base);
+    if (check.reporter === 'json-score') return jsonScoreCheck(check, app, base);
     const result = runGate(check.run, app, (check.timeoutSec ?? 600) * 1000);
     const pass = check.expect === 'fail' ? !result.ok : result.ok;
     return { ...base, pass, score: pass ? 1 : 0, detail: pass ? '' : result.tail.slice(-600) };
@@ -70,6 +72,28 @@ function vitestCheck(check, app, base) {
       ...(!result.ok && loaded && !report.failed.length ? [`command failed outside test cases\n${result.tail}`] : [])
     ];
     return { ...base, pass, score: loaded ? report.passed / report.total : 0, passed: report.passed, total: report.total, detail: notes.join('\n').slice(0, 1200) };
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+/**
+ * A continuous check: the command writes `{ score, components, detail }` to `$EVAL_SCORE_FILE` (a temp
+ * file outside the app). A valid file sets the score even when the command exits non-zero (it may exit 1
+ * to signal "below threshold"); `pass` is `score >= passAt` (default 1). No valid file, or a timeout,
+ * scores 0 with the output's tail as detail.
+ */
+function jsonScoreCheck(check, app, base) {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-score-'));
+  try {
+    const scoreFile = path.join(scratch, 'score.json');
+    const result = runGate(check.run, app, (check.timeoutSec ?? 600) * 1000, { EVAL_SCORE_FILE: scoreFile });
+    const report = !result.timedOut && fs.existsSync(scoreFile) ? parseJsonScore(fs.readFileSync(scoreFile, 'utf8')) : null;
+    if (!report) {
+      const why = result.timedOut ? `timed out after ${check.timeoutSec ?? 600}s` : fs.existsSync(scoreFile) ? 'invalid score file' : 'no score file';
+      return { ...base, reporter: 'json-score', pass: false, score: 0, components: {}, detail: `${why}\n${result.outputTail}`.slice(-600) };
+    }
+    return { ...base, reporter: 'json-score', pass: report.score >= (check.passAt ?? 1), score: report.score, components: report.components, detail: report.detail };
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
   }
@@ -119,6 +143,23 @@ const armPlugins = (armsInfo) => {
   return Object.values(byName);
 };
 
+/**
+ * Which policies, skills and plugins of either arm a run's transcript shows firing, plus the commands
+ * matching a policy signal. Also used to re-derive a reused run's telemetry against this eval's arms.
+ */
+export function runTelemetry({ transcript, transcriptText, armsInfo, taskSet, prompt }) {
+  const telemetry = detectPolicies(transcript.events, {
+    policies: [...new Set([...(armsInfo.A.policies ?? []), ...(armsInfo.B.policies ?? [])])],
+    skills: [...new Set([...(armsInfo.A.skills ?? []), ...(armsInfo.B.skills ?? [])])],
+    plugins: armPlugins(armsInfo),
+    signals: taskSet.policySignals ?? {},
+    prompt,
+    commandTags: commandTags(transcriptText),
+    subagents: subagentCalls(transcriptText)
+  });
+  return { ...telemetry, commands: transcript.events.commands.filter((command) => Object.values(taskSet.policySignals ?? {}).some((signal) => new RegExp(signal.commandPattern).test(command))) };
+}
+
 /** `prompt` is the exact prompt sent (with any arm prefix); it defaults to the job's or the task's. */
 export function measureRun({ job, fixture, pristine, runDir, app, taskSet, task, provider, armsInfo, agentResult, prompt = job.prompt ?? task.prompt }) {
   const patch = diffAgainstPristine(fixture, pristine, app);
@@ -137,15 +178,6 @@ export function measureRun({ job, fixture, pristine, runDir, app, taskSet, task,
   const transcriptPath = path.join(runDir, provider.transcriptFile);
   const transcriptText = fs.existsSync(transcriptPath) ? fs.readFileSync(transcriptPath, 'utf8') : '';
   const transcript = provider.parseTranscript(transcriptText);
-  const telemetry = detectPolicies(transcript.events, {
-    policies: [...new Set([...(armsInfo.A.policies ?? []), ...(armsInfo.B.policies ?? [])])],
-    skills: [...new Set([...(armsInfo.A.skills ?? []), ...(armsInfo.B.skills ?? [])])],
-    plugins: armPlugins(armsInfo),
-    signals: taskSet.policySignals ?? {},
-    prompt,
-    commandTags: commandTags(transcriptText),
-    subagents: subagentCalls(transcriptText)
-  });
   const completed = agentResult.exitCode === 0 && !agentResult.timedOut && transcript.subtype === 'success';
   const record = {
     id: job.id,
@@ -165,7 +197,8 @@ export function measureRun({ job, fixture, pristine, runDir, app, taskSet, task,
     deps,
     diff: { changedFiles: diff.changedFiles, addedLines: diff.addedLines, removedLines: diff.removedLines },
     features: countFeatures(taskSet.featurePatterns, diff.code),
-    telemetry: { ...telemetry, commands: transcript.events.commands.filter((command) => Object.values(taskSet.policySignals ?? {}).some((signal) => new RegExp(signal.commandPattern).test(command))) },
+    telemetry: runTelemetry({ transcript, transcriptText, armsInfo, taskSet, prompt }),
+    mcpCalls: mcpCalls(transcriptText),
     resultExcerpt: transcript.resultText.slice(-2000)
   };
   return { ...record, ...scoreRun(record) };

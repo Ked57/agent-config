@@ -52,12 +52,13 @@ const pluginKey = (plugin) => `${plugin.name}@${plugin.version ?? '?'}`;
 
 /**
  * A run's init event against the arm's expectation (from its probe): no skill, plugin (name and
- * version) or agent beyond the expectation, none the arm installed missing, no MCP server, the cwd is
+ * version) or agent beyond the expectation, none the arm installed missing, exactly the MCP servers of the
+ * run's input mode (`mcpServers`, names; none by default) and each connected, the cwd is
  * the run's working copy, and memory and plugin paths sit under the run home. Built-ins (the empty-home
  * probe's `builtins`) vary with account state and CLI flags, so an absent one is a note, not a problem.
  * Returns `{ problems, notes }`.
  */
-export function initProblems({ expected, builtins, init, runHome, app }) {
+export function initProblems({ expected, builtins, init, runHome, app, mcpServers = [] }) {
   if (!init) return { problems: ['no init event in the transcript'], notes: [] };
   const actual = sessionComponents(init, runHome);
   const diffs = [
@@ -67,7 +68,13 @@ export function initProblems({ expected, builtins, init, runHome, app }) {
   ];
   const problems = diffs.flatMap((diff) => diff.problems);
   const notes = diffs.flatMap((diff) => diff.notes);
-  if (actual.mcpServers.length) problems.push(`MCP servers loaded: ${actual.mcpServers.join(', ')}`);
+  const unexpectedServers = actual.mcpServers.filter((name) => !mcpServers.includes(name));
+  if (unexpectedServers.length) problems.push(`MCP servers loaded: ${unexpectedServers.join(', ')}`);
+  for (const name of mcpServers) {
+    const server = (init.mcp_servers ?? []).find((entry) => (entry?.name ?? String(entry)) === name);
+    if (!server) problems.push(`MCP server ${name} of the input mode is missing`);
+    else if (server.status !== 'connected') problems.push(`MCP server ${name} is ${server.status ?? 'in an unknown state'}, not connected`);
+  }
   if (path.resolve(init.cwd ?? '') !== path.resolve(app)) problems.push(`cwd ${init.cwd} is not the run's working copy ${app}`);
   for (const [kind, memory] of Object.entries(init.memory_paths ?? {})) {
     if (typeof memory === 'string' && !isInside(memory, runHome)) problems.push(`${kind} memory path ${memory} is outside the run home`);

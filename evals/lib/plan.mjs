@@ -62,7 +62,7 @@ export function budgetAllows({ maxUsd, maxRuns }, { spentUsd, runsDone, runsInFl
 }
 
 /** Flags that define an eval and are frozen in its config.json: passing one with --resume would be silently ignored. */
-const FIXED_ON_RESUME = { a: '--a', b: '--b', aAdd: '--a-add', aRemove: '--a-remove', bAdd: '--b-add', bRemove: '--b-remove', aPrefix: '--a-prefix', bPrefix: '--b-prefix', plugins: '--plugins', tasks: '--tasks', only: '--only', smoke: '--smoke', reps: '--reps', provider: '--provider', model: '--model', effort: '--effort', timeoutMin: '--timeout-min', singleArm: '--single-arm', env: '--env', name: '--name', out: '--out' };
+const FIXED_ON_RESUME = { a: '--a', b: '--b', aAdd: '--a-add', aRemove: '--a-remove', bAdd: '--b-add', bRemove: '--b-remove', aPrefix: '--a-prefix', bPrefix: '--b-prefix', aMode: '--a-mode', bMode: '--b-mode', plugins: '--plugins', tasks: '--tasks', only: '--only', smoke: '--smoke', reps: '--reps', provider: '--provider', model: '--model', effort: '--effort', timeoutMin: '--timeout-min', singleArm: '--single-arm', env: '--env', name: '--name', out: '--out' };
 
 export const fixedFlagsOnResume = (raw) => Object.entries(FIXED_ON_RESUME).filter(([key]) => raw[key] !== undefined).map(([, flag]) => flag);
 

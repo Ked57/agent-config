@@ -16,10 +16,14 @@ npm run eval -- --b feat/x --smoke
 # Test one changed policy without a branch: main plus that file (and its routing line) from feat/x
 npm run eval -- --b main --b-add policy/typescript.md=feat/x --b-add policy/routing.md=feat/x
 
-# Full agent-config against bare Claude Code; poteto mode on against off; pstack ablated
-npm run eval -- --a BARE --b WORKTREE --tasks ts-backend
-npm run eval -- --a WORKTREE --b WORKTREE --b-prefix "/pstack:poteto-mode" --tasks ts-backend
-npm run eval -- --a WORKTREE --b WORKTREE --b-remove plugin:pstack --tasks ts-backend
+# Config against config: a fix branch; one skill removed; poteto mode on against off; pstack ablated
+npm run eval -- --a main --b fix/x --tasks ts-backend
+npm run eval -- --a main --b main --b-remove skills/manual-qa --tasks ts-backend
+npm run eval -- --a main --b main --b-prefix "/pstack:poteto-mode" --tasks ts-backend
+npm run eval -- --a main --b main --b-remove plugin:pstack --tasks ts-backend
+
+# The same tasks with a Figma MCP server against attached PNG mockups (task-set input modes)
+npm run eval -- --a main --b main --a-mode figma --b-mode files --tasks vue-design
 
 # A/A control: how noisy is the judge on identical arms?
 npm run eval -- --b main --smoke --reps 2
@@ -34,6 +38,9 @@ npm run eval -- --resume ~/agent-config-evals/<dir> [--max-usd 30]
 npm run eval -- --combine ~/agent-config-evals/<backend-dir> ~/agent-config-evals/<vue-dir> --name full-vs-bare
 ```
 
+With reuse on (the default), repeated comparisons against an unchanged arm cost nothing for that arm:
+its finished runs are copied from the earlier eval (see "Reusing runs").
+
 `npm run eval -- --help` lists every option. Results go to `~/agent-config-evals/<timestamp>-<name>/`
 (override the parent with `AGENT_CONFIG_EVALS_HOME`), never into this repository.
 
@@ -41,7 +48,7 @@ npm run eval -- --combine ~/agent-config-evals/<backend-dir> ~/agent-config-eval
 
 An arm is a **ref** plus toggles. `--a` (default `main`) and `--b` take any git ref, `WORKTREE` for
 the current checkout with uncommitted changes, or `BARE` for an empty home: Claude Code with nothing
-installed. A git or `WORKTREE` arm is extracted into `<sandbox>/<eval>/arms/<arm>/src` and installed
+installed (kept for reference; comparisons are config against config). A git or `WORKTREE` arm is extracted into `<sandbox>/<eval>/arms/<arm>/src` and installed
 with **that ref's own** `bin/agent-config.mjs sync --user` into `arms/<arm>/home` (its template home),
 with `HOME`, `CLAUDE_CONFIG_DIR` and `CODEX_HOME` pointed there.
 
@@ -282,6 +289,14 @@ at concurrency 4 (the B9 backoff and B11 startup tests dominate), so `npm run ve
 applies to the template, at least 5 mutants per task (3 for controls) and a declared kill rate of
 at least 80%. Run the gate after changing any hidden test, check or prompt.
 
+**Score gate.** A task whose checks are continuous (`json-score`) rarely fails outright, so its manifest
+can judge by score instead: `"scoreGate": { "referenceMin": 0.9, "untouchedMax": 0.2, "mutantMaxDrop": 0.05 }`.
+A score is the mean of the task's required check scores. Every reference must score at least
+`referenceMin`, the untouched fixture at most `untouchedMax`, and a mutant counts as killed (a known-failing
+solution as failing) when it scores at least `mutantMaxDrop` below the lowest reference. The 80% kill-rate
+rule applies to that count. The gate table prints the scores of the references, the untouched fixture and
+each mutant for every task.
+
 Make a patch from a worked app (a saved run's `app/`, or a copy you broke by hand) with
 `npm run eval:mutants -- --fixture ts-backend --make-patch <app> > <task>/m7-….patch`. It diffs
 against the template with the fixture's `diffExclude` (so no drizzle snapshots) and strips
@@ -323,16 +338,23 @@ test.
   pass on exit 0, or on failure with `"expect": "fail"`. `copy` maps fixture-relative files (hidden tests)
   to app-relative paths; they are copied in after the diff is taken and removed afterwards.
   `timeoutSec` defaults to 600; a timeout scores 0.
+- `"reporter": "json-score"` on a `command` check scores it continuously: the command runs with
+  `EVAL_SCORE_FILE=<temp file outside the app>` in its environment and must write
+  `{ "score": <0..1>, "components": { "<name>": <0..1> }, "detail": "<short text>" }` there. The result
+  carries `score`, `components` and `detail`; `pass` is `score >= passAt` (`"passAt"` on the check,
+  default 1). A command that exits non-zero but wrote a valid file keeps its score (exit 1 may mean "below
+  threshold"). No file, an invalid one or a timeout scores 0 with the output's tail as detail.
 - `"reporter": "vitest-json"` on a `command` check scores it by test case: the suite appends
   `--reporter=json --outputFile=<temp file outside the app>` to `run` (so `run` must end with the
   `vitest run ...` call; CLI flags override any reporter the agent configured), and records `passed`,
   `total` (passed plus failed; skipped tests don't count) and `score = passed / total`. The score is 0
   when a test file fails to load, no test runs, no report is written or the command times out. Failed
   test names go into `detail`. `pass` still needs exit 0 and every test passing. `expect` is ignored.
-- Every check result carries a `score`: the Vitest fraction above, otherwise 1 for a pass and 0 for a fail.
+- Every check result carries a `score`: the Vitest fraction or the JSON score above, otherwise 1 for a pass and 0 for a fail.
 - A task's `files` (`{ "fixture-relative source": "app-relative target" }`, e.g. a spec document) are
   copied into the worked copy before the agent starts, and into the base the diff is taken against, so
   they never count as the agent's change.
+- `modes` and `defaultMode` define input modes (see "Input modes" below).
 - Checks default to `level: "required"`. `info` checks are scored and reported but don't count.
 - `expectsComponents` (or the older `expectsPolicies`) lists the components a task should fire:
   policy and skill names, and plugins as `plugin:<name>`. A watched component firing on a task that
@@ -340,10 +362,54 @@ test.
   component that didn't fire is a **miss**.
 - A policy counts as fired when the agent read its file. If the task set defines a
   `policySignals.<policy>.commandPattern` regex, it counts as fired only when the agent ran a matching command.
-- A skill fires on a `Skill` tool call naming it (bare or `<plugin>:<skill>`), a read of its `SKILL.md`,
+- A skill fires on a `Skill` tool call naming it (bare or `<plugin>:<skill>`), a read of its `SKILL.md`
+  (a Read path or a shell command naming `<skill>/SKILL.md` under any root, such as
+  `cat "$S/emil-design-eng/SKILL.md"`; a brace list `skills/{a,b}/SKILL.md`; or `skills/<skill>/` and a bare
+  `SKILL.md` in the same command, such as `cd skills/<skill> && cat SKILL.md`; the name must match whole),
   or a slash invocation: the prompt sent starts with `/<skill>` or `/<plugin>:<skill>`, or the session
   shows the command expanded (`<command-name>`). A plugin fires when any of its skills fires that way.
 - `featurePatterns` counts how many runs used each pattern, on added lines with comments stripped.
+
+### Input modes
+
+A task set can define how the task reaches the agent, and each arm picks one. The `vue-design` set,
+for example, gives the agent a Figma frame link read through an MCP server in one mode and PNG mockups
+attached as files in the other.
+
+```jsonc
+{
+  "defaultMode": "figma",
+  "modes": {
+    "figma": {
+      "serverFiles": "figma-stub",   // fixture-relative dir, copied into each run
+      "mcpServers": { "figma": { "command": "node", "args": ["{serverDir}/server.mjs"], "env": { "FIGMA_DATA": "{serverDir}/frames.json" } } }
+    },
+    "files": {}
+  },
+  "tasks": [{
+    "id": "D1-dashboard", "prompt": "Build the frame at https://www.figma.com/design/…", "files": { "specs/d1.md": "docs/d1.md" },
+    "modes": { "files": { "prompt": "Build the screen in docs/d1.png", "files": { "mockups/d1.png": "docs/d1.png" } } }
+  }]
+}
+```
+
+- `--a-mode <name>` / `--b-mode <name>` set an arm's mode (default: `defaultMode`); the Setup table shows it.
+  Two arms that differ only in mode are a real comparison, not an A/A control.
+- A task's `modes.<mode>.prompt` replaces its prompt in that mode and `modes.<mode>.files` adds to its
+  `files`. A task without an entry for the mode, or a set without modes, runs as before.
+- A mode with `mcpServers` gets a per-run `--mcp-config` (next to `--strict-mcp-config`, which keeps every
+  other server out). Only local stdio servers are allowed: `url` and `type: http|sse` are refused. The
+  mode's `serverFiles` dir is copied to `<sandbox run>/mcp/<mode>/` and the placeholders `{serverDir}`,
+  `{runDir}` (the run's sandbox dir), `{appDir}` and `{fixtureDir}` are expanded in `command`, `args` and
+  `env`. Use `{serverDir}`: the repository holds the hidden tests and reference designs, and the agent can
+  read any path its config names. **Whatever `serverFiles` holds is visible to the agent** (it runs with
+  every permission next to that copy), so keep only what the server needs there. Each server starts through
+  `env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN`, with telemetry off.
+- The arm probe stays MCP-free. A run's isolation check expects exactly its mode's servers, each
+  `connected`; another server, or a missing or failed one, fails the run. A mode without servers still
+  requires none.
+- Each run records its MCP tool calls by tool name (`mcpCalls`, from `mcp__<server>__<tool>` calls in
+  the transcript); the report's telemetry section has a per-arm table.
 
 ## What gets measured
 
@@ -441,7 +507,7 @@ original judge's id the first time they are resumed.
 
 ## Budget, resume and parallelism
 
-- `--concurrency` (default 3) applies to runs and to judgments. Gates and hidden tests run in the
+- `--concurrency` (default 1: one agent at a time, the usual setting) applies to runs and to judgments. Gates and hidden tests run in the
   harness next to the running agents, so at most 2 runs measure (gates, checks, `--http`,
   `--browser`) at once, and the fixtures' `test` gates use `vitest run --testTimeout=30000` because
   Vitest's 5 s default trips under that load. A hidden-test check sets its own timeouts in the task set.
@@ -449,7 +515,7 @@ original judge's id the first time they are resumed.
   In-flight work finishes, so the overshoot is at most about `concurrency` runs. A run killed at
   `--timeout-min` has no result event; its spend is taken from the session log's last running total
   (`cost.usdSource: "session-log"`). Arm probes (about $0.002 each) are not counted.
-- `--max-runs` caps the total number of runs.
+- `--max-runs` caps the total number of runs. Reused runs count toward neither cap.
 - The queue goes rep by rep with shuffled task and arm order, so a stop leaves the arms balanced.
 - Rerunning with `--resume <dir>` skips every run or judgment with a result file. A run interrupted
   mid-way has none: its sandbox dir is wiped and the run is redone. The arms are reused from the
@@ -483,6 +549,48 @@ original judge's id the first time they are resumed.
 - `--strict-isolation` (the default) or `--no-strict-isolation` may be changed on resume; the arms,
   `--plugins`, prefixes, tasks, model and reps may not.
 - `--rejudge --resume <dir>` re-runs only the judging, with the judge flags you pass.
+
+### Reusing runs
+
+Every new run record carries an `inputsKey`: a sha256 over a canonical JSON of the run's inputs, kept
+readable in the record as `inputs`. The inputs are the provider, model, effort, timeout and `--env`; the
+arm's identity (commit, or `BARE`/`WORKTREE`; toggles; plugin mode; each plugin's version and commit; the
+installed-files digest, which also covers toggle contents and `WORKTREE` arms) and the effective prompt
+prefix; the input mode (name, server specs, a content hash of its `serverFiles`); the task id, the exact
+prompt sent, a hash of its checks with the contents of every file a check copies in (the hidden tests) and
+of its pre-run `files` (binary files included); the fixture's template hash (`runFixtureHash`: `fixture.json`,
+`template/` and the scripts its `setup` names as `{fixtureDir}/<path>`, but not `hidden/`, `mutants/`, specs or
+MCP stubs, which enter only through the task's own copies, files and server files, so editing another
+task's hidden test keeps every key); the rep number; and `--http` and
+`--browser`. The arm letter is not an input.
+
+- Before running pending work, the suite indexes every finished run (`*/results/runs/*.json`, combined
+  dirs and unreadable files skipped) under the evals home. A pending run whose key matches a run with
+  `status: "ok"` (never an isolation or error run) is **reused**: its record, `diff.patch`, transcript,
+  session logs and other artefacts are copied under this eval's run id, with the arm letter remapped, and
+  `reusedFrom: { dir, runId, madeAt, at }` set. The log says `reused <id> from <dir>`. Rep n reuses rep n
+  only, and no source run stands in twice in one eval.
+- The worked `app/` is not copied. `--recheck` on a reused run re-scores the source dir's app if it still
+  exists (and leaves the source record alone); otherwise it skips the run with a warning.
+- A reused run's recorded cost stays in its record, so cost comparisons between the arms stay valid, but
+  it is not part of this eval's spend or `--max-usd`. The report's Setup says "Arm A: 12 of 12 runs reused
+  from `<dir>` (made <date>)", marks reused tasks in the per-task table, separates new spend from the
+  recorded cost of reused runs, and adds an integrity note: reused runs were not made in the same time
+  window as the new ones (their inputs, plugin versions included, are identical by key). Judging works on
+  the copied diffs as usual, and `--combine` keeps `reusedFrom`.
+- `--no-reuse` turns it off; `--reuse-from <dir>` (repeatable) searches only those dirs, which may lie
+  outside the evals home. `--dry-run` prints how many runs would be reused and how many run.
+- `--recheck` updates a run's key when the checks changed, so later evals with the same checks can reuse it.
+- `node evals/run.mjs --backfill-keys <dir>` adds keys to an eval made before keys existed. It recomputes
+  them from the dir's `config.json`, `arms.json` and `taskset.json` and the repository's check files,
+  only when the template hash the eval ran with equals the current one and each task's prompt, prefix,
+  checks, files and the set's modes equal the current task set's. Otherwise it refuses that run and says
+  why. New evals record that hash (`runFixtureHash`) and the repo commit (`repoCommit`) in `config.json`.
+  For older ones it is recovered from git history (the recorded commit, else the newest commit whose full
+  fixture hash matches `fixtureHash`), else from the prepared fixture cache of that version if every
+  current template file is identical there, else only with `--assume-template-unchanged`. The method used
+  goes to `audit.jsonl` with the written records. No model calls. The full fixture hash still guards the
+  fixture cache and `--resume`.
 
 ### Combining evals across fixtures
 
@@ -528,7 +636,7 @@ The raw data sits alongside it:
 | Path | Contents |
 |---|---|
 | `summary.json` | aggregated results |
-| `results/runs/*.json` | one record per run |
+| `results/runs/*.json` | one record per run (with `inputsKey`, `inputs` and, for a reused run, `reusedFrom`) |
 | `results/judge/<judge-set>/*.json` | one record per judgment |
 | `runs/<task>__<arm>__r<n>/` | `transcript.jsonl`, `diff.patch`, and the worked `app/` |
 | `config.json`, `taskset.json`, `arms.json` | what was run |

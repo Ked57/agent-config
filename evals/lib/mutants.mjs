@@ -51,6 +51,11 @@ export function validateManifest(manifest, taskId, files) {
       }
     }
   }
+  if (manifest.scoreGate !== undefined) {
+    const gate = manifest.scoreGate;
+    const unit = (value) => typeof value === 'number' && value >= 0 && value <= 1;
+    if (!gate || typeof gate !== 'object' || !['referenceMin', 'untouchedMax', 'mutantMaxDrop'].every((key) => unit(gate[key]))) problems.push('scoreGate needs referenceMin, untouchedMax and mutantMaxDrop, each in 0..1');
+  }
   if (!(manifest.references ?? []).length) problems.push('no references');
   if (!(manifest.mutants ?? []).length) problems.push('no mutants');
   const duplicates = listed.filter((file, index) => listed.indexOf(file) !== index);
@@ -64,10 +69,12 @@ export const declaredKillRate = (manifest) => (manifest.mutants ?? []).filter((m
 
 /**
  * Scores one task. `results` maps a patch file (or `null` for the untouched fixture) to
- * `{ pass, failed: [check ids] }`, where `pass` means every required check passed.
- * Returns the kill rate and every rule the task breaks.
+ * `{ pass, failed: [check ids], score }`, where `pass` means every required check passed and `score` is
+ * the mean required-check score. Returns the kill rate and every rule the task breaks. With
+ * `manifest.scoreGate` the task is judged on scores instead (see `scoreGateTask`).
  */
 export function scoreTask({ manifest, results, baselinePasses = false, commandCheckIds = [] }) {
+  if (manifest.scoreGate) return scoreGateTask({ manifest, results });
   const errors = [];
   const baseline = results.get(null);
   if (baseline?.pass) errors.push('untouched fixture passes every required check');
@@ -94,4 +101,46 @@ export function scoreTask({ manifest, results, baselinePasses = false, commandCh
   const killRate = mutants.length ? killed / mutants.length : 0;
   if (killRate < MIN_KILL_RATE) errors.push(`kill rate ${(killRate * 100).toFixed(0)}% is under ${MIN_KILL_RATE * 100}%`);
   return { killed, total: mutants.length, killRate, errors, unexpectedKills: unexpected };
+}
+
+// Scores within this of the threshold count as reaching it (floating-point means of check scores).
+const EPSILON = 1e-9;
+
+/**
+ * Score-based gate for tasks with continuous checks: every reference scores at least `referenceMin`,
+ * the untouched fixture at most `untouchedMax`, and a mutant (or known-failing solution) is killed when
+ * it scores at least `mutantMaxDrop` below the lowest reference.
+ */
+export function scoreGateTask({ manifest, results }) {
+  const { referenceMin, untouchedMax, mutantMaxDrop } = manifest.scoreGate;
+  const errors = [];
+  const shown = (score) => (typeof score === 'number' ? score.toFixed(2) : '?');
+  const baseline = results.get(null);
+  if (baseline && !(baseline.score <= untouchedMax + EPSILON)) errors.push(`untouched fixture scores ${shown(baseline.score)}, above untouchedMax ${untouchedMax}`);
+  const referenceScores = [];
+  for (const reference of manifest.references ?? []) {
+    const result = results.get(reference.file);
+    if (!result) continue;
+    referenceScores.push(result.score ?? 0);
+    if (!((result.score ?? 0) >= referenceMin - EPSILON)) errors.push(`reference ${reference.file} scores ${shown(result.score)}, under referenceMin ${referenceMin}`);
+  }
+  const lowest = referenceScores.length ? Math.min(...referenceScores) : null;
+  const isKilled = (result) => lowest !== null && (result.score ?? 0) <= lowest - mutantMaxDrop + EPSILON;
+  for (const known of manifest.knownFailing ?? []) {
+    const result = results.get(known.file);
+    if (result && !isKilled(result)) errors.push(`known-failing ${known.file} scores ${shown(result.score)}, less than ${mutantMaxDrop} below the lowest reference (${shown(lowest)})`);
+  }
+  const mutants = manifest.mutants ?? [];
+  let killed = 0;
+  const unexpected = [];
+  for (const mutant of mutants) {
+    const result = results.get(mutant.file);
+    if (!result) continue;
+    if (isKilled(result)) killed += 1;
+    if (mutant.expect === 'killed' && !isKilled(result)) errors.push(`mutant ${mutant.file} scores ${shown(result.score)}, less than ${mutantMaxDrop} below the lowest reference (${shown(lowest)})`);
+    if (mutant.expect === 'survives' && isKilled(result)) unexpected.push(mutant.file);
+  }
+  const killRate = mutants.length ? killed / mutants.length : 0;
+  if (killRate < MIN_KILL_RATE) errors.push(`kill rate ${(killRate * 100).toFixed(0)}% is under ${MIN_KILL_RATE * 100}%`);
+  return { killed, total: mutants.length, killRate, errors, unexpectedKills: unexpected, killedFiles: mutants.filter((mutant) => results.get(mutant.file) && isKilled(results.get(mutant.file))).map((mutant) => mutant.file) };
 }

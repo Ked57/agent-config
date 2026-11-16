@@ -153,6 +153,24 @@ export function subagentCalls(transcript) {
   return types;
 }
 
+/** MCP tool calls in a stream-json transcript, counted by tool name (`mcp__<server>__<tool>`). */
+export function mcpCalls(transcript) {
+  const counts = {};
+  for (const line of String(transcript).split('\n')) {
+    if (!line.includes('"mcp__')) continue;
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    for (const block of message?.message?.content ?? []) {
+      if (block?.type === 'tool_use' && String(block.name).startsWith('mcp__')) counts[block.name] = (counts[block.name] ?? 0) + 1;
+    }
+  }
+  return counts;
+}
+
 /**
  * Whether a plugin fired, given the skill invocations and subagent types of a run: a
  * `<plugin>:<x>` name, or a bare name listed in the plugin's own `skills`/`agents` (from the arm
@@ -170,7 +188,8 @@ export function pluginUse(plugin, { invocations = [], subagents = [], standalone
  * A policy counts as read when a Read targeted `.../policy/<name>.md` or a shell command named
  * `<name>.md` (agents often `cat $P/<name>.md`). If the task set defines a `commandPattern`
  * signal for the policy, `fired` means the agent acted on it; otherwise `fired` means read.
- * A skill fires on a `Skill` call naming it (bare or `<plugin>:<name>`), a read of its SKILL.md, or a
+ * A skill fires on a `Skill` call naming it (bare or `<plugin>:<name>`), a read of its SKILL.md (see
+ * `skillFileRead`), or a
  * slash invocation (`prompt` starting with `/<name>`, or an expanded `<command-name>` tag in
  * `commandTags`). A plugin fires when any of its skills fires that way or one of its agents runs as a
  * subagent (see `pluginUse`). `plugins` are names or inventory entries `{ name, skills, agents }`;
@@ -189,10 +208,9 @@ export function detectPolicies(events, { policies = [], skills = [], plugins = [
     result.policies[name] = { read, signalHits, fired: signal ? signalHits > 0 : read };
   }
   for (const name of skills) {
-    const path = `skills/${name}/SKILL.md`;
     const invoked = invocations.some((skill) => skill === name || skill.endsWith(`:${name}`))
-      || events.reads.some((read) => read.endsWith(path))
-      || events.commands.some((command) => command.includes(path));
+      || events.reads.some((read) => skillFileRead(read, name))
+      || events.commands.some((command) => skillFileRead(command, name));
     result.skills[name] = { fired: invoked };
   }
   for (const plugin of plugins) {
@@ -203,6 +221,42 @@ export function detectPolicies(events, { policies = [], skills = [], plugins = [
   for (const type of subagents) subagentCounts[type] = (subagentCounts[type] ?? 0) + 1;
   result.subagents = subagentCounts;
   return result;
+}
+
+// A skill name is bounded by anything that can't be part of one, so `my-emil` is not `emil`.
+const NAME_BEFORE = '(?<![A-Za-z0-9_.-])';
+const NAME_AFTER = '(?![A-Za-z0-9_.-])';
+
+/**
+ * Whether a Read path or a shell command reads skill `name`'s SKILL.md: `<name>/SKILL.md` under any
+ * root (`cat "$S/emil-design-eng/SKILL.md"`), a brace list (`cat ~/.agents/skills/{a,b}/SKILL.md`),
+ * or the directory `skills/<name>` named in a command that also reads a bare `SKILL.md`
+ * (`cd skills/<name> && cat SKILL.md`).
+ */
+export function skillFileRead(text, name) {
+  const skill = escape(name);
+  if (new RegExp(`${NAME_BEFORE}${skill}/SKILL\\.md`).test(text)) return true;
+  for (const match of String(text).matchAll(/\{([^{}]*)\}\/SKILL\.md/g)) if (match[1].split(',').map((item) => item.trim()).includes(name)) return true;
+  return new RegExp(`skills/${skill}${NAME_AFTER}`).test(text) && /(?<![A-Za-z0-9_./-])SKILL\.md/.test(text);
+}
+
+/**
+ * Reads a JSON score file written by a `"reporter": "json-score"` check:
+ * `{ "score": 0..1, "components": { "<name>": 0..1 }, "detail": "..." }`. Returns null unless
+ * `score` and every component are numbers in 0..1.
+ */
+export function parseJsonScore(text) {
+  let report;
+  try {
+    report = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const unit = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+  if (!report || typeof report !== 'object' || !unit(report.score)) return null;
+  const components = report.components ?? {};
+  if (typeof components !== 'object' || Array.isArray(components) || !Object.values(components).every(unit)) return null;
+  return { score: report.score, components, detail: typeof report.detail === 'string' ? report.detail.slice(0, 1200) : '' };
 }
 
 /**

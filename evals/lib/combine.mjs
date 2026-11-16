@@ -20,6 +20,7 @@ export function armIdentity(config, armsInfo, arm) {
     add: (info.add ?? spec.add ?? []).map((toggle) => `${toggle.path}=${toggle.resolved ?? toggle.source ?? ''}`),
     remove: info.remove ?? spec.remove ?? [],
     prefix: spec.prefix ?? null,
+    mode: spec.mode ?? null,
     pluginMode: info.pluginMode ?? config.plugins ?? null,
     plugins: (info.plugins ?? []).map((plugin) => `${plugin.id}@${plugin.version ?? '?'}#${plugin.gitCommitSha ?? '?'}`),
     installed: digest(sortedHashes(info.hashes))

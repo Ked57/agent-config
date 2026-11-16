@@ -68,6 +68,7 @@ export function armStats(runs) {
   for (const run of runs) {
     for (const check of run.checks ?? []) {
       checkStats[check.id] ??= { label: check.label, level: check.level, pass: 0, n: 0, score: 0 };
+      if (check.reporter === 'json-score') checkStats[check.id].jsonScore = true;
       checkStats[check.id].n += 1;
       checkStats[check.id].score += checkScore(check);
       if (check.pass) checkStats[check.id].pass += 1;
@@ -84,6 +85,7 @@ export function armStats(runs) {
     .map((name) => [name, rate(runs, (run) => run.telemetry?.[kind]?.[name]?.fired)]));
   return {
     n: runs.length,
+    reused: runs.filter((run) => run.reusedFrom).length,
     errors: runs.filter((run) => run.status !== 'ok').length,
     score: mean(runs.map((run) => scoreRun(run).score)),
     allPass: rate(runs, (run) => scoreRun(run).allPass),
@@ -106,6 +108,10 @@ export function armStats(runs) {
     pluginsFired: firedRate('plugins'),
     hiddenTests: counted.length ? { passed: counted.reduce((sum, check) => sum + (check.passed ?? 0), 0), total: counted.reduce((sum, check) => sum + check.total, 0) } : null,
     subagents: subagentStats(runs),
+    mcp: { runs: runs.length, runsWithAny: runs.filter((run) => Object.keys(run.mcpCalls ?? {}).length).length, calls: runs.reduce((calls, run) => {
+      for (const [tool, count] of Object.entries(run.mcpCalls ?? {})) calls[tool] = (calls[tool] ?? 0) + count;
+      return calls;
+    }, {}) },
     signalHits: Object.fromEntries([...new Set(runs.flatMap((run) => Object.keys(run.telemetry?.policies ?? {})))]
       .filter((name) => runs.some((run) => run.telemetry.policies[name]?.signalHits !== null && run.telemetry.policies[name]?.signalHits !== undefined))
       .map((name) => [name, mean(runs.map((run) => run.telemetry.policies[name]?.signalHits))]))
@@ -272,6 +278,14 @@ export function aggregate({ config, taskSet, armsInfo, runs: allRuns, judgments,
     turns: compareCost({ runs, taskIds, seed, metric: 'turns per run', value: (run) => run.agent?.turns ?? null })
   } : null;
 
+  // Continuous (json-score) checks that recur across tasks get a descriptive paired comparison each.
+  const scoreCheckTasks = {};
+  for (const run of runs) for (const check of run.checks ?? []) if (check?.reporter === 'json-score') (scoreCheckTasks[check.id] ??= new Set()).add(run.task);
+  const scoreComponents = twoArms ? Object.entries(scoreCheckTasks).filter(([, tasks]) => tasks.size >= MIN_TASKS).map(([id]) => ({
+    id,
+    ...compareTasks({ runs, taskIds, seed, bounds: [0, 1], metric: `check ${id} score`, value: (run) => run.checks?.find((check) => check?.id === id)?.score ?? null })
+  })) : [];
+
   const perTask = taskIds.map((id) => {
     const row = { id, category: tasksById[id]?.category, ...section((run) => run.task === id, (j) => j.task === id) };
     const paired = primary?.perTask.find((entry) => entry.task === id);
@@ -331,15 +345,32 @@ export function aggregate({ config, taskSet, armsInfo, runs: allRuns, judgments,
     : { verdict: 'single-arm validation', reasons: ['Only arm A ran: this report validates tasks, checks and gates, not a change. Comparison, judge and cost-overhead sections are empty by design.'] };
 
   const sum = (items, pick) => items.reduce((total, item) => total + (pick(item) ?? 0), 0);
+  // Reused runs were paid for by the eval that made them: their recorded cost stays in the cost
+  // comparison but not in this eval's spend.
+  const newRuns = allRuns.filter((run) => !run.reusedFrom);
+  const reusedRuns = allRuns.filter((run) => run.reusedFrom);
   const spend = {
-    runsUsd: sum(allRuns, (run) => run.cost?.usd),
-    runsUsdByArm: { A: sum(allRuns.filter((run) => run.arm === 'A'), (run) => run.cost?.usd), B: sum(allRuns.filter((run) => run.arm === 'B'), (run) => run.cost?.usd) },
+    runsUsd: sum(newRuns, (run) => run.cost?.usd),
+    runsUsdByArm: { A: sum(newRuns.filter((run) => run.arm === 'A'), (run) => run.cost?.usd), B: sum(newRuns.filter((run) => run.arm === 'B'), (run) => run.cost?.usd) },
+    reusedRuns: reusedRuns.length,
+    reusedUsdByArm: { A: sum(reusedRuns.filter((run) => run.arm === 'A'), (run) => run.cost?.usd), B: sum(reusedRuns.filter((run) => run.arm === 'B'), (run) => run.cost?.usd) },
     judgeSet: activeJudgeSet,
     judgeUsd: sum(judgments, (judgment) => judgment.costUsd),
     judgeUsdPerJudgment: judgments.length ? sum(judgments, (judgment) => judgment.costUsd) / judgments.length : null,
     otherJudgeSetsUsd: Object.fromEntries(Object.entries(otherJudgeSets).map(([id, set]) => [id, sum(set, (judgment) => judgment.costUsd)]))
   };
   spend.totalUsd = spend.runsUsd + spend.judgeUsd + Object.values(spend.otherJudgeSetsUsd).reduce((total, value) => total + value, 0);
+  const reuse = Object.fromEntries(['A', 'B'].map((arm) => {
+    const armAll = allRuns.filter((run) => run.arm === arm);
+    const sources = {};
+    for (const run of armAll.filter((entry) => entry.reusedFrom)) {
+      const source = (sources[run.reusedFrom.dir] ??= { dir: run.reusedFrom.dir, runs: 0, madeAt: run.reusedFrom.madeAt ?? null });
+      source.runs += 1;
+      if (run.reusedFrom.madeAt && (!source.madeAt || run.reusedFrom.madeAt < source.madeAt)) source.madeAt = run.reusedFrom.madeAt;
+    }
+    return [arm, { runs: armAll.length, reused: armAll.length - armAll.filter((run) => !run.reusedFrom).length, sources: Object.values(sources) }];
+  }));
+  if (reusedRuns.length) scoringWarnings.push(`${reusedRuns.length} run(s) were reused from earlier evals (see Setup), not made in the same time window as this eval's new runs: drift on the provider's side between then and now is not controlled. Their inputs, plugin versions and commits included, are identical by inputsKey.`);
   const judgeComparisons = Object.entries(otherJudgeSets).map(([id, set]) => ({ id, ...compareJudgeSets(judgments, set, armsInfo.identical) }));
   const runtimeSmoke = Object.fromEntries(['A', 'B'].map((arm) => {
     const checked = runs.filter((run) => run.arm === arm && (run.browser || run.http));
@@ -353,7 +384,7 @@ export function aggregate({ config, taskSet, armsInfo, runs: allRuns, judgments,
     excludedRuns: isolated.map((run) => run.id),
     unscoredTasks
   };
-  return { generatedAt: new Date().toISOString(), runs: runs.length, judgments: judgments.length, sample, headline, primary, allPass, judge, cost, spend, scoringWarnings, judgeComparisons, runtimeSmoke, perTask, perCategory, overall, overhead, overheadNonControl, telemetry, noise, notable, recommendation };
+  return { generatedAt: new Date().toISOString(), runs: runs.length, judgments: judgments.length, sample, headline, primary, allPass, judge, cost, spend, scoringWarnings, judgeComparisons, runtimeSmoke, reuse, scoreComponents, perTask, perCategory, overall, overhead, overheadNonControl, telemetry, noise, notable, recommendation };
 }
 
 /**

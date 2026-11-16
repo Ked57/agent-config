@@ -36,6 +36,67 @@ export function fixtureHash(fixture) {
   return hash.digest('hex').slice(0, 12);
 }
 
+/**
+ * Hash of what a run can observe or be measured by: `fixture.json`, `template/`, and every file its
+ * `setup` commands name as `{fixtureDir}/<path>` (generator scripts such as `scaffold.mjs`). Task
+ * material (hidden tests, mutants, specs, MCP stubs) is left out: it enters a run's inputsKey through
+ * the task's own check copies, files and mode server files. `fixtureHash` still guards the cache and resume.
+ */
+export function runFixtureHash(fixtureDir) {
+  const hash = crypto.createHash('sha256');
+  const definition = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'fixture.json'), 'utf8'));
+  const scripts = (definition.setup ?? []).flatMap((command) => [...command.matchAll(/\{fixtureDir\}\/([^\s'"]+)/g)].map((match) => match[1]));
+  const add = (file) => {
+    hash.update(path.relative(fixtureDir, file));
+    hash.update(fs.readFileSync(file));
+  };
+  for (const relative of ['fixture.json', ...[...new Set(scripts)].sort()]) {
+    const full = path.join(fixtureDir, relative);
+    if (fs.existsSync(full)) add(full);
+  }
+  const template = path.join(fixtureDir, 'template');
+  if (fs.existsSync(template)) walk(template, add, (full, entry) => entry.isDirectory() && ['node_modules', 'dist'].includes(entry.name));
+  return hash.digest('hex').slice(0, 12);
+}
+
+/**
+ * The `runFixtureHash` an old eval ran with, for evals that predate it: the fixture at `commit` (the
+ * repository commit the eval recorded) or, without one, at the newest commit whose full `fixtureHash`
+ * equals `fullHash`. Extracted under `scratchRoot` and removed. Returns `{ hash, commit }` or null.
+ */
+export function historicalRunFixtureHash({ repoRoot, fixture, commit = null, fullHash, scratchRoot }) {
+  const relative = path.relative(repoRoot, fixture.dir);
+  const git = (args) => spawnSync('git', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const candidates = commit ? [commit] : git(['log', '--format=%H', '--', relative]).stdout.split('\n').filter(Boolean);
+  fs.mkdirSync(scratchRoot, { recursive: true });
+  for (const candidate of candidates) {
+    const scratch = fs.mkdtempSync(path.join(scratchRoot, 'fixture-history-'));
+    try {
+      const archive = spawnSync('git', ['archive', '--format=tar', candidate, '--', relative], { cwd: repoRoot, maxBuffer: 512 * 1024 * 1024 });
+      if (archive.status !== 0) continue;
+      spawnSync('tar', ['-x', '-C', scratch], { input: archive.stdout });
+      const dir = path.join(scratch, relative);
+      if (!fs.existsSync(path.join(dir, 'fixture.json'))) continue;
+      if (commit || fixtureHash({ dir }) === fullHash) return { hash: runFixtureHash(dir), commit: candidate };
+    } finally {
+      removeTree(scratch, scratchRoot);
+    }
+  }
+  return null;
+}
+
+/** Whether every current template file (as the cache copies them) is byte-identical in a prepared copy. */
+export function templateMatchesPrepared(fixture, prepared) {
+  if (!fs.existsSync(path.join(prepared, '.eval-ready'))) return false;
+  const skip = new Set(['node_modules', 'dist', 'data']);
+  let same = true;
+  walk(fixture.templateDir, (file) => {
+    const copy = path.join(prepared, path.relative(fixture.templateDir, file));
+    if (same && !(fs.existsSync(copy) && fs.readFileSync(copy).equals(fs.readFileSync(file)))) same = false;
+  }, (full, entry) => entry.isDirectory() && skip.has(entry.name) && path.dirname(full) === fixture.templateDir);
+  return same;
+}
+
 const sh = (command, cwd, env) => {
   const result = spawnSync('bash', ['-c', command], { cwd, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (result.status !== 0) throw new Error(`Fixture setup failed: ${command}\n${result.stdout}\n${result.stderr}`);

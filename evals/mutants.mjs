@@ -10,6 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads';
 import { copyForRun, loadFixture, preparePristine } from './lib/fixtures.mjs';
+import { checkScore } from './lib/checks.mjs';
 import { diffAgainstPristine, recheckRun } from './lib/measure.mjs';
 import { declaredKillRate, normalisePatch, scoreTask, validateManifest } from './lib/mutants.mjs';
 
@@ -27,6 +28,13 @@ const USAGE = `Usage: npm run eval:mutants -- [options]
   --json <file>        also write the results as JSON
   --keep               keep the scratch copies under ${SANDBOX}/mutants/
   --make-patch <app>   print the patch of a worked app against the fixture (needs --fixture) and exit`;
+
+/** Mean required-check scores for the gate table: references; untouched fixture; mutants (plus the score gate when set). */
+function scoreLine(manifest, byFile) {
+  const shown = (file) => (typeof byFile.get(file)?.score === 'number' ? byFile.get(file).score.toFixed(2) : '–');
+  const gate = manifest.scoreGate ? ` (gate: ref ≥ ${manifest.scoreGate.referenceMin}, untouched ≤ ${manifest.scoreGate.untouchedMax}, drop ≥ ${manifest.scoreGate.mutantMaxDrop})` : '';
+  return `${(manifest.references ?? []).map((reference) => shown(reference.file)).join(' ')}; ${shown(null)}; ${manifest.mutants.map((mutant) => shown(mutant.file)).join(' ')}${gate}`;
+}
 
 /** Reads the task's manifest and lists its directory; null when the task has no mutants. */
 export function taskMutants(fixture, task) {
@@ -68,6 +76,7 @@ function runJob({ fixtureName, pristine, scratch, task, patch, label }) {
     const failed = required.filter((check) => !check.pass || (check.total !== undefined && check.passed !== check.total));
     return {
       pass: failed.length === 0,
+      score: required.length ? required.reduce((sum, check) => sum + checkScore(check), 0) / required.length : null,
       failed: failed.map((check) => check.id),
       details: Object.fromEntries(failed.map((check) => [check.id, String(check.detail ?? '').slice(-400)])),
       ms: Date.now() - started
@@ -226,14 +235,15 @@ async function main() {
         knownFailing: `${knownFailing}/${(entry.manifest.knownFailing ?? []).length}`,
         untouched: byFile.get(null) ? (byFile.get(null).pass ? 'passes' : `fails ${byFile.get(null).failed.join(', ')}`) : '-',
         unexpectedKills: score.unexpectedKills,
-        survivors: entry.manifest.mutants.filter((mutant) => byFile.get(mutant.file)?.pass).map((mutant) => mutant.file)
+        survivors: entry.manifest.mutants.filter((mutant) => (score.killedFiles ? !score.killedFiles.includes(mutant.file) : byFile.get(mutant.file)?.pass)).filter((mutant) => byFile.has(mutant.file)).map((mutant) => mutant.file),
+        scores: scoreLine(entry.manifest, byFile)
       });
     }
 
     const seconds = (Date.now() - started) / 1000;
-    console.log('\n| Task | Mutants | Killed | Kill rate | References pass | Known failing fail | Untouched |');
-    console.log('|---|---|---|---|---|---|---|');
-    for (const row of summary) console.log(`| ${row.task} | ${row.mutants} | ${row.killed} | ${(row.killRate * 100).toFixed(0)}% | ${row.references} | ${row.knownFailing} | ${row.untouched} |`);
+    console.log('\n| Task | Mutants | Killed | Kill rate | References pass | Known failing fail | Untouched | Scores (references; untouched; mutants) |');
+    console.log('|---|---|---|---|---|---|---|---|');
+    for (const row of summary) console.log(`| ${row.task} | ${row.mutants} | ${row.killed} | ${(row.killRate * 100).toFixed(0)}% | ${row.references} | ${row.knownFailing} | ${row.untouched} | ${row.scores} |`);
     for (const row of summary) {
       if (row.survivors.length) console.log(`${row.task} survivors: ${row.survivors.join(', ')}`);
       if (row.unexpectedKills.length) console.log(`${row.task} killed although listed as survives (update the manifest): ${row.unexpectedKills.join(', ')}`);

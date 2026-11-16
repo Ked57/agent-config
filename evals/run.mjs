@@ -11,16 +11,18 @@ import { armBuilt, BUILT_MARKER, buildArm, rebuildDecision, compareInventories, 
 import { browserSmoke } from './lib/browser.mjs';
 import { combineEvals } from './lib/combine.mjs';
 import { scoreRun } from './lib/checks.mjs';
-import { DEFAULTS, judgeSetId, parseArgs, promptFor, resolveConfig, validateTaskSet } from './lib/config.mjs';
+import { DEFAULTS, judgeSetId, parseArgs, promptFor, resolveConfig, taskForMode, validateTaskSet } from './lib/config.mjs';
 import { assertSafeRoot, browserToolEnv, killStrays, memAvailableMb, removeTree, sandboxProblems, sandboxRoot } from './lib/env.mjs';
 import { httpSmoke } from './lib/http-smoke.mjs';
-import { copyForRun, copyTaskFiles, fixtureHash, loadFixture, moveTree, preparePristine, pruneLinkPaths, verifyPristine, withLinkedPaths } from './lib/fixtures.mjs';
+import { copyForRun, copyTaskFiles, fixtureHash, historicalRunFixtureHash, loadFixture, runFixtureHash, templateMatchesPrepared, moveTree, preparePristine, pruneLinkPaths, verifyPristine, withLinkedPaths } from './lib/fixtures.mjs';
 import { initEvent, initProblems, invokedCommands, loadedInstructionFiles, removalLeftovers, sessionComponents, sessionCostUsd, strayInstructionFiles, unexplainedComponents } from './lib/isolation.mjs';
 import { buildJudgePrompt, judgePair } from './lib/judge.mjs';
-import { measureRun, recheckRun } from './lib/measure.mjs';
+import { expectedMcpServers, writeMcpConfig } from './lib/modes.mjs';
+import { measureRun, recheckRun, runTelemetry } from './lib/measure.mjs';
 import { budgetAllows, buildRunQueue, changedArmFiles, fixedFlagsOnResume, flippedChecks, planJudgePairs, semaphore } from './lib/plan.mjs';
 import { agentProvider, judgeProvider } from './lib/providers/index.mjs';
 import { renderReport } from './lib/report.mjs';
+import { backfillKeys, copyReusedRun, indexRuns, inputsKey, newRunsUsd, planReuse, reuseSourceDirs, runAppDir, runInputs, scanRuns, taskInputs } from './lib/reuse.mjs';
 
 const EVALS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(EVALS_DIR, '..');
@@ -48,6 +50,8 @@ Arms
   --a-remove / --b-remove <path>     Remove policy/<x>.md, skills/<x> or plugin:<id> (external plugin) from that arm.
   --a-prefix / --b-prefix "<text>"   Prepend to every task prompt in that arm (e.g. "/pstack:poteto-mode").
                             A task's own promptPrefix: { "A": ..., "B": ... } wins.
+  --a-mode / --b-mode <name>         Input mode of that arm (the task set's modes, e.g. MCP server vs attached files;
+                            default: its defaultMode).
   --plugins install|skip    Install the refs' external plugins into the arms (default: install).
 Tasks
   --tasks <name|file>       Task set in evals/tasks/<name>.json or a path (default: ${DEFAULTS.tasks}).
@@ -80,7 +84,13 @@ Execution
   --min-free-mb <n>         Wait to start an agent run while less memory is available (default: ${DEFAULTS.minFreeMb}; 0 = never).
   --accept-arm-drift        With --resume: go on when a rebuilt arm's plugins or files differ (recorded).
   --no-strict-isolation     Keep going after a run fails the isolation check (it is excluded either way).
-  --dry-run                 Build arms and fixture, print the plan, call no models.
+  --no-reuse                Run every pending run, even when a finished run with the same inputsKey exists.
+  --reuse-from <dir>        Search only these result dirs for reusable runs (repeatable; default: every dir
+                            under the evals home).
+  --backfill-keys <dir>     Compute inputsKeys for an existing results dir's runs (when its fixture template
+                            and tasks are unchanged), so later evals can reuse them. No model calls.
+  --assume-template-unchanged  With --backfill-keys, for a dir whose template hash can't be recovered (recorded).
+  --dry-run                 Build arms and fixture, print the plan (runs to reuse and to run), call no models.
   --name <name>             Label for the results dir and report.
   --combine <dir> <dir> ... Pool finished evals of different task sets (same arms, plugins, model) into a
                             new results dir and report over all their tasks. No model calls.`;
@@ -150,14 +160,14 @@ function collectSessions(root) {
  * The per-run isolation check: the run's init event against the arm's probe, and every instruction
  * file its sessions loaded against the run's own home and working copy.
  */
-function checkIsolation({ arm, builtins, runHome, app, runDir, provider, record, sessions, sessionText }) {
+function checkIsolation({ arm, builtins, runHome, app, runDir, provider, record, sessions, sessionText, mcpServers = [] }) {
   const transcriptFile = path.join(runDir, provider.transcriptFile);
   const init = initEvent(fs.existsSync(transcriptFile) ? fs.readFileSync(transcriptFile, 'utf8') : '');
   const problems = [];
   const notes = [];
   // A run that died before its session started has nothing to verify and is already an error.
   if (init || record.status === 'ok') {
-    const checked = initProblems({ expected: arm.expected, builtins, init, runHome, app });
+    const checked = initProblems({ expected: arm.expected, builtins, init, runHome, app, mcpServers });
     problems.push(...checked.problems);
     notes.push(...checked.notes);
   }
@@ -229,6 +239,34 @@ async function pool(items, concurrency, worker, shouldStop) {
   }));
 }
 
+/**
+ * `--backfill-keys <dir>`: computes inputsKeys for an eval made before keys existed, run by run, only
+ * where its fixture hash and tasks equal the current repo's (see `backfillKeys`). Writes the records.
+ */
+function backfillMain(dir, raw) {
+  const config = readJson(path.join(dir, 'config.json'));
+  const taskSet = readJson(path.join(dir, 'taskset.json'));
+  const fixture = loadFixture(taskSet.fixture);
+  const runs = readDir(path.join(dir, 'results', 'runs'));
+  const currentRunFixtureHash = runFixtureHash(fixture.dir);
+  // The template hash the eval ran with: recorded, else recovered from git history or the prepared
+  // fixture cache, else only by an explicit, audited assumption.
+  let stored = config.runFixtureHash ? { hash: config.runFixtureHash, method: 'recorded' } : null;
+  if (!stored && (config.repoCommit || config.fixtureHash)) {
+    const found = historicalRunFixtureHash({ repoRoot: REPO_ROOT, fixture, commit: config.repoCommit ?? null, fullHash: config.fixtureHash, scratchRoot: path.join(SANDBOX_ROOT, '.tmp') });
+    if (found) stored = { hash: found.hash, method: `git history (${found.commit.slice(0, 12)})` };
+  }
+  if (!stored && config.fixtureHash && templateMatchesPrepared(fixture, path.join(CACHE_ROOT, 'fixtures', `${fixture.name}-${config.fixtureHash}`))) stored = { hash: currentRunFixtureHash, method: 'prepared fixture cache matches the current template' };
+  if (!stored && raw.assumeTemplateUnchanged) stored = { hash: currentRunFixtureHash, method: 'assumed unchanged (--assume-template-unchanged)' };
+  if (!stored) log('The template hash this eval ran with could not be recovered (no record, no matching commit, no prepared cache); pass --assume-template-unchanged to assume it (recorded in audit.jsonl).');
+  else log(`Template hash ${stored.hash} (${stored.method}); current ${currentRunFixtureHash}`);
+  const { updated, refused } = backfillKeys({ config, armsInfo: readJson(path.join(dir, 'arms.json')), taskSet, runs, currentTaskSet: loadTaskSet(taskSet.name), fixtureDir: fixture.dir, storedRunFixtureHash: stored?.hash ?? null, currentRunFixtureHash });
+  for (const record of updated) writeJson(path.join(dir, 'results', 'runs', `${record.id}.json`), record);
+  for (const { id, reason } of refused) log(`refused ${id}: ${reason}`);
+  appendAudit(dir, { action: 'backfill-keys', templateHash: stored ?? null, currentTemplateHash: currentRunFixtureHash, updated: updated.map((record) => record.id), refused });
+  log(`Backfilled ${updated.length} of ${runs.length} run(s) in ${dir}; ${refused.length} refused.`);
+}
+
 /** The saved state of a finished eval, as `combineEvals` takes it. */
 function loadEval(dir) {
   const config = readJson(path.join(dir, 'config.json'));
@@ -277,7 +315,7 @@ function combineMain(raw) {
   summary.warnings = [];
   summary.history = readAudit(outDir);
   writeJson(path.join(outDir, 'summary.json'), summary);
-  const spend = { runsUsd: merged.runs.reduce((sum, run) => sum + (run.cost?.usd ?? 0), 0), judgeUsd: Object.values(merged.judgeSets).flat().reduce((sum, judgment) => sum + (judgment.costUsd ?? 0), 0) };
+  const spend = { runsUsd: newRunsUsd(merged.runs), judgeUsd: Object.values(merged.judgeSets).flat().reduce((sum, judgment) => sum + (judgment.costUsd ?? 0), 0) };
   const f = (value) => (value === null || value === undefined ? '–' : value.toFixed(2));
   const breakdown = [
     '', '## Per fixture (descriptive)', '',
@@ -294,6 +332,7 @@ async function main() {
   const raw = parseArgs(process.argv.slice(2));
   if (raw.help) return console.log(USAGE);
   if (raw.combine) return combineMain(raw);
+  if (raw.backfillKeys) return backfillMain(path.resolve(raw.backfillKeys), raw);
 
   let config;
   let outDir;
@@ -307,7 +346,7 @@ async function main() {
     if (fixed.length) throw new Error(`--resume keeps the eval's arms, tasks, model and reps: drop ${fixed.join(', ')} or start a new eval`);
     migrateLegacyJudgments(outDir, config);
     const overrides = {};
-    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser', 'http', 'judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand', 'strictIsolation', 'minFreeMb', 'keepLinked']) if (raw[key] !== undefined && raw[key] !== config[key]) {
+    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser', 'http', 'judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand', 'strictIsolation', 'minFreeMb', 'keepLinked', 'reuse', 'reuseFrom']) if (raw[key] !== undefined && raw[key] !== config[key]) {
       overrides[key] = { from: config[key] ?? null, to: raw[key] };
       config[key] = raw[key];
     }
@@ -335,8 +374,12 @@ async function main() {
   const fixture = loadFixture(taskSet.fixture);
   const currentFixtureHash = fixtureHash(fixture);
   const agentRunsWanted = !reportOnly && !raw.rejudge && !raw.recheck;
+  const currentRunFixtureHash = runFixtureHash(fixture.dir);
   if (!raw.resume) {
     config.fixtureHash = currentFixtureHash;
+    // What --backfill-keys and reuse compare: the template part of the fixture, and the repo commit it came from.
+    config.runFixtureHash = currentRunFixtureHash;
+    config.repoCommit = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8' }).stdout.trim() || null;
     writeJson(path.join(outDir, 'config.json'), config);
   } else if (agentRunsWanted && config.fixtureHash && config.fixtureHash !== currentFixtureHash) {
     throw new Error(`Fixture ${fixture.name} changed since this eval started (${config.fixtureHash} → ${currentFixtureHash}): new runs would not be comparable with the saved ones. Start a new eval, or use --report-only, --rejudge or --recheck.`);
@@ -415,6 +458,11 @@ async function main() {
       const invoked = prefixes.map((prefix) => /^\/([\w-]+):/.exec(prefix.trim())?.[1]).filter(Boolean).map((name) => `plugin:${name}`);
       armsInfo.watched = [...new Set([...armsInfo.watched, ...invoked])].sort();
     }
+    // Same install in two input modes (e.g. Figma MCP server vs attached PNGs) is a real comparison too.
+    if (armIds.length === 2 && (config.arms.A.mode ?? null) !== (config.arms.B.mode ?? null)) {
+      armsInfo.identical = false;
+      armsInfo.changedFiles = [...armsInfo.changedFiles, '(input mode)'];
+    }
     writeJson(armsFile, armsInfo);
   }
   log(`Arms ${armsInfo.identical ? 'identical (A/A control)' : `differ in ${armsInfo.changedFiles.length} file(s); watching ${armsInfo.watched.join(', ') || 'nothing'}`}`);
@@ -470,8 +518,9 @@ async function main() {
   const otherJudgeSets = Object.fromEntries((fs.existsSync(judgeRoot) ? fs.readdirSync(judgeRoot, { withFileTypes: true }) : [])
     .filter((entry) => entry.isDirectory() && entry.name !== activeJudgeSet)
     .map((entry) => [entry.name, readJudgments(path.join(judgeRoot, entry.name))]));
+  // Reused runs keep their recorded cost but were paid for by the eval that made them.
   const spend = {
-    runsUsd: runs.reduce((sum, run) => sum + (run.cost?.usd ?? 0), 0),
+    runsUsd: newRunsUsd(runs),
     judgeUsd: [judgments, ...Object.values(otherJudgeSets)].flat().reduce((sum, judgment) => sum + (judgment.costUsd ?? 0), 0)
   };
   const spent = () => spend.runsUsd + spend.judgeUsd;
@@ -500,18 +549,27 @@ async function main() {
     const currentById = Object.fromEntries(current.tasks.map((task) => [task.id, task]));
     const at = new Date().toISOString();
     const flips = [];
-    const savedApp = (run) => (currentById[run.task] ? path.join(outDir, 'runs', run.id, 'app') : null);
+    // A reused run's worked copy stays in the eval that made it.
+    const savedApp = (run) => (currentById[run.task] ? runAppDir(outDir, run) : null);
     const relinkNeeded = runs.some((run) => savedApp(run) && fs.existsSync(savedApp(run)) && fixture.linkPaths.some((linkPath) => !fs.existsSync(path.join(savedApp(run), linkPath))));
     const linkSource = relinkNeeded ? preparePristine(fixture, CACHE_ROOT, log) : null;
     for (const run of runs) {
       const task = currentById[run.task];
       const runDir = path.join(outDir, 'runs', run.id);
       const app = savedApp(run);
-      if (!app || !fs.existsSync(app)) continue;
+      if (!app || !fs.existsSync(app)) {
+        if (app && run.reusedFrom) warnings.push(`Not rechecked: ${run.id} was reused from ${run.reusedFrom.dir} and its worked copy ${app} is gone.`);
+        continue;
+      }
       const before = run.checks ?? [];
       run.checksOriginal ??= before;
       run.checks = withLinkedPaths(fixture, linkSource, app, () => recheckRun({ fixture, app, runDir, task }));
       Object.assign(run, scoreRun(run));
+      // The checks are part of the key: a rechecked run is reusable by evals with the current checks.
+      if (run.inputs) {
+        run.inputs = { ...run.inputs, task: { ...run.inputs.task, ...taskInputs(taskForMode(task, config.arms?.[run.arm]?.mode), fixture.dir), id: run.inputs.task.id } };
+        run.inputsKey = inputsKey(run.inputs);
+      }
       const flipped = flippedChecks(before, run.checks);
       flips.push(...flipped.map((flip) => ({ run: run.id, ...flip })));
       run.rechecks = [...(run.rechecks ?? []), { at, fixtureHash: currentFixtureHash, flipped }];
@@ -525,11 +583,30 @@ async function main() {
     writeJson(path.join(outDir, 'taskset.json'), taskSet);
     appendAudit(outDir, { action: 'recheck-result', fixtureHash: currentFixtureHash, runFixtureHash: config.fixtureHash ?? null, tasksetBefore: previousTaskSet, tasksetAfter: sha256(JSON.stringify(taskSet)), flips });
   }
-  const pending = agentRunsWanted ? queue.filter((job) => !done.has(job.id)) : [];
+  const inputsOf = (job) => runInputs({ config, armsInfo, arm: job.arm, task: tasksById[job.task], taskSet, rep: job.rep, runFixtureHash: currentRunFixtureHash, fixtureDir: fixture.dir });
+  let pending = agentRunsWanted ? queue.filter((job) => !done.has(job.id)) : [];
+  // Reuse: a finished run elsewhere with the same inputsKey stands in for a pending one (index built once).
+  let reusePlan = { reuse: [], run: pending };
+  if (pending.length && config.reuse !== false) {
+    const dirs = reuseSourceDirs({ evalsHome: EVALS_HOME, reuseFrom: config.reuseFrom ?? [], exclude: outDir });
+    const keys = new Map(pending.map((job) => [job.id, inputsKey(inputsOf(job))]));
+    reusePlan = planReuse({ pending, keyOf: (job) => keys.get(job.id), index: indexRuns(scanRuns(dirs)), used: runs.filter((run) => run.reusedFrom).map((run) => run.reusedFrom) });
+  }
   if (raw.dryRun) {
-    console.log(JSON.stringify({ outDir, sandbox, arms: { A: armsInfo.A.ref, B: armsInfo.B.ref }, plugins: { A: armsInfo.A.plugins?.map((plugin) => `${plugin.id}@${plugin.version}`), B: armsInfo.B.plugins?.map((plugin) => `${plugin.id}@${plugin.version}`) }, identical: armsInfo.identical, changedFiles: armsInfo.changedFiles, watched: armsInfo.watched, tasks: config.taskIds, reps: config.reps, pendingRuns: pending.length, completedRuns: runs.length }, null, 2));
+    console.log(JSON.stringify({ outDir, sandbox, arms: { A: armsInfo.A.ref, B: armsInfo.B.ref }, plugins: { A: armsInfo.A.plugins?.map((plugin) => `${plugin.id}@${plugin.version}`), B: armsInfo.B.plugins?.map((plugin) => `${plugin.id}@${plugin.version}`) }, identical: armsInfo.identical, changedFiles: armsInfo.changedFiles, watched: armsInfo.watched, tasks: config.taskIds, reps: config.reps, pendingRuns: pending.length, reusedRuns: reusePlan.reuse.length, runsToRun: reusePlan.run.length, reuseSources: [...new Set(reusePlan.reuse.map((entry) => entry.source.dir))], completedRuns: runs.length }, null, 2));
     return;
   }
+  for (const { job, source } of reusePlan.reuse) {
+    const record = copyReusedRun({ source, job, outDir });
+    // Telemetry is re-derived against this eval's arms, whose watched components may differ.
+    const transcriptText = fs.existsSync(path.join(outDir, 'runs', job.id, provider.transcriptFile)) ? fs.readFileSync(path.join(outDir, 'runs', job.id, provider.transcriptFile), 'utf8') : '';
+    if (transcriptText) record.telemetry = runTelemetry({ transcript: provider.parseTranscript(transcriptText), transcriptText, armsInfo, taskSet, prompt: record.prompt });
+    writeJson(path.join(resultsDir, `${job.id}.json`), record);
+    runs.push(record);
+    log(`reused ${job.id} from ${source.dir} (${source.runId})`);
+  }
+  if (reusePlan.reuse.length) appendAudit(outDir, { action: 'reuse', runs: reusePlan.reuse.map(({ job, source }) => ({ run: job.id, dir: source.dir, from: source.runId })) });
+  pending = reusePlan.run;
 
   let inFlight = 0;
   const checkPhases = semaphore(CHECK_PHASES);
@@ -537,7 +614,7 @@ async function main() {
   // A run interrupted mid-way has no result file: its sandbox dir is stale and is redone from scratch.
   if (pending.length) removeTree(path.join(sandbox, 'runs'), sandbox);
   await pool(pending, config.concurrency, async (job) => {
-    const budget = budgetAllows(config, { spentUsd: spent(), runsDone: runs.length, runsInFlight: inFlight });
+    const budget = budgetAllows(config, { spentUsd: spent(), runsDone: runs.filter((run) => !run.reusedFrom).length, runsInFlight: inFlight });
     if (!budget.ok) {
       stopReason ??= budget.reason;
       return;
@@ -560,7 +637,8 @@ async function main() {
     const strayMarkers = [`HOME=${runHome}`, `TMPDIR=${tmp}`];
     let releaseChecks = () => {};
     try {
-      const task = tasksById[job.task];
+      const modeName = config.arms[job.arm].mode ?? null;
+      const task = taskForMode(tasksById[job.task], modeName);
       const arm = armsInfo[job.arm];
       const runDir = path.join(outDir, 'runs', job.id);
       const app = path.join(runRoot, 'app');
@@ -572,6 +650,8 @@ async function main() {
       copyForRun(fixture, pristine, app);
       if (task.files) copyTaskFiles(fixture, task.files, app);
       const prompt = promptFor(task, job.arm, config.arms[job.arm]);
+      // The mode's MCP servers run from a copy in the run's sandbox dir, never from the repository.
+      const mcpConfig = writeMcpConfig({ taskSet, modeName, fixtureDir: fixture.dir, runDir: runRoot, appDir: app });
       log(`start ${job.id}`);
       const env = { ...browserToolEnv(job.id), ...config.env };
       const agentResult = await provider.runAgent({
@@ -584,7 +664,8 @@ async function main() {
         transcriptPath: path.join(runDir, provider.transcriptFile),
         stderrPath: path.join(runDir, 'stderr.log'),
         timeoutMs: config.timeoutMin * 60 * 1000,
-        env
+        env,
+        mcpConfig
       });
       // Stop browsers, then anything else the run left behind (the provider already killed its process group).
       spawnSync('agent-browser', ['close'], { env: { PATH: process.env.PATH, HOME: runHome, AGENT_BROWSER_SESSION: env.AGENT_BROWSER_SESSION }, timeout: 20000 });
@@ -616,6 +697,9 @@ async function main() {
       const record = measureRun({ job, fixture, pristine: base, runDir, app, taskSet, task, provider, armsInfo, agentResult, prompt });
       record.fixtureHash = currentFixtureHash;
       record.prompt = prompt;
+      if (modeName) record.mode = modeName;
+      record.inputs = inputsOf(job);
+      record.inputsKey = inputsKey(record.inputs);
       if (strays.length) record.strays = strays;
       const sessions = collectSessions(provider.sessionRoot(runHome));
       const sessionText = sessions.map((session) => session.text).join('\n');
@@ -624,7 +708,7 @@ async function main() {
         const usd = sessions.filter((session) => !session.relative.includes('/subagents/')).reduce((sum, session) => sum + (sessionCostUsd(session.text) ?? 0), 0);
         if (usd > 0) record.cost = { ...record.cost, usd, usdSource: 'session-log' };
       }
-      record.isolation = checkIsolation({ arm, builtins: armsInfo.builtins, runHome, app, runDir, provider, record, sessions, sessionText });
+      record.isolation = checkIsolation({ arm, builtins: armsInfo.builtins, runHome, app, runDir, provider, record, sessions, sessionText, mcpServers: expectedMcpServers(taskSet, modeName) });
       if (!record.isolation.ok) {
         record.status = 'isolation';
         record.error = `isolation: ${record.isolation.problems.join('; ')}`;

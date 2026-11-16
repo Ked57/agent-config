@@ -220,8 +220,8 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
 | # | Item | State |
 |---|---|---|
 | R1 | `fix/skill-bugs` from `origin/main` (worktree `../fix-skill-bugs`): Halstead package in `fullstack-typescript-static`; `emil-design-eng` never loading; regression tests; cherry-pick into `feat/repo-evals` | done: `fix/skill-bugs` pushed (`baac20a`, `d7d0108`), cherry-picked into `feat/repo-evals` |
-| R2 | Suite: arm result reuse ("reused from <dir>"), no bare arm in future comparisons, `"reporter": "json-score"` for continuous checks | in flight (agent R2) |
-| R3 | `vue-design`: about 6 mockup screens (reference → Playwright PNGs), visual similarity + DOM layout + behaviour + axe, mutants, calibration | not started |
+| R2 | Suite: arm result reuse ("reused from <dir>"), no bare arm in future comparisons, `"reporter": "json-score"` for continuous checks | done (verify 213 pass); not yet exercised with real agents; the MCP path is confirmed by the first `vue-design` probe |
+| R3 | `vue-design`: about 6 mockup screens (reference → Playwright PNGs), visual similarity + DOM layout + behaviour + axe, mutants, calibration | in flight: agent R3a (scorer, Figma stub, first screen end to end), then R3b (remaining screens, calibration) |
 | R4 | Harder backend set: RacePlanr replay feasibility first (time-boxed), else legacy fixture + symptom-only bugs + implied invariants + budgets + spec conformance; mutants; calibration to 30–60% failing | not started |
 | R5.1 | Comparison: `main` vs `fix/skill-bugs` on `vue-design` | not started |
 | R5.2 | Comparison: poteto-mode on vs off on the new backend set | not started |
@@ -273,3 +273,4 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
 - 16:02 UTC: R2 started (arm reuse, `json-score` reporter, telemetry undercount, concurrency default 1).
 - 16:05 UTC: user addendum on the Figma workflow recorded under decisions; R2 extended with per-arm
   input modes and a task-set MCP server (copied into the run sandbox, checked by isolation).
+- 16:22 UTC: R2 done. Arm result reuse by `inputsKey` (narrowed to `fixture.json` + `template/` + setup scripts, plus per-task check, file and server hashes), `--backfill-keys`, `json-score` reporter with a score gate for mutants, input modes with per-run MCP config and isolation expectation, skill telemetry for `<name>/SKILL.md` under any root, concurrency default 1. R3a started.
