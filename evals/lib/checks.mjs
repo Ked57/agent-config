@@ -133,6 +133,38 @@ export function slashInvocations({ prompt = '', commandTags = [] } = {}) {
 export const commandTags = (transcript) => [...String(transcript).matchAll(/<command-name>\s*(\/?[^<\s]+)\s*<\/command-name>/g)].map((match) => match[1]);
 
 /**
+ * Subagent types the agent started: `subagent_type` of every `Task`/`Agent` tool call in a
+ * stream-json transcript (one entry per call; "general-purpose" when the call names none).
+ */
+export function subagentCalls(transcript) {
+  const types = [];
+  for (const line of String(transcript).split('\n')) {
+    if (!line.includes('"tool_use"')) continue;
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    for (const block of message?.message?.content ?? []) {
+      if (block?.type === 'tool_use' && (block.name === 'Task' || block.name === 'Agent')) types.push(String(block.input?.subagent_type ?? 'general-purpose'));
+    }
+  }
+  return types;
+}
+
+/**
+ * Whether a plugin fired, given the skill invocations and subagent types of a run: a
+ * `<plugin>:<x>` name, or a bare name listed in the plugin's own `skills`/`agents` (from the arm
+ * inventory) that no standalone skill claims. Returns the matching names.
+ */
+export function pluginUse(plugin, { invocations = [], subagents = [], standaloneSkills = [] }) {
+  const name = typeof plugin === 'string' ? plugin : plugin.name;
+  const own = new Set([...(plugin.skills ?? []), ...(plugin.agents ?? [])].filter((entry) => !standaloneSkills.includes(entry)));
+  return [...new Set([...invocations, ...subagents].filter((entry) => entry.startsWith(`${name}:`) || own.has(entry)))].sort();
+}
+
+/**
  * Detects which policies, skills and plugins an agent consulted.
  * `events` is a provider-normalised transcript: `{ reads: string[], commands: string[], skills: string[] }`.
  * A policy counts as read when a Read targeted `.../policy/<name>.md` or a shell command named
@@ -140,9 +172,11 @@ export const commandTags = (transcript) => [...String(transcript).matchAll(/<com
  * signal for the policy, `fired` means the agent acted on it; otherwise `fired` means read.
  * A skill fires on a `Skill` call naming it (bare or `<plugin>:<name>`), a read of its SKILL.md, or a
  * slash invocation (`prompt` starting with `/<name>`, or an expanded `<command-name>` tag in
- * `commandTags`). A plugin fires when any of its skills fires that way (`<plugin>:<skill>`).
+ * `commandTags`). A plugin fires when any of its skills fires that way or one of its agents runs as a
+ * subagent (see `pluginUse`). `plugins` are names or inventory entries `{ name, skills, agents }`;
+ * `subagents` are the run's subagent types, reported as counts.
  */
-export function detectPolicies(events, { policies = [], skills = [], plugins = [], signals = {}, prompt = '', commandTags = [] }) {
+export function detectPolicies(events, { policies = [], skills = [], plugins = [], signals = {}, prompt = '', commandTags = [], subagents = [] }) {
   const result = { policies: {}, skills: {}, plugins: {} };
   const slash = slashInvocations({ prompt, commandTags });
   const invocations = [...events.skills, ...slash];
@@ -161,10 +195,13 @@ export function detectPolicies(events, { policies = [], skills = [], plugins = [
       || events.commands.some((command) => command.includes(path));
     result.skills[name] = { fired: invoked };
   }
-  for (const name of plugins) {
-    const used = [...new Set(invocations.filter((skill) => skill.startsWith(`${name}:`)))].sort();
-    result.plugins[name] = { fired: used.length > 0, skills: used };
+  for (const plugin of plugins) {
+    const used = pluginUse(plugin, { invocations, subagents, standaloneSkills: skills });
+    result.plugins[typeof plugin === 'string' ? plugin : plugin.name] = { fired: used.length > 0, skills: used };
   }
+  const subagentCounts = {};
+  for (const type of subagents) subagentCounts[type] = (subagentCounts[type] ?? 0) + 1;
+  result.subagents = subagentCounts;
   return result;
 }
 

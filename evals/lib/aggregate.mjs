@@ -1,7 +1,7 @@
 // Pure aggregation of run and judgment records into the summary that the report renders.
 // The unit of comparison is the task: an arm's task score is the mean over its reps, and the arms are
 // compared on the paired per-task differences d_t = B_t − A_t (see stats.mjs and evals/README.md).
-import { checkScore, scoreRun, slashInvocations } from './checks.mjs';
+import { checkScore, pluginUse, scoreRun, slashInvocations } from './checks.mjs';
 import { bootstrapCi, pairedStats, ratioStats } from './stats.mjs';
 
 /** Differences smaller than this (in metric units) count as "no difference". */
@@ -22,19 +22,46 @@ const pluginName = (plugin) => (typeof plugin === 'string' ? plugin : plugin?.na
  * measured telemetry, a slash invocation counts: the exact prompt sent (`run.prompt`) or a slash
  * command the session log shows expanded (`run.isolation.commands`, recorded after measuring).
  */
-export function componentFired(run, name) {
+export function componentFired(run, name, plugin = null) {
   const telemetry = run.telemetry ?? {};
   const slash = slashInvocations({ prompt: run.prompt ?? '', commandTags: run.isolation?.commands ?? [] });
-  if (name.startsWith('plugin:')) return Boolean(telemetry.plugins?.[name.slice(7)]?.fired) || slash.some((command) => command.startsWith(`${name.slice(7)}:`));
+  if (name.startsWith('plugin:')) {
+    const entry = plugin ?? { name: name.slice(7) };
+    return Boolean(telemetry.plugins?.[entry.name]?.fired)
+      || pluginUse(entry, { invocations: slash, subagents: Object.keys(telemetry.subagents ?? {}), standaloneSkills: Object.keys(telemetry.skills ?? {}) }).length > 0;
+  }
   return Boolean(telemetry.policies?.[name]?.fired || telemetry.skills?.[name]?.fired) || slash.some((command) => command === name || command.endsWith(`:${name}`));
 }
 
+const armPlugin = (info = {}, name) => (info.plugins ?? []).map((plugin) => (typeof plugin === 'string' ? { name: pluginName(plugin) } : { ...plugin, name: pluginName(plugin) })).find((plugin) => plugin.name === name.slice(7)) ?? null;
 const armHas = (info = {}, name) => (name.startsWith('plugin:')
   ? (info.plugins ?? []).some((plugin) => pluginName(plugin) === name.slice(7))
   : (info.policies ?? []).includes(name) || (info.skills ?? []).includes(name));
 
 /** Components a task expects to fire (`expectsComponents`, or the older `expectsPolicies`). */
 export const expectedComponents = (task) => task?.expectsComponents ?? task?.expectsPolicies ?? [];
+
+/**
+ * Subagent use: calls and runs per `subagent_type`, and how many runs started any. Records made
+ * before types were captured count their Task/Agent tool calls as "(type not recorded)".
+ */
+export function subagentStats(runs) {
+  const calls = {};
+  const runsByType = {};
+  let runsWithAny = 0;
+  for (const run of runs) {
+    const counts = run.telemetry?.subagents ?? (() => {
+      const n = (run.agent?.toolsByName?.Task ?? 0) + (run.agent?.toolsByName?.Agent ?? 0);
+      return n ? { '(type not recorded)': n } : {};
+    })();
+    if (Object.keys(counts).length) runsWithAny += 1;
+    for (const [type, n] of Object.entries(counts)) {
+      calls[type] = (calls[type] ?? 0) + n;
+      runsByType[type] = (runsByType[type] ?? 0) + 1;
+    }
+  }
+  return { runs: runs.length, runsWithAny, calls, runsByType };
+}
 
 export function armStats(runs) {
   const checkStats = {};
@@ -51,6 +78,8 @@ export function armStats(runs) {
   const features = {};
   for (const run of runs) for (const name of Object.keys(run.features ?? {})) features[name] = (features[name] ?? 0) + 1;
   const gateNames = [...new Set(runs.flatMap((run) => Object.keys(run.gates ?? {})))];
+  // Hidden test cases, summed over Vitest-scored checks and reps: the number people read first.
+  const counted = runs.flatMap((run) => (run.checks ?? []).filter((check) => typeof check?.total === 'number'));
   const firedRate = (kind) => Object.fromEntries([...new Set(runs.flatMap((run) => Object.keys(run.telemetry?.[kind] ?? {})))]
     .map((name) => [name, rate(runs, (run) => run.telemetry?.[kind]?.[name]?.fired)]));
   return {
@@ -75,6 +104,8 @@ export function armStats(runs) {
     policiesFired: firedRate('policies'),
     skillsFired: firedRate('skills'),
     pluginsFired: firedRate('plugins'),
+    hiddenTests: counted.length ? { passed: counted.reduce((sum, check) => sum + (check.passed ?? 0), 0), total: counted.reduce((sum, check) => sum + check.total, 0) } : null,
+    subagents: subagentStats(runs),
     signalHits: Object.fromEntries([...new Set(runs.flatMap((run) => Object.keys(run.telemetry?.policies ?? {})))]
       .filter((name) => runs.some((run) => run.telemetry.policies[name]?.signalHits !== null && run.telemetry.policies[name]?.signalHits !== undefined))
       .map((name) => [name, mean(runs.map((run) => run.telemetry.policies[name]?.signalHits))]))
@@ -201,7 +232,14 @@ export function aggregate({ config, taskSet, armsInfo, runs: allRuns, judgments,
   // Runs that failed the isolation check saw config the arm did not install: excluded from everything.
   const isolated = allRuns.filter((run) => run.status === 'isolation');
   const runs = allRuns.filter((run) => run.status !== 'isolation');
-  if (isolated.length) scoringWarnings.push(`${isolated.length} run(s) failed the isolation check and are excluded from every figure: ${isolated.map((run) => run.id).join(', ')}.`);
+  if (isolated.length) scoringWarnings.push(`${isolated.length} run(s) failed the isolation check and are excluded from every figure: ${isolated.map((run) => `${run.id} (${(run.isolation?.problems ?? []).join('; ') || run.error || 'no detail'})`).join('; ')}.`);
+  for (const plugin of armsInfo.A?.plugins ?? []) {
+    const other = (armsInfo.B?.plugins ?? []).find((entry) => pluginName(entry) === pluginName(plugin));
+    const label = (entry) => `${entry.version ?? '?'}${entry.gitCommitSha ? ` (${entry.gitCommitSha.slice(0, 7)})` : ''}`;
+    if (other && typeof plugin === 'object' && (plugin.version !== other.version || (plugin.gitCommitSha ?? null) !== (other.gitCommitSha ?? null))) {
+      scoringWarnings.push(`Plugin ${pluginName(plugin)} differs between arms: A ${label(plugin)}, B ${label(other)}. Any difference may come from the plugin version, not the change under test.`);
+    }
+  }
   const excludedIds = new Set(isolated.map((run) => run.id));
   const usable = (set) => set.filter((judgment) => !(judgment.runs ?? []).some((id) => excludedIds.has(id))).map(applyTieRule);
   judgments = usable(judgments);
@@ -257,21 +295,23 @@ export function aggregate({ config, taskSet, armsInfo, runs: allRuns, judgments,
     const entry = { fired: {}, falseTriggers: {}, misses: {} };
     for (const arm of ['A', 'B']) {
       if (!armHas(armsInfo[arm], name)) continue;
+      const plugin = name.startsWith('plugin:') ? armPlugin(armsInfo[arm], name) : null;
+      const firedIn = (run) => componentFired(run, name, plugin);
       const expects = (run) => expectedComponents(tasksById[run.task]).includes(name);
       const notExpected = armRuns(arm, (run) => !expects(run));
       const expected = armRuns(arm, expects);
       const controls = notExpected.filter((run) => taskSet.categories[tasksById[run.task]?.category]?.control);
-      const fired = armRuns(arm, (run) => componentFired(run, name));
+      const fired = armRuns(arm, (run) => firedIn(run));
       entry.fired[arm] = { runs: armRuns(arm).length, fired: fired.map((run) => run.id), tasks: [...new Set(fired.map((run) => run.task))].sort() };
       entry.falseTriggers[arm] = {
         controlRuns: controls.length,
-        controlFired: controls.filter((run) => componentFired(run, name)).length,
+        controlFired: controls.filter((run) => firedIn(run)).length,
         unexpectedRuns: notExpected.length,
-        unexpectedFired: notExpected.filter((run) => componentFired(run, name)).map((run) => run.id)
+        unexpectedFired: notExpected.filter((run) => firedIn(run)).map((run) => run.id)
       };
       entry.misses[arm] = {
         expectedRuns: expected.length,
-        missed: expected.filter((run) => !componentFired(run, name)).map((run) => run.id)
+        missed: expected.filter((run) => !firedIn(run)).map((run) => run.id)
       };
     }
     telemetry.perPolicy[name] = entry;

@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { commandTags, countFeatures, detectPolicies, evaluateChecks, newDependencies, parseUnifiedDiff, parseVitestJson, scoreRun } from './checks.mjs';
+import { commandTags, countFeatures, subagentCalls, detectPolicies, evaluateChecks, newDependencies, parseUnifiedDiff, parseVitestJson, scoreRun } from './checks.mjs';
 import { matchesAny } from './config.mjs';
 import { TELEMETRY_OFF } from './env.mjs';
 
@@ -107,7 +107,17 @@ const finalFiles = (app, ignored) => (globs) => {
   return out;
 };
 
-const pluginNames = (arm) => (arm?.plugins ?? []).map((plugin) => (typeof plugin === 'string' ? plugin : plugin.name ?? plugin.id)).filter(Boolean).map((name) => name.split('@')[0]);
+/** Both arms' plugins as `{ name, skills, agents }`, merged by name. */
+const armPlugins = (armsInfo) => {
+  const byName = {};
+  for (const plugin of [...(armsInfo.A?.plugins ?? []), ...(armsInfo.B?.plugins ?? [])]) {
+    const entry = typeof plugin === 'string' ? { name: plugin.split('@')[0] } : { ...plugin, name: (plugin.name ?? plugin.id ?? '').split('@')[0] };
+    if (!entry.name) continue;
+    const seen = byName[entry.name] ?? { name: entry.name, skills: [], agents: [] };
+    byName[entry.name] = { name: entry.name, skills: [...new Set([...seen.skills, ...(entry.skills ?? [])])], agents: [...new Set([...seen.agents, ...(entry.agents ?? [])])] };
+  }
+  return Object.values(byName);
+};
 
 /** `prompt` is the exact prompt sent (with any arm prefix); it defaults to the job's or the task's. */
 export function measureRun({ job, fixture, pristine, runDir, app, taskSet, task, provider, armsInfo, agentResult, prompt = job.prompt ?? task.prompt }) {
@@ -130,10 +140,11 @@ export function measureRun({ job, fixture, pristine, runDir, app, taskSet, task,
   const telemetry = detectPolicies(transcript.events, {
     policies: [...new Set([...(armsInfo.A.policies ?? []), ...(armsInfo.B.policies ?? [])])],
     skills: [...new Set([...(armsInfo.A.skills ?? []), ...(armsInfo.B.skills ?? [])])],
-    plugins: [...new Set([...pluginNames(armsInfo.A), ...pluginNames(armsInfo.B)])],
+    plugins: armPlugins(armsInfo),
     signals: taskSet.policySignals ?? {},
     prompt,
-    commandTags: commandTags(transcriptText)
+    commandTags: commandTags(transcriptText),
+    subagents: subagentCalls(transcriptText)
   });
   const completed = agentResult.exitCode === 0 && !agentResult.timedOut && transcript.subtype === 'success';
   const record = {

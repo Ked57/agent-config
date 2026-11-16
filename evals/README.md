@@ -407,10 +407,12 @@ original judge's id the first time they are resumed.
 and bootstrap CIs, MDE, and the judge tiebreak when it applies) and a cost line (ratio with its CI),
 then the sample (paired tasks × reps, runs counted and excluded) and the ceiling/floor counts. Then:
 integrity warnings (isolation exclusions, A/A false positives, re-derived ties, fixture and recheck
-notes), setup (with a "Rechecked N time(s)" line after `--recheck`), the task-level comparison table
-(primary, all-pass, judge), per-task results (score A/B, d, reps, all-pass, judge preference),
-per-category means (descriptive), cost (ratios with CIs, means, and where the money went), component
-telemetry, judge (secondary: dimension means, noise figure, judge-set comparison) and notable diffs.
+notes, plugins at different versions in the two arms), setup (per arm: ref and sha, toggles, prompt
+prefix, plugin mode, plugins with version and commit, skill and policy counts; a "Rechecked N time(s)" line
+after `--recheck`), the task-level comparison table (primary, all-pass, judge), per-task results (score
+A/B, d, hidden test cases passed/run, reps, all-pass, judge preference), per-category means
+(descriptive), cost (ratios with CIs, means, and where the money went), component telemetry (with
+subagent calls per `subagent_type`), judge (secondary: dimension means, noise figure, judge-set comparison) and notable diffs.
 
 `summary.json` carries the same numbers under stable keys: `primary`, `allPass`, `judge` and `cost`
 each have `mean`, `ci`, `bootstrapCi`, `mde`, `tasks` and `verdict` (`{ code, text }`; codes `B better`,

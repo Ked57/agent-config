@@ -71,9 +71,8 @@ export function scoreTask({ manifest, results, baselinePasses = false, commandCh
   const errors = [];
   const baseline = results.get(null);
   if (baseline?.pass) errors.push('untouched fixture passes every required check');
-  if (baselinePasses && baseline && baseline.failed.some((id) => commandCheckIds.includes(id))) {
-    errors.push(`untouched fixture fails hidden check(s) ${baseline.failed.join(', ')} although the task preserves behaviour`);
-  }
+  const hiddenFailures = baseline ? baseline.failed.filter((id) => commandCheckIds.includes(id)) : [];
+  if (baselinePasses && hiddenFailures.length) errors.push(`untouched fixture fails hidden check(s) ${hiddenFailures.join(', ')} although the task preserves behaviour`);
   for (const reference of manifest.references ?? []) {
     const result = results.get(reference.file);
     if (result && !result.pass) errors.push(`reference ${reference.file} fails ${result.failed.join(', ')}`);

@@ -258,3 +258,68 @@ test('applyTieRule falls back to the votes tally of older records', async () => 
   assert.equal(applyTieRule({ sides: ['A', 'B'], preference: 'B', votes: { A: 0, B: 1, tie: 1 } }).preference, 'tie');
   assert.equal(applyTieRule({ sides: ['A#1', 'A#2'], preference: 'A#1', votes: { 'A#1': 2, 'A#2': 0, tie: 0 } }).preference, 'A#1');
 });
+
+test('aggregate excludes isolation runs from every metric and names their problems', async () => {
+  const { renderReport } = await import('../evals/lib/report.mjs');
+  const runs = design([0.3, 0.25, 0.35, 0.3, 0.28]);
+  // A perfect-scoring, expensive isolation run would move every figure if it were counted.
+  const leaked = run('t0', 'A', 2, 1, { status: 'isolation', cost: { usd: 50 }, wallMs: 6e6, isolation: { ok: false, problems: ['skills differ from the arm: +live-skill'], commands: [] } });
+  const clean = summarise(runs);
+  const summary = summarise([...runs, leaked]);
+  for (const key of ['primary', 'allPass']) assert.deepEqual(summary[key].perTask, clean[key].perTask, key);
+  assert.equal(summary.cost.mean, clean.cost.mean);
+  assert.deepEqual(summary.overall.A, clean.overall.A);
+  assert.equal(summary.runs, clean.runs);
+  assert.deepEqual(summary.sample.excludedRuns, ['t0__A__r2']);
+  assert.match(summary.scoringWarnings[0], /t0__A__r2 \(skills differ from the arm: \+live-skill\)/);
+  const report = renderReport({ summary, config: { name: 'x', arms: {} }, armsInfo: { A: {}, B: {} }, taskSet: { name: 's' }, fixture: { name: 'f' } });
+  assert.match(report, /## Integrity warnings\n\n- 1 run\(s\) failed the isolation check .*skills differ from the arm/);
+});
+
+test('subagent use is counted per type, and a plugin agent run as a subagent fires the plugin', () => {
+  const telemetry = (subagents) => ({ policies: {}, skills: {}, plugins: {}, subagents });
+  const runs = [
+    run('a', 'B', 1, 1, { telemetry: telemetry({ 'pstack:poteto-agent': 2, Explore: 1 }) }),
+    run('a', 'B', 2, 1, { telemetry: telemetry({}) }),
+    run('a', 'A', 1, 1, { agent: { turns: 3, toolsByName: { Task: 2 } } })
+  ];
+  const taskSet = { name: 's', categories: { c: {} }, tasks: [{ id: 'a', category: 'c', prompt: 'p' }] };
+  const pstack = { name: 'pstack', version: '0.15.42', gitCommitSha: 'abcdef123456', skills: ['poteto-mode'], agents: ['poteto-agent'] };
+  const summary = aggregate({ config: { taskIds: ['a'], watch: [] }, taskSet, armsInfo: { identical: false, watched: ['plugin:pstack'], A: { plugins: [{ ...pstack, version: '0.15.40' }] }, B: { plugins: [pstack] } }, runs, judgments: [] });
+  assert.deepEqual(summary.overall.B.subagents, { runs: 2, runsWithAny: 1, calls: { 'pstack:poteto-agent': 2, Explore: 1 }, runsByType: { 'pstack:poteto-agent': 1, Explore: 1 } });
+  assert.deepEqual(summary.overall.A.subagents.calls, { '(type not recorded)': 2 });
+  assert.deepEqual(summary.telemetry.perPolicy['plugin:pstack'].fired.B.fired, ['a__B__r1']);
+  assert.match(summary.scoringWarnings.join('\n'), /Plugin pstack differs between arms: A 0\.15\.40 \(abcdef1\), B 0\.15\.42 \(abcdef1\)/);
+  // A bare skill name the plugin ships counts for the plugin unless a standalone skill claims it.
+  const bare = detectPolicies({ reads: [], commands: [], skills: ['poteto-mode'] }, { plugins: [pstack], subagents: ['poteto-agent'] });
+  assert.deepEqual(bare.plugins.pstack.skills, ['poteto-agent', 'poteto-mode']);
+  assert.deepEqual(bare.subagents, { 'poteto-agent': 1 });
+  assert.deepEqual(detectPolicies({ reads: [], commands: [], skills: ['poteto-mode'] }, { skills: ['poteto-mode'], plugins: [{ ...pstack, agents: [] }] }).plugins.pstack.skills, []);
+});
+
+test('subagentCalls reads Task and Agent tool calls from stream-json', async () => {
+  const { subagentCalls } = await import('../evals/lib/checks.mjs');
+  const line = (name, input) => JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name, input }] } });
+  const transcript = [line('Agent', { subagent_type: 'pstack:poteto-agent', prompt: 'x' }), line('Task', {}), line('Bash', { command: 'ls' }), 'not json "tool_use"'].join('\n');
+  assert.deepEqual(subagentCalls(transcript), ['pstack:poteto-agent', 'general-purpose']);
+});
+
+test('the report Setup shows ref, toggles, prefix, plugin mode, plugin versions and counts; per-task shows hidden tests', async () => {
+  const { renderReport } = await import('../evals/lib/report.mjs');
+  const hidden = (passed, total) => ({ id: 'acc', level: 'required', pass: passed === total, score: passed / total, passed, total });
+  const runs = [
+    run('t0', 'A', 1, 0.5, { checks: [hidden(4, 8)] }), run('t0', 'A', 2, 1, { checks: [hidden(8, 8)] }),
+    run('t0', 'B', 1, 1, { checks: [hidden(8, 8)] }), run('t0', 'B', 2, 1, { checks: [hidden(8, 8)] })
+  ];
+  const armsInfo = {
+    identical: false, watched: [],
+    A: { ref: 'BARE', sha: null, pluginMode: 'none', plugins: [], skills: [], policies: [] },
+    B: { ref: 'WORKTREE', sha: null, pluginMode: 'install', add: [], remove: ['plugin:taste-skill'], plugins: [{ name: 'pstack', version: '0.15.42', gitCommitSha: 'abcdef123456', skills: ['a', 'b'], agents: ['c'] }], skills: ['manual-qa'], policies: ['routing', 'typescript'] }
+  };
+  const summary = aggregate({ config: { taskIds: ['t0'], watch: [] }, taskSet: taskSetOf(['t0']), armsInfo, runs, judgments: [] });
+  const report = renderReport({ summary, config: { name: 'x', reps: 2, arms: { A: { ref: 'BARE' }, B: { ref: 'WORKTREE', prefix: '/pstack:poteto-mode' } } }, armsInfo, taskSet: { name: 's' }, fixture: { name: 'f' } });
+  assert.match(report, /\| A \| `BARE` \(empty home\) \| – \| – \| none \| none \| 0 \| 0 \|/);
+  assert.match(report, /\| B \| `WORKTREE` \(working tree\) \| −plugin:taste-skill \| `\/pstack:poteto-mode` \| install \| pstack 0\.15\.42 \(abcdef1\): 2 skills, 1 agents \| 1 \| 2 \|/);
+  assert.match(report, /\| t0 \| c \| 0\.75 \| 1\.00 \| \+0\.25 \| 12\/16 \/ 16\/16 \|/);
+  assert.match(report, /Subagents \(Task\/Agent tool calls/);
+});

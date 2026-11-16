@@ -252,7 +252,8 @@ async function main() {
   }
 }
 
-if (isMainThread) {
+// Only as the entry script: tests import taskMutants and loadTaskSets.
+if (isMainThread && process.argv[1] === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
     console.error(error.message ?? error);
     process.exitCode = 1;

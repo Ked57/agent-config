@@ -6,14 +6,18 @@ const signedPct = (value) => (value === null || value === undefined ? '–' : `$
 const counts = (entries) => Object.entries(entries).sort((a, b) => b[1] - a[1]).map(([name, n]) => `${name}×${n}`).join(', ') || '–';
 const cell = (value) => String(value).replaceAll('|', '\\|').replaceAll('\n', ' ');
 const ci = (interval, format = fmtSigned) => (interval ? `${format(interval[0])} to ${format(interval[1])}` : '–');
-const pluginLabel = (plugin) => (typeof plugin === 'string' ? plugin : `${plugin.name}${plugin.version ? `@${plugin.version}` : ''}`);
+const pluginLabel = (plugin) => (typeof plugin === 'string' ? plugin
+  : `${plugin.name} ${plugin.version ?? '?'}${plugin.gitCommitSha ? ` (${plugin.gitCommitSha.slice(0, 7)})` : ''}${plugin.skills || plugin.agents ? `: ${plugin.skills?.length ?? 0} skills, ${plugin.agents?.length ?? 0} agents` : ''}`);
+const refLabel = (info) => (info.ref === 'BARE' ? '`BARE` (empty home)' : `\`${info.ref}\` (${info.sha?.slice(0, 7) ?? 'working tree'})`);
 
-function armLine(arm, info) {
+/** One row per arm: what was installed, how it was toggled and what each prompt was prefixed with. */
+function armLine(arm, info, spec = {}) {
   const toggles = [
     ...(info.add ?? []).map((toggle) => `+${toggle.path}${toggle.source ? ` from ${toggle.source}` : ''}`),
-    ...(info.remove ?? []).map((path) => `−${path}`)
+    ...(info.remove ?? spec.remove ?? []).map((path) => `−${path}`)
   ];
-  return `| ${arm} | \`${info.ref}\` (${info.sha?.slice(0, 7) ?? 'working tree'}) | ${toggles.join(', ') || '–'} | ${(info.policies ?? []).join(', ')} | ${(info.skills ?? []).join(', ')} | ${(info.plugins ?? []).map(pluginLabel).join(', ') || '–'} |`;
+  const plugins = info.ref === 'BARE' ? 'none' : (info.plugins ?? []).map(pluginLabel).join('; ') || 'none';
+  return `| ${arm} | ${refLabel(info)} | ${cell(toggles.join(', ') || '–')} | ${spec.prefix ? `\`${cell(spec.prefix)}\`` : '–'} | ${info.pluginMode ?? '–'} | ${cell(plugins)} | ${(info.skills ?? []).length} | ${(info.policies ?? []).length} |`;
 }
 
 function comparisonRow(label, c) {
@@ -47,9 +51,14 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture }) {
   }
 
   lines.push('## Setup', '');
-  lines.push('| Arm | Ref | Toggles | Policies | Skills | Plugins |', '|---|---|---|---|---|---|');
-  lines.push(armLine('A', armsInfo.A), armLine('B', armsInfo.B), '');
-  lines.push(`- Arms identical: **${armsInfo.identical ? 'yes (A/A control)' : 'no'}**. Changed between arms: ${armsInfo.changedFiles?.length ? armsInfo.changedFiles.map((file) => `\`${file}\``).join(', ') : '–'}`);
+  lines.push('| Arm | Ref | Toggles | Prompt prefix | Plugin mode | Plugins (version, commit) | Skills | Policies |', '|---|---|---|---|---|---|---|---|');
+  lines.push(armLine('A', armsInfo.A, config.arms?.A), ...(single ? [] : [armLine('B', armsInfo.B, config.arms?.B)]), '');
+  for (const arm of single ? ['A'] : ['A', 'B']) {
+    const info = armsInfo[arm];
+    lines.push(`- Arm ${arm} policies: ${(info.policies ?? []).join(', ') || '–'}; skills: ${(info.skills ?? []).join(', ') || '–'}.`);
+  }
+  lines.push('- A task\'s own `promptPrefix` overrides the arm prefix; each run record keeps the exact prompt sent.');
+  lines.push(`- Arms identical: **${armsInfo.identical ? 'yes (A/A control)' : 'no'}**. Changed between arms: ${armsInfo.changedFiles?.length ? `${armsInfo.changedFiles.length} file(s)${armsInfo.changedFiles.length > 12 ? ', first 12' : ''}: ${armsInfo.changedFiles.slice(0, 12).map((file) => `\`${file}\``).join(', ')}` : '–'}`);
   lines.push(`- Agent: provider \`${config.provider}\`, model \`${config.model}\`, effort \`${config.effort}\`, ${config.reps} rep(s) per task and arm, concurrency ${config.concurrency}.`);
   lines.push(`- Judge: ${config.judge ? `provider \`${config.judgeProvider}\`${config.judgeProvider === 'command' ? ` (\`${config.judgeCommand}\`)` : `, model \`${config.judgeModel}\``}, ${config.judgeReps} verdict(s) per pair with alternating patch order, ${config.judgeControls} A#1-vs-A#2 control pair(s) per task` : 'disabled'}.`);
   const rechecks = (summary.history ?? []).filter((entry) => entry.action === 'recheck-result');
@@ -75,11 +84,13 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture }) {
 
   lines.push('## Per-task results', '');
   lines.push('Score = mean required-check score over reps (Vitest-scored checks count passed/total test cases; 0 when a gate failed or the run errored). All-pass = share of reps with every required check and gate passing. Judge = mean overall score on A/B pairs; Pref = judge preference A·B·tie.', '');
-  lines.push('| Task | Category | Score A | Score B | d | Reps A / B | All-pass A / B | Judge A / B | Pref A·B·tie | Cost $ A / B | Features A | Features B |');
-  lines.push('|---|---|---|---|---|---|---|---|---|---|---|---|');
+  lines.push('Hidden tests = test cases passed / run, summed over the task\'s Vitest-scored checks and reps.', '');
+  lines.push('| Task | Category | Score A | Score B | d | Hidden tests A / B | Reps A / B | All-pass A / B | Judge A / B | Pref A·B·tie | Cost $ A / B | Features A | Features B |');
+  lines.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|');
+  const tests = (stats) => (stats.hiddenTests ? `${stats.hiddenTests.passed}/${stats.hiddenTests.total}` : '–');
   for (const task of summary.perTask) {
     const p = task.judge.preference;
-    lines.push(`| ${task.id}${task.unscored ? ' (no required checks)' : ''} | ${task.category} | ${fmt(task.scoreA)} | ${fmt(task.scoreB)} | ${fmtSigned(task.d)} | ${task.A.n} / ${task.B.n} | ${pct(task.A.allPass)} / ${pct(task.B.allPass)} | ${fmt(task.judge.A.overall)} / ${fmt(task.judge.B.overall)} | ${p.A}·${p.B}·${p.tie} | ${fmt(task.A.costUsd)} / ${fmt(task.B.costUsd)} | ${cell(counts(task.A.features))} | ${cell(counts(task.B.features))} |`);
+    lines.push(`| ${task.id}${task.unscored ? ' (no required checks)' : ''} | ${task.category} | ${fmt(task.scoreA)} | ${fmt(task.scoreB)} | ${fmtSigned(task.d)} | ${tests(task.A)} / ${tests(task.B)} | ${task.A.n} / ${task.B.n} | ${pct(task.A.allPass)} / ${pct(task.B.allPass)} | ${fmt(task.judge.A.overall)} / ${fmt(task.judge.B.overall)} | ${p.A}·${p.B}·${p.tie} | ${fmt(task.A.costUsd)} / ${fmt(task.B.costUsd)} | ${cell(counts(task.A.features))} | ${cell(counts(task.B.features))} |`);
   }
   lines.push('');
 
@@ -121,7 +132,7 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture }) {
   }
 
   lines.push('## Component telemetry', '');
-  lines.push('Fired: a policy when the agent read its file (or ran its command signal); a skill on a `Skill` call, a read of its SKILL.md or a slash invocation; a plugin when one of its `<plugin>:<skill>` skills fired.', '');
+  lines.push('Fired: a policy when the agent read its file (or ran its command signal); a skill on a `Skill` call, a read of its SKILL.md or a slash invocation (the prompt sent, or a command the session log shows expanded); a plugin when one of its skills fired that way or one of its agents ran as a subagent.', '');
   const firedTable = (title, key) => {
     const names = [...new Set([...Object.keys(overall.A[key] ?? {}), ...Object.keys(overall.B[key] ?? {})])].sort();
     if (!names.length) return;
@@ -132,6 +143,14 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture }) {
   firedTable('Policy', 'policiesFired');
   firedTable('Skill', 'skillsFired');
   firedTable('Plugin', 'pluginsFired');
+  const subagentTypes = [...new Set(['A', 'B'].flatMap((arm) => Object.keys(overall[arm].subagents?.calls ?? {})))].sort();
+  lines.push('Subagents (Task/Agent tool calls by `subagent_type`):', '');
+  lines.push('| Arm | Runs using any | ' + (subagentTypes.length ? subagentTypes.map((type) => `\`${type}\` calls (runs)`).join(' | ') : 'Calls') + ' |', `|---|---|${subagentTypes.length ? subagentTypes.map(() => '---|').join('') : '---|'}`);
+  for (const arm of single ? ['A'] : ['A', 'B']) {
+    const sub = overall[arm].subagents;
+    lines.push(`| ${arm} | ${sub.runsWithAny}/${sub.runs} | ${subagentTypes.length ? subagentTypes.map((type) => `${sub.calls[type] ?? 0} (${sub.runsByType[type] ?? 0})`).join(' | ') : '0'} |`);
+  }
+  lines.push('');
   if (summary.telemetry.watched.length) {
     lines.push('Watched components (changed between arms, or `--watch`). Expected = the task lists it in `expectsComponents`/`expectsPolicies`.', '');
     lines.push('| Watched | Arm | Fired in runs | Tasks fired on | False triggers on controls | Fired where not expected | Missed where expected |', '|---|---|---|---|---|---|---|');

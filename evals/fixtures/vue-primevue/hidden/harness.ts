@@ -44,6 +44,9 @@ export const env = {
   mediaListeners: new Set<(event: { matches: boolean; media: string }) => void>(),
   observers: [] as StubIntersectionObserver[],
   clipboardWrites: [] as string[],
+  /** Calls to document.startViewTransition and Element.animate since the last mount. */
+  viewTransitions: 0,
+  animations: 0,
 }
 
 class StubIntersectionObserver {
@@ -73,11 +76,12 @@ class StubIntersectionObserver {
   fire(isIntersecting: boolean) {
     const entries = [...this.targets].map((target) => {
       const rect = target.getBoundingClientRect()
+      const box = { x: rect.x, y: rect.y, width: rect.width, height: rect.height, left: rect.left, right: rect.right }
       return {
         target,
         isIntersecting,
         intersectionRatio: isIntersecting ? 1 : 0,
-        boundingClientRect: { ...rect.toJSON(), top: isIntersecting ? 0 : -200, bottom: isIntersecting ? 1 : -199 } as DOMRectReadOnly,
+        boundingClientRect: { ...box, top: isIntersecting ? 0 : -200, bottom: isIntersecting ? 1 : -199 } as DOMRectReadOnly,
         intersectionRect: rect,
         rootBounds: null,
         time: Date.now(),
@@ -223,10 +227,22 @@ export function installBrowserStubs() {
   } as unknown as typeof ResizeObserver
   window.scrollTo = (() => {}) as typeof window.scrollTo
   Element.prototype.scrollIntoView = function scrollIntoView() {}
-  if (!('animate' in Element.prototype)) {
+  env.viewTransitions = 0
+  env.animations = 0
+  Object.defineProperty(document, 'startViewTransition', {
+    configurable: true,
+    value(update?: (() => unknown) | { update?: () => unknown }) {
+      env.viewTransitions += 1
+      const callback = typeof update === 'function' ? update : update?.update
+      const done = Promise.resolve().then(() => callback?.())
+      return { updateCallbackDone: done, ready: done, finished: done, skipTransition() {}, types: new Set() }
+    },
+  })
+  {
     Object.defineProperty(Element.prototype, 'animate', {
       configurable: true,
       value() {
+        env.animations += 1
         const animation = { finished: Promise.resolve(), cancel() {}, finish() {}, play() {}, pause() {}, onfinish: null as null | (() => void), addEventListener() {} }
         setTimeout(() => animation.onfinish?.(), 0)
         return animation
@@ -320,6 +336,23 @@ export function unmountApp() {
   for (const attribute of [...document.documentElement.attributes]) {
     if (attribute.name !== 'lang') document.documentElement.removeAttribute(attribute.name)
   }
+}
+
+/**
+ * Simulates scrolling the page to `y`: sets the scroll offsets, fires `scroll` on window and document,
+ * and reports every observed IntersectionObserver target as intersecting only at the top.
+ */
+export async function scrollPageTo(y: number) {
+  for (const target of [window, document.documentElement, document.body, document.scrollingElement]) {
+    if (!target) continue
+    for (const key of target === window ? ['scrollY', 'pageYOffset'] : ['scrollTop']) {
+      Object.defineProperty(target, key, { configurable: true, value: y })
+    }
+  }
+  window.dispatchEvent(new Event('scroll'))
+  document.dispatchEvent(new Event('scroll'))
+  for (const observer of env.observers) observer.fire(y < 8)
+  await sleep(250)
 }
 
 /** Visible text of an element with whitespace collapsed. */
