@@ -139,6 +139,13 @@ test('scoreRun: mean required-check score, 0 on gate failure or error, null with
   assert.deepEqual(scoreRun({ status: 'ok', gatesPass: true, checks: [{ level: 'required', pass: true }, { level: 'required', pass: false }] }), { score: 0.5, allPass: false });
 });
 
+test('scoreRun: check weights make a weighted mean (default 1, info checks ignored)', () => {
+  const checks = [{ pass: false, score: 0.5, weight: 0.4 }, { pass: true, score: 1, weight: 0.1 }, { pass: true, score: 1 }, { level: 'info', pass: false, score: 0, weight: 5 }];
+  // (0.4 x 0.5 + 0.1 x 1 + 1 x 1) / 1.5
+  assert.equal(scoreRun({ status: 'ok', gatesPass: true, checks }).score.toFixed(6), (1.3 / 1.5).toFixed(6));
+  assert.equal(scoreRun({ status: 'ok', gatesPass: true, checks: [{ pass: true, weight: 3 }, { pass: false, score: 0, weight: 1 }] }).score, 0.75);
+});
+
 test('isolation runs are excluded from every figure and counted in a warning', () => {
   const runs = design([0.3, 0.25, 0.35, 0.3, 0.28]);
   runs.push(run('t9', 'A', 1, 1, { status: 'isolation' }), run('t9', 'B', 1, 0));

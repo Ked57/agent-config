@@ -284,6 +284,7 @@ export function validateTaskSet(taskSet) {
       checkIds.add(check?.id);
       if (!CHECK_TYPES.has(check?.type)) errors.push(`${cwhere}: type must be pattern, changed or command`);
       if (check?.level !== undefined && !['required', 'info'].includes(check.level)) errors.push(`${cwhere}: level must be required or info`);
+      if (check?.weight !== undefined && !(typeof check.weight === 'number' && Number.isFinite(check.weight) && check.weight > 0)) errors.push(`${cwhere}: weight must be a positive number`);
       if (check?.type === 'pattern') {
         if (!['added', 'final'].includes(check.in)) errors.push(`${cwhere}: in must be added or final`);
         if (!['present', 'absent'].includes(check.expect)) errors.push(`${cwhere}: expect must be present or absent`);

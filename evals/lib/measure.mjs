@@ -42,7 +42,7 @@ export function runCommandCheck(check, { fixture, app }) {
     copied.push(target);
   }
   try {
-    const base = { id: check.id, label: check.label ?? check.id, level: check.level ?? 'required' };
+    const base = { id: check.id, label: check.label ?? check.id, level: check.level ?? 'required', ...(check.weight !== undefined ? { weight: check.weight } : {}) };
     const toolsEnv = check.browserTools ? { EVAL_TOOLS_DIR: ensureBrowserTools(path.join(sandboxRoot(), '.cache')) } : {};
     if (check.reporter === 'vitest-json') return vitestCheck(check, app, base);
     if (check.reporter === 'json-score') return jsonScoreCheck(check, app, base, toolsEnv);

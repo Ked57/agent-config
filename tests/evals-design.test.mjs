@@ -201,6 +201,7 @@ test('vue-design task set is valid and wired to its screens, mockups and stub fr
   assert.deepEqual(validateTaskSet(taskSet), []);
   const [first] = taskSet.tasks;
   assert.match(validateTaskSet({ ...taskSet, tasks: [{ ...first, checks: [{ ...first.checks[0], browserTools: 'yes' }] }] }).join('\n'), /browserTools must be true or false/);
+  assert.match(validateTaskSet({ ...taskSet, tasks: [{ ...first, checks: [{ ...first.checks[0], weight: 0 }] }] }).join('\n'), /weight must be a positive number/);
   const files = JSON.parse(fs.readFileSync(path.join(STUB, 'files.json'), 'utf8'));
   const nodes = new Set(Object.values(files).flatMap((entry) => entry.pages.flatMap((pageEntry) => pageEntry.frames.map((frame) => frame.nodeId))));
   for (const task of taskSet.tasks) {

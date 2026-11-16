@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads';
 import { copyForRun, loadFixture, preparePristine } from './lib/fixtures.mjs';
-import { checkScore } from './lib/checks.mjs';
+import { checkScore, requiredScore } from './lib/checks.mjs';
 import { diffAgainstPristine, recheckRun } from './lib/measure.mjs';
 import { declaredKillRate, normalisePatch, scoreTask, validateManifest } from './lib/mutants.mjs';
 
@@ -76,7 +76,7 @@ function runJob({ fixtureName, pristine, scratch, task, patch, label }) {
     const failed = required.filter((check) => !check.pass || (check.total !== undefined && check.passed !== check.total));
     return {
       pass: failed.length === 0,
-      score: required.length ? required.reduce((sum, check) => sum + checkScore(check), 0) / required.length : null,
+      score: requiredScore(required),
       checkScores: Object.fromEntries(required.map((check) => [check.id, checkScore(check)])),
       failed: failed.map((check) => check.id),
       details: Object.fromEntries(failed.map((check) => [check.id, String(check.detail ?? '').slice(-400)])),

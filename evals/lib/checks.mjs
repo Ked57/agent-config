@@ -287,7 +287,16 @@ export function parseVitestJson(text) {
 export const checkScore = (check) => (typeof check?.score === 'number' ? check.score : check?.pass ? 1 : 0);
 
 /**
- * Run score: mean score of the required checks, or 0 when the run did not finish (`status` other than
+ * Weighted mean score of required check results (`weight` on the check, default 1); null when there are none.
+ */
+export function requiredScore(checks) {
+  const required = checks.filter((check) => check && (check.level ?? 'required') === 'required');
+  const total = required.reduce((sum, check) => sum + (check.weight ?? 1), 0);
+  return total ? required.reduce((sum, check) => sum + (check.weight ?? 1) * checkScore(check), 0) / total : null;
+}
+
+/**
+ * Run score: weighted mean score of the required checks (see `requiredScore`), or 0 when the run did not finish (`status` other than
  * `ok`) or a fixture gate failed. `score` is null when the task has no required checks. `allPass`
  * means every required check and every gate passed. Old records without check scores are scored
  * from `pass`.
@@ -297,7 +306,7 @@ export function scoreRun(run) {
   const finished = run.status === 'ok' && run.gatesPass !== false;
   if (!required.length) return { score: null, allPass: finished };
   return {
-    score: finished ? required.reduce((sum, check) => sum + checkScore(check), 0) / required.length : 0,
+    score: finished ? requiredScore(required) : 0,
     allPass: finished && required.every((check) => check.pass)
   };
 }
