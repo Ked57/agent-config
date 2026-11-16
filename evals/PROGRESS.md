@@ -160,3 +160,14 @@ and the run is excluded and reported.
   - If budget remains under the $80 total, add a second rep of comparison 2 with
     `--resume <dir> --reps 2` only if the suite supports raising reps on resume; otherwise report the shortfall.
 - After Phase 3: write `evals/NEXT.md`, update README examples if needed, final summary, delete heartbeat `e95b56f3`.
+- 10:37 UTC: `fvb-hard` done (16 runs, $9.99): run score A 0.92, B 1.00, CI −0.11 to +0.28, 7 of 8 tasks at ceiling; cost B +54%.
+- 10:57 UTC: `fvb-base` done (26 runs, $11.15): mean d +0.10, CI −0.15 to +0.36; cost B +53%.
+- 11:08 UTC: `fvb-vue` crashed with ENOSPC after 11 runs. Cause: each finished run's `app/` in the
+  results dir carries a full copy of `node_modules` (230–280 MB; the hard links to the fixture cache
+  do not survive). Fix applied by hand: removed `node_modules` from every finished run app and the
+  finished evals' sandboxes (19 GB free again), driver relaunched at 11:15 and resumed `fvb-vue`.
+  **Open code fix:** drop `linkPaths` from saved run apps after measuring and re-link them on
+  `--recheck`. Until then, prune `runs/*/app/node_modules` in results dirs by hand; `--recheck` on
+  those dirs needs `node_modules` linked back from a prepared fixture.
+- Host now reports 15.7 GB RAM (was 7.5 GB).
+- Phase 3 spend so far: $21.14.
