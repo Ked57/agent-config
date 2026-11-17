@@ -342,3 +342,18 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
   with poteto-mode only.
 - R5.3 (`manual-qa` removed) running; R5.4 next. New comparison spend so far: $14.62 + $13.89 + $3.95 wasted = $32.46.
 - 03:58 UTC: R5.3 done (`~/agent-config-evals/2026-11-17T01-40-r2-no-manual-qa`, $12.22 new). R5.4 running.
+- 04:32 UTC: **all four comparisons done.**
+  - R5.3 `manual-qa` removed on `backend-legacy` ($12.22): score 0.98 vs 0.99, d +0.01, CI −0.02 to +0.04,
+    MDE 0.04 → no difference; cost −4% (CI −15% to +5%). Telemetry still counts `manual-qa` as fired in
+    7 of 8 ablated runs: the shared policy and routing still ask for manual QA, so removing the skill
+    file alone does not remove the behaviour (not confirmed from transcripts). The ablation is
+    uninformative as designed.
+  - R5.4 figma-link vs screenshot-only on `main` (`…-r2-figma-vs-screenshot`, $11.04): 0.75 vs 0.78, d +0.03,
+    CI −0.10 to +0.15, MDE 0.17 → cannot conclude; screenshot-only costs 27% less (CI −36% to −17%).
+    Per task d: D1 −0.10, D2 +0.06, D3 −0.07, D4 +0.18, D5 −0.05, D6 +0.14.
+  - Comparison spend: $14.62 + $13.89 + $12.22 + $11.04 = $51.77, plus $3.95 wasted = $55.72 of about $80.
+- Observation: arm A's D4 run (0.75) is low against both variants (0.96, 0.93), so single-run noise on
+  the design set may be as large as the effects. Lead decision: spend about $14 on a second rep of
+  `main` on `vue-design` (`…-r2-design-noise`, single arm, rep 1 reused) to measure run-to-run noise.
+  RacePlanr replay (R4c) is not built this round: feasible, but it needs a private fixture path, a Rust
+  toolchain in the run env and two more usage windows, and three tasks cannot support a verdict.
