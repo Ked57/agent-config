@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { removeTree, sandboxRoot } from './lib/env.mjs';
 import { baselineFrom, judgeSmoke, renderSmoke, smokeRow } from './lib/smoke.mjs';
 
 const EVALS_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -74,6 +75,10 @@ function runSets({ spec, tasks, dir, options }) {
       process.exit(EXIT_PROVIDER_STOP);
     }
     if (result.status !== 0) console.log(`\n${set}: run.mjs exited ${result.status}; its tasks are reported as they stand.`);
+    // The set's sandbox (about 0.5 GB of arm home and fixture copies) is not needed once its runs are
+    // saved: arm builds are cached under the evals home, and --resume rebuilds a missing sandbox.
+    const sandbox = fs.existsSync(path.join(out, 'config.json')) ? readJson(path.join(out, 'config.json')).sandbox : null;
+    if (sandbox && fs.existsSync(sandbox)) removeTree(sandbox, sandboxRoot());
   }
 }
 
