@@ -300,3 +300,4 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
      (medium and large spec issue plus one small fix), kept outside this repo. Otherwise reported as
      feasible, not built.
   Calibration runs are `--a main` single-arm, so with reuse they double as arm A of R5.2 and R5.3.
+- 00:45 UTC (Nov 17): R4b built `ts-backend-legacy` + `backend-legacy` G1–G8 (gate passes, 77 checks; verify 242) and started calibration; usage limit hit after one run (G7 18 of 18, $2.14). Lead resumed the calibration eval directly (`~/agent-config-evals/2026-11-16T23-57-57-r2-legacy-calibration`, loop in `round2/r4b-calibration.log`); R4b agent to be resumed only for failure classification.
