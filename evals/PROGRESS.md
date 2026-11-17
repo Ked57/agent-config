@@ -301,3 +301,19 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
      feasible, not built.
   Calibration runs are `--a main` single-arm, so with reuse they double as arm A of R5.2 and R5.3.
 - 00:45 UTC (Nov 17): R4b built `ts-backend-legacy` + `backend-legacy` G1–G8 (gate passes, 77 checks; verify 242) and started calibration; usage limit hit after one run (G7 18 of 18, $2.14). Lead resumed the calibration eval directly (`~/agent-config-evals/2026-11-16T23-57-57-r2-legacy-calibration`, loop in `round2/r4b-calibration.log`); R4b agent to be resumed only for failure classification.
+- 01:15 UTC: **legacy calibration done** (`~/agent-config-evals/2026-11-16T23-57-57-r2-legacy-calibration`, $11.12):
+  92 of 94 hidden cases passed. G1 9/9, G2 11/11, G3 10/11, G4 11/11, G5 7/7, G6 16/16, G7 18/18, G8 10/11.
+  The two misses (a full refund of a decimal payment in G3; a leftover import of the retired module in
+  G8) are not yet classified. **Fourth ceiling**: a bigger, messier codebase, symptom-only reports, an
+  IDOR sweep, a measured budget and spec conformance did not make the baseline fail. Target of 30–60%
+  failing not met; no unstated requirements were added to force it.
+- Round 2 calibration spend: $27.71 of about $40 (probes $1.54, design $15.05, legacy $11.12).
+- Lead plan for R5 (budget about $80), concurrency 1, calibration runs reused as arm A:
+  R5.1 `main` vs `fix/skill-bugs` on `vue-design` (figma-link); R5.4 figma-link vs screenshot-only;
+  R5.2 poteto-mode on vs off on `backend-legacy`; R5.3 `manual-qa` removed on `backend-legacy`.
+  Design-pack `--b-remove` ablations dropped. The legacy quality metric is at ceiling, so R5.2 and R5.3
+  will mostly answer cost; the design set (0.67–0.82) is the one place quality can move.
+  RacePlanr replay (R4c) only if a usage window remains after R5.
+- Reuse snag: the design calibration ran with pstack 0.15.42; today's build has 0.15.43, so the exact
+  key no longer matches. A small change (`--reuse-allow-plugin-drift`, recorded in the report, allowed
+  only when the drifted plugin did not fire) is being added rather than paying $15 to re-run arm A.
