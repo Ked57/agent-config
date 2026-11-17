@@ -6,6 +6,75 @@ agent-config **arms** are built from git refs. The same **tasks** run against fr
 gates and checks, routing telemetry, cost, and a blind pairwise LLM judge whose noise floor is
 measured alongside it.
 
+## Regression smoke (start here)
+
+Two rounds of A/B evals (history: [`history/README.md`](history/README.md)) showed that synthetic tasks
+cannot separate configs on quality: Opus 5.5 passes them with or without this config. What the suite
+does measure well is **which policies and skills fire** and **what a task costs**. `npm run eval:smoke`
+checks exactly that, cheaply, after every config change:
+
+```sh
+npm run eval:smoke                          # the working tree, uncommitted changes included
+npm run eval:smoke -- --ref main            # a branch or commit instead
+npm run eval:smoke -- --only C3-page-transition,P1-landing-page   # rerun a few tasks
+npm run eval:smoke -- --resume ~/agent-config-evals/<dir>         # after a usage limit (exit 75)
+npm run eval:smoke -- --from ~/agent-config-evals/<dir>           # report again, no agent runs
+npm run eval:smoke -- --update-baseline     # run, then write evals/smoke-baseline.json
+```
+
+It runs one arm, one rep of each task in [`smoke.json`](smoke.json) on Sonnet 5.5 (`claude-sonnet-5-5`,
+medium effort), at concurrency 1, with the judge off (a single arm has nothing to compare against). Each
+task set is a normal `npm run eval -- --single-arm` under `~/agent-config-evals/<timestamp>-smoke/<set>/`,
+with the same isolation, arm cache and result reuse; `SMOKE.md` there holds the report.
+
+| Task | Covers | Expected to fire | Must not fire |
+|---|---|---|---|
+| L1-confirm-delete | Vue/PrimeVue UI, library component | routing, vue-primevue, typescript, emil-design-eng, manual-qa | react |
+| C3-page-transition | Vue/PrimeVue UI, motion | routing, vue-primevue, animate | react |
+| C5-container-card-grid | Vue/PrimeVue UI, layout | routing, vue-primevue, emil-design-eng, manual-qa | react |
+| P1-landing-page | Designed page without a mockup | routing, vue-primevue, emil-design-eng, taste-skill, manual-qa | react |
+| D2-account-settings | Design from a mockup (PNG hand-off) | routing, vue-primevue, emil-design-eng, manual-qa | react, taste-skill |
+| N1-query-parser-util | Pure-utility control in a UI repo | routing, typescript | manual-qa, agent-browser, emil-design-eng, react |
+| B6-login-rate-limit | TS backend feature | routing, typescript | manual-qa, agent-browser, vue-primevue, emil-design-eng |
+| B7-tenant-isolation | Backend bug fix (reported defect) | routing, typescript | same |
+| B3-project-list-n-plus-one | Backend bug fix (performance) | routing, typescript | same |
+| K5-token-cli | TS backend CLI | routing, typescript | same |
+| N1-parse-duration | Pure-utility control | routing, typescript | same |
+| N2-readme | Non-code control (docs) | routing | same |
+
+**Verdicts.** Per task, against the expectations in `smoke.json` and the numbers in
+[`smoke-baseline.json`](smoke-baseline.json):
+
+- **Fail** (exit 1): an expected component did not fire, a forbidden one did, a fixture gate failed, or
+  the run errored or broke isolation.
+- **Warn** (exit 0): cost or turns more than 30% off the baseline (`costTolerance`), a required check
+  scoring below its baseline, or firing of a component the spec does not mention that differs from the
+  baseline ("newly fired", "no longer fired").
+
+**Cost.** A full run costs about **$2.40** (measured 2026-11-17: $1.59 to $2.43 for 11–12 tasks) and
+takes about 15 minutes, plus about 3 minutes once to generate the design mockups. Tasks with an
+unchanged config and task are reused from earlier results at no cost.
+
+**Noise.** One rep is one sample. Sonnet skips optional steps more often than Opus: across the two
+runs of 2026-11-17, C3 never loaded `emil-design-eng` or ran manual QA, although it read the policy
+that asks for both (so those are not expected there). Before treating a firing failure as a
+regression, rerun that task with `--only`; a failure that repeats is real.
+
+**Workflow.**
+
+1. Change the config (`policy/`, `skills/`, `bin/external-plugins.mjs`).
+2. `npm run eval:smoke`. Read `SMOKE.md`: each FAIL and each warning.
+3. Decide: a failure from your change → fix the change; an expectation your change makes wrong on
+   purpose → edit `smoke.json` in the same commit; drift → check the transcript in
+   `<set>/runs/<task>__A__r1/`.
+4. Once it is right, `npm run eval:smoke -- --update-baseline --from <that dir>` (or rerun with
+   `--update-baseline`) and commit `smoke-baseline.json` with the change. Refresh it from `main`
+   after a merge: `npm run eval:smoke -- --ref main --update-baseline`.
+
+The full A/B machinery below is still there for cost comparisons and ablations.
+
+## A/B comparisons
+
 ```sh
 # Does feat/x improve on main? (3 reps of every task in the default task set)
 npm run eval -- --a main --b feat/x --tasks vue-primevue --reps 3

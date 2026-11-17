@@ -8,7 +8,7 @@
     { "set": "vue-primevue", "id": "L1-confirm-delete", "covers": "Vue/PrimeVue UI: library component",
       "fires": ["routing", "vue-primevue", "typescript", "emil-design-eng", "manual-qa"], "notFires": ["react"] },
     { "set": "vue-primevue", "id": "C3-page-transition", "covers": "Vue/PrimeVue UI: motion",
-      "fires": ["routing", "vue-primevue", "emil-design-eng", "animate", "manual-qa"], "notFires": ["react"] },
+      "fires": ["routing", "vue-primevue", "animate"], "notFires": ["react"] },
     { "set": "vue-primevue", "id": "C5-container-card-grid", "covers": "Vue/PrimeVue UI: layout",
       "fires": ["routing", "vue-primevue", "emil-design-eng", "manual-qa"], "notFires": ["react"] },
     { "set": "vue-primevue", "id": "N1-query-parser-util", "covers": "Pure-utility control in a UI repo",

@@ -256,9 +256,12 @@ This syntax-checks the scripts and executes the installer and eval-suite unit te
 fixture project. Each arm is installed into a temporary home, never into your live config.
 
 ```sh
-npm run eval -- --b feat/my-policy --smoke          # quick check
+npm run eval:smoke                                   # regression smoke of the working tree (~$2.40)
 npm run eval -- --a main --b feat/my-policy --reps 3 --max-usd 60
 ```
+
+`eval:smoke` checks which policies and skills fire, cost and gates against
+`evals/smoke-baseline.json`; run it after every config change.
 
 See [evals/README.md](evals/README.md) for arms and toggles, fixtures, task sets, the judge's noise
 floor, budgets and resuming.
