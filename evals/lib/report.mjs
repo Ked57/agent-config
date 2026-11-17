@@ -59,7 +59,7 @@ export function renderReport({ summary, config, armsInfo, taskSet, fixture }) {
   }
   for (const arm of single ? ['A'] : ['A', 'B']) {
     const reuse = summary.reuse?.[arm];
-    if (reuse?.reused) lines.push(`- **Arm ${arm}: ${reuse.reused} of ${reuse.runs} runs reused** from ${reuse.sources.map((source) => `\`${source.dir}\` (${source.runs} run(s), made ${source.madeAt?.slice(0, 10) ?? 'date unknown'})`).join(', ')}: same inputsKey (arm install, plugin versions and commits, model, task, checks, fixture, rep), copied instead of run.`);
+    if (reuse?.reused) lines.push(`- **Arm ${arm}: ${reuse.reused} of ${reuse.runs} runs reused** from ${reuse.sources.map((source) => `\`${source.dir}\` (${source.runs} run(s), made ${source.madeAt?.slice(0, 10) ?? 'date unknown'})`).join(', ')}: same inputsKey (arm install, plugin versions and commits, model, task, checks, fixture, rep), copied instead of run.${reuse.pluginDrift?.length ? ` With plugin drift (\`--reuse-allow-plugin-drift\`): ${reuse.pluginDrift.map((plugin) => `${plugin.runs} made with ${plugin.id.split('@')[0]} ${plugin.from.version}, this arm has ${plugin.to.version}`).join('; ')}; the plugin did not fire in them, and the repo-owned files are identical.` : ''}`);
   }
   lines.push('- A task\'s own `promptPrefix` overrides the arm prefix; each run record keeps the exact prompt sent.');
   lines.push(`- Arms identical: **${armsInfo.identical ? 'yes (A/A control)' : 'no'}**. Changed between arms: ${armsInfo.changedFiles?.length ? `${armsInfo.changedFiles.length} file(s)${armsInfo.changedFiles.length > 12 ? ', first 12' : ''}: ${armsInfo.changedFiles.slice(0, 12).map((file) => `\`${file}\``).join(', ')}` : '–'}`);

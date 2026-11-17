@@ -636,6 +636,12 @@ task's hidden test keeps every key); the rep number; and `--http` and
   the copied diffs as usual, and `--combine` keeps `reusedFrom`.
 - `--no-reuse` turns it off; `--reuse-from <dir>` (repeatable) searches only those dirs, which may lie
   outside the evals home. `--dry-run` prints how many runs would be reused and how many run.
+- `--reuse-allow-plugin-drift` also reuses, when no exact match exists, a run whose key differs only in
+  external plugin versions and commits (and their files), provided the plugin set and the repo-owned
+  installed files are identical and none of the drifted plugins fired in it (repo-owned files come from
+  the record's `inputs.installedParts`, or for older records from the source eval's `arms.json`). Such a
+  run carries `reusedFrom.pluginDrift`, the report adds an integrity warning and a Setup note per arm,
+  and `--dry-run` splits `reusedStrict` from `reusedWithPluginDrift`.
 - `--recheck` updates a run's key when the checks changed, so later evals with the same checks can reuse it.
 - `node evals/run.mjs --backfill-keys <dir>` adds keys to an eval made before keys existed. It recomputes
   them from the dir's `config.json`, `arms.json` and `taskset.json` and the repository's check files,

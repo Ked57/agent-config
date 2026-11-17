@@ -368,9 +368,21 @@ export function aggregate({ config, taskSet, armsInfo, runs: allRuns, judgments,
       source.runs += 1;
       if (run.reusedFrom.madeAt && (!source.madeAt || run.reusedFrom.madeAt < source.madeAt)) source.madeAt = run.reusedFrom.madeAt;
     }
-    return [arm, { runs: armAll.length, reused: armAll.length - armAll.filter((run) => !run.reusedFrom).length, sources: Object.values(sources) }];
+    // Runs reused with --reuse-allow-plugin-drift, grouped by plugin and version change.
+    const pluginDrift = {};
+    for (const run of armAll) {
+      for (const plugin of run.reusedFrom?.pluginDrift ?? []) {
+        const key = `${plugin.id}\0${plugin.from.version}\0${plugin.to.version}`;
+        (pluginDrift[key] ??= { ...plugin, runs: 0 }).runs += 1;
+      }
+    }
+    return [arm, { runs: armAll.length, reused: armAll.length - armAll.filter((run) => !run.reusedFrom).length, sources: Object.values(sources), pluginDrift: Object.values(pluginDrift) }];
   }));
-  if (reusedRuns.length) scoringWarnings.push(`${reusedRuns.length} run(s) were reused from earlier evals (see Setup), not made in the same time window as this eval's new runs: drift on the provider's side between then and now is not controlled. Their inputs, plugin versions and commits included, are identical by inputsKey.`);
+  const driftRuns = reusedRuns.filter((run) => run.reusedFrom.pluginDrift?.length).length;
+  if (reusedRuns.length) scoringWarnings.push(`${reusedRuns.length} run(s) were reused from earlier evals (see Setup), not made in the same time window as this eval's new runs: drift on the provider's side between then and now is not controlled. Their inputs, plugin versions and commits included, are identical by inputsKey${driftRuns ? `, except ${driftRuns} reused with plugin drift (below)` : ''}.`);
+  for (const arm of ['A', 'B']) {
+    for (const plugin of reuse[arm].pluginDrift) scoringWarnings.push(`${plugin.runs} reused run(s) were made with ${plugin.id.split('@')[0]} ${plugin.from.version}; this eval's arm ${arm} has ${plugin.to.version}; the plugin did not fire in those runs.`);
+  }
   const judgeComparisons = Object.entries(otherJudgeSets).map(([id, set]) => ({ id, ...compareJudgeSets(judgments, set, armsInfo.identical) }));
   const runtimeSmoke = Object.fromEntries(['A', 'B'].map((arm) => {
     const checked = runs.filter((run) => run.arm === arm && (run.browser || run.http));

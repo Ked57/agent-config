@@ -23,7 +23,7 @@ import { measureRun, recheckRun, runTelemetry } from './lib/measure.mjs';
 import { budgetAllows, buildRunQueue, changedArmFiles, fixedFlagsOnResume, flippedChecks, planJudgePairs, semaphore } from './lib/plan.mjs';
 import { agentProvider, judgeProvider } from './lib/providers/index.mjs';
 import { renderReport } from './lib/report.mjs';
-import { backfillKeys, copyReusedRun, indexRuns, inputsKey, newRunsUsd, planReuse, reuseSourceDirs, runAppDir, runInputs, scanRuns, taskInputs } from './lib/reuse.mjs';
+import { backfillKeys, copyReusedRun, indexRuns, indexRunsByDriftKey, inputsKey, newRunsUsd, planReuse, reuseSourceDirs, runAppDir, runInputs, scanRuns, taskInputs } from './lib/reuse.mjs';
 
 const EVALS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(EVALS_DIR, '..');
@@ -97,6 +97,9 @@ Execution
   --no-reuse                Run every pending run, even when a finished run with the same inputsKey exists.
   --reuse-from <dir>        Search only these result dirs for reusable runs (repeatable; default: every dir
                             under the evals home).
+  --reuse-allow-plugin-drift  When no exact match exists, also reuse a run whose key differs only in external
+                            plugin versions and commits, if the plugin set and repo-owned files are equal and
+                            none of the drifted plugins fired in it (recorded as reusedFrom.pluginDrift).
   --backfill-keys <dir>     Compute inputsKeys for an existing results dir's runs (when its fixture template
                             and tasks are unchanged), so later evals can reuse them. No model calls.
   --assume-template-unchanged  With --backfill-keys, for a dir whose template hash can't be recovered (recorded).
@@ -357,7 +360,7 @@ async function main() {
     if (fixed.length) throw new Error(`--resume keeps the eval's arms, tasks, model and reps: drop ${fixed.join(', ')} or start a new eval`);
     migrateLegacyJudgments(outDir, config);
     const overrides = {};
-    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser', 'http', 'judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand', 'strictIsolation', 'minFreeMb', 'keepLinked', 'reuse', 'reuseFrom']) if (raw[key] !== undefined && raw[key] !== config[key]) {
+    for (const key of ['concurrency', 'maxUsd', 'maxRuns', 'judge', 'judgeReps', 'judgeControls', 'browser', 'http', 'judgeModel', 'judgeEffort', 'judgeProvider', 'judgeCommand', 'strictIsolation', 'minFreeMb', 'keepLinked', 'reuse', 'reuseFrom', 'reuseAllowPluginDrift']) if (raw[key] !== undefined && raw[key] !== config[key]) {
       overrides[key] = { from: config[key] ?? null, to: raw[key] };
       config[key] = raw[key];
     }
@@ -622,23 +625,27 @@ async function main() {
   let reusePlan = { reuse: [], run: pending };
   if (pending.length && config.reuse !== false) {
     const dirs = reuseSourceDirs({ evalsHome: EVALS_HOME, reuseFrom: config.reuseFrom ?? [], exclude: outDir });
-    const keys = new Map(pending.map((job) => [job.id, inputsKey(inputsOf(job))]));
-    reusePlan = planReuse({ pending, keyOf: (job) => keys.get(job.id), index: indexRuns(scanRuns(dirs)), used: runs.filter((run) => run.reusedFrom).map((run) => run.reusedFrom) });
+    const inputs = new Map(pending.map((job) => [job.id, inputsOf(job)]));
+    const found = scanRuns(dirs);
+    // --reuse-allow-plugin-drift: without an exact match, a run made with other external plugin versions.
+    const drift = config.reuseAllowPluginDrift ? { inputsOf: (job) => inputs.get(job.id), index: indexRunsByDriftKey(found) } : null;
+    reusePlan = planReuse({ pending, keyOf: (job) => inputsKey(inputs.get(job.id)), index: indexRuns(found), used: runs.filter((run) => run.reusedFrom).map((run) => run.reusedFrom), drift });
   }
+  const driftReused = reusePlan.reuse.filter((entry) => entry.pluginDrift);
   if (raw.dryRun) {
-    console.log(JSON.stringify({ outDir, sandbox, arms: { A: armsInfo.A.ref, B: armsInfo.B.ref }, plugins: { A: armsInfo.A.plugins?.map((plugin) => `${plugin.id}@${plugin.version}`), B: armsInfo.B.plugins?.map((plugin) => `${plugin.id}@${plugin.version}`) }, identical: armsInfo.identical, changedFiles: armsInfo.changedFiles, watched: armsInfo.watched, tasks: config.taskIds, reps: config.reps, pendingRuns: pending.length, reusedRuns: reusePlan.reuse.length, runsToRun: reusePlan.run.length, reuseSources: [...new Set(reusePlan.reuse.map((entry) => entry.source.dir))], completedRuns: runs.length }, null, 2));
+    console.log(JSON.stringify({ outDir, sandbox, arms: { A: armsInfo.A.ref, B: armsInfo.B.ref }, plugins: { A: armsInfo.A.plugins?.map((plugin) => `${plugin.id}@${plugin.version}`), B: armsInfo.B.plugins?.map((plugin) => `${plugin.id}@${plugin.version}`) }, identical: armsInfo.identical, changedFiles: armsInfo.changedFiles, watched: armsInfo.watched, tasks: config.taskIds, reps: config.reps, pendingRuns: pending.length, reusedRuns: reusePlan.reuse.length, reusedStrict: reusePlan.reuse.length - driftReused.length, reusedWithPluginDrift: driftReused.length, pluginDrift: [...new Set(driftReused.flatMap((entry) => entry.pluginDrift.map((plugin) => `${plugin.id} ${plugin.from.version} → ${plugin.to.version}`)))], runsToRun: reusePlan.run.length, reuseSources: [...new Set(reusePlan.reuse.map((entry) => entry.source.dir))], completedRuns: runs.length }, null, 2));
     return;
   }
-  for (const { job, source } of reusePlan.reuse) {
-    const record = copyReusedRun({ source, job, outDir });
+  for (const { job, source, pluginDrift } of reusePlan.reuse) {
+    const record = copyReusedRun({ source, job, outDir, pluginDrift });
     // Telemetry is re-derived against this eval's arms, whose watched components may differ.
     const transcriptText = fs.existsSync(path.join(outDir, 'runs', job.id, provider.transcriptFile)) ? fs.readFileSync(path.join(outDir, 'runs', job.id, provider.transcriptFile), 'utf8') : '';
     if (transcriptText) record.telemetry = runTelemetry({ transcript: provider.parseTranscript(transcriptText), transcriptText, armsInfo, taskSet, prompt: record.prompt });
     writeJson(path.join(resultsDir, `${job.id}.json`), record);
     runs.push(record);
-    log(`reused ${job.id} from ${source.dir} (${source.runId})`);
+    log(`reused ${job.id} from ${source.dir} (${source.runId})${pluginDrift ? ` with plugin drift ${pluginDrift.map((plugin) => `${plugin.id} ${plugin.from.version} → ${plugin.to.version}`).join(', ')}` : ''}`);
   }
-  if (reusePlan.reuse.length) appendAudit(outDir, { action: 'reuse', runs: reusePlan.reuse.map(({ job, source }) => ({ run: job.id, dir: source.dir, from: source.runId })) });
+  if (reusePlan.reuse.length) appendAudit(outDir, { action: 'reuse', runs: reusePlan.reuse.map(({ job, source, pluginDrift }) => ({ run: job.id, dir: source.dir, from: source.runId, ...(pluginDrift ? { pluginDrift } : {}) })) });
   pending = reusePlan.run;
 
   let inFlight = 0;

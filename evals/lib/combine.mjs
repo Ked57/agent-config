@@ -5,6 +5,8 @@ import { runId } from './plan.mjs';
 
 const digest = (value) => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16);
 const sortedHashes = (hashes = {}) => Object.fromEntries(Object.entries(hashes).sort(([a], [b]) => a.localeCompare(b)));
+/** Digest of an arm's installed files (`arms.json` `hashes`: path to content hash). */
+export const installedDigest = (hashes) => digest(sortedHashes(hashes));
 
 /**
  * Everything that defines what an arm's agent ran with: ref and commit, toggles, prefix, plugin mode,
@@ -23,7 +25,7 @@ export function armIdentity(config, armsInfo, arm) {
     mode: spec.mode ?? null,
     pluginMode: info.pluginMode ?? config.plugins ?? null,
     plugins: (info.plugins ?? []).map((plugin) => `${plugin.id}@${plugin.version ?? '?'}#${plugin.gitCommitSha ?? '?'}`),
-    installed: digest(sortedHashes(info.hashes))
+    installed: installedDigest(info.hashes)
   };
 }
 

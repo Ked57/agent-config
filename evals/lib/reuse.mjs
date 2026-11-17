@@ -4,7 +4,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { armIdentity } from './combine.mjs';
+import { armIdentity, installedDigest } from './combine.mjs';
 import { promptFor, taskForMode } from './config.mjs';
 import { removeTree } from './env.mjs';
 
@@ -58,6 +58,18 @@ export function taskInputs(task, fixtureDir) {
  * arm's input mode counts with its MCP server specs and the contents of its `serverFiles`; `task` is
  * the base task, resolved for that mode here.
  */
+// Files an external plugin install writes (plugin caches, marketplaces, installed-plugin lists). Every
+// other installed file (policies, repo skills, CLAUDE.md, AGENTS.md, settings) is repo-owned.
+const PLUGIN_OWNED = /^\.(claude|cursor|codex)\/plugins\//;
+
+/** The installed-files digest split into its repo-owned and plugin-owned parts. */
+export function installedParts(hashes = {}) {
+  const repo = {};
+  const plugins = {};
+  for (const [file, hash] of Object.entries(hashes)) (PLUGIN_OWNED.test(file) ? plugins : repo)[file] = hash;
+  return { repo: installedDigest(repo), plugins: installedDigest(plugins) };
+}
+
 export function runInputs({ config, armsInfo, arm, task: baseTask, taskSet = {}, rep, runFixtureHash, fixtureDir, prompt }) {
   const identity = armIdentity(config, armsInfo, arm);
   const modeName = config.arms?.[arm]?.mode ?? null;
@@ -79,11 +91,70 @@ export function runInputs({ config, armsInfo, arm, task: baseTask, taskSet = {},
     // Only what a run observes of the fixture (see `runFixtureHash`), so editing another task's hidden test keeps keys.
     runFixtureHash,
     rep,
-    measure: { http: Boolean(config.http), browser: Boolean(config.browser) }
+    measure: { http: Boolean(config.http), browser: Boolean(config.browser) },
+    installedParts: installedParts(armsInfo?.[arm]?.hashes)
   };
 }
 
-export const inputsKey = (inputs) => sha256(canonicalJson(inputs));
+/**
+ * `installedParts` only splits `arm.installed`, which the key already covers; it stays out of the key
+ * so new runs keep the keys of records made before it existed.
+ */
+export const inputsKey = (inputs) => sha256(canonicalJson({ ...inputs, installedParts: undefined }));
+
+/** `id@version#commit` (see `armIdentity`) as `{ id, version, commit }`; the id itself holds an `@`. */
+const parsePlugin = (entry) => {
+  const [head, commit = null] = entry.split('#');
+  const at = head.lastIndexOf('@');
+  return { id: head.slice(0, at), version: head.slice(at + 1), commit };
+};
+
+/**
+ * The key with external plugin versions, commits and the installed-files digest left out (the set of
+ * plugin ids stays in): the match `--reuse-allow-plugin-drift` falls back to. `pluginDriftCheck` then
+ * compares the repo-owned files.
+ */
+export const driftKey = (inputs) => inputsKey({ ...inputs, arm: { ...inputs.arm, plugins: (inputs.arm.plugins ?? []).map((entry) => parsePlugin(entry).id).sort(), installed: null } });
+
+/** Plugins whose version or commit differs between two `arm.plugins` lists, as `{ id, from, to }`. */
+export function pluginDrift(fromPlugins = [], toPlugins = []) {
+  const to = Object.fromEntries(toPlugins.map(parsePlugin).map((plugin) => [plugin.id, plugin]));
+  return fromPlugins.map(parsePlugin).filter((plugin) => to[plugin.id] && (plugin.version !== to[plugin.id].version || plugin.commit !== to[plugin.id].commit))
+    .map((plugin) => ({ id: plugin.id, from: { version: plugin.version, commit: plugin.commit }, to: { version: to[plugin.id].version, commit: to[plugin.id].commit } }));
+}
+
+/**
+ * The repo-owned files digest of the arm a source run was made with: stored in records made since the
+ * split, else derived from `arms.json` of the eval that holds the record (or of its origin), from the
+ * arm whose full digest equals the record's.
+ */
+export function sourceRepoDigest(entry, armsOf) {
+  const { inputs } = entry.record;
+  if (inputs.installedParts) return inputs.installedParts.repo;
+  for (const dir of new Set([entry.dir, reuseOrigin(entry).dir])) {
+    for (const info of Object.values(armsOf(dir) ?? {})) {
+      if (info?.hashes && installedDigest(info.hashes) === inputs.arm.installed) return installedParts(info.hashes).repo;
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether a source run that matches `inputs` by `driftKey` may stand in: some plugin's version or commit
+ * drifted, none of the drifted plugins fired in the source run (a Skill call, slash command or subagent
+ * of the plugin; no telemetry counts as fired), and the repo-owned installed files are identical.
+ * Returns `{ drift }` or `{ reason }`.
+ */
+export function pluginDriftCheck({ inputs, entry, armsOf }) {
+  const drift = pluginDrift(entry.record.inputs.arm.plugins, inputs.arm.plugins);
+  if (!drift.length) return { reason: 'the installed files differ, but no plugin version or commit does' };
+  const fired = drift.filter((plugin) => entry.record.telemetry?.plugins?.[plugin.id.split('@')[0]]?.fired !== false);
+  if (fired.length) return { reason: `${fired.map((plugin) => plugin.id).join(', ')} fired in the source run (or it has no telemetry for it)` };
+  const repo = sourceRepoDigest(entry, armsOf);
+  if (!repo) return { reason: 'the source run\'s repo-owned files are unknown (no split digest, no matching arms.json)' };
+  if (repo !== inputs.installedParts?.repo) return { reason: 'the repo-owned installed files differ' };
+  return { drift };
+}
 
 /** Result dirs to search: `--reuse-from` dirs when given, else every dir under the evals home; combined dirs are skipped. */
 export function reuseSourceDirs({ evalsHome, reuseFrom = [], exclude = null }) {
@@ -113,15 +184,22 @@ export function scanRuns(dirs) {
   return found;
 }
 
-/** Index of reusable runs by `inputsKey`: only finished runs (`status: "ok"`) that carry a key. */
-export function indexRuns(entries) {
+/**
+ * Index of reusable runs by `inputsKey` (or by `keyOf(record)`, e.g. `driftKey` of its inputs): only
+ * finished runs (`status: "ok"`) that carry a key.
+ */
+export function indexRuns(entries, keyOf = (record) => record.inputsKey) {
   const index = new Map();
   for (const entry of entries) {
     if (entry.record.status !== 'ok' || !entry.record.inputsKey) continue;
-    index.set(entry.record.inputsKey, [...(index.get(entry.record.inputsKey) ?? []), entry]);
+    const key = keyOf(entry.record);
+    index.set(key, [...(index.get(key) ?? []), entry]);
   }
   return index;
 }
+
+/** Index by `driftKey` for `planReuse`'s `drift` option; records without stored inputs are left out. */
+export const indexRunsByDriftKey = (entries) => indexRuns(entries.filter((entry) => entry.record.inputs?.arm), (record) => driftKey(record.inputs));
 
 /** The run a reused copy ultimately came from, so a chain of reuses never counts one run twice. */
 export const reuseOrigin = (entry) => entry.record.reusedFrom ?? { dir: entry.dir, runId: entry.runId, madeAt: entry.madeAt };
@@ -130,33 +208,55 @@ const originId = (origin) => `${origin.dir}\0${origin.runId}`;
 /**
  * Splits pending jobs into those a finished run can stand in for and those to run. Rep n reuses rep n
  * only (the rep is in the key); no source run is used twice in one eval (an A/A eval has equal keys in
- * both arms), and `used` holds the origins of runs this eval already reused.
+ * both arms), and `used` holds the origins of runs this eval already reused. With `drift`
+ * (`{ inputsOf, index }`, the index by `driftKey`), a job without an exact match takes a run that passes
+ * `pluginDriftCheck`; its entry carries `pluginDrift`.
  */
-export function planReuse({ pending, keyOf, index, used = [] }) {
+export function planReuse({ pending, keyOf, index, used = [], drift = null }) {
   const taken = new Set(used.map(originId));
+  const free = (entry) => entry.record.status === 'ok' && !taken.has(originId(reuseOrigin(entry)));
+  const armsByDir = new Map();
+  const armsOf = (dir) => {
+    if (!armsByDir.has(dir)) armsByDir.set(dir, readJsonOrNull(path.join(dir, 'arms.json')));
+    return armsByDir.get(dir);
+  };
   const reuse = [];
   const run = [];
   for (const job of pending) {
-    const source = (index.get(keyOf(job)) ?? []).find((entry) => entry.record.status === 'ok' && !taken.has(originId(reuseOrigin(entry))));
-    if (!source) {
+    const exact = (index.get(keyOf(job)) ?? []).find(free);
+    let found = exact ? { source: exact } : null;
+    if (!found && drift) {
+      const inputs = drift.inputsOf(job);
+      for (const entry of (drift.index.get(driftKey(inputs)) ?? []).filter(free)) {
+        const check = pluginDriftCheck({ inputs, entry, armsOf });
+        if (check.drift) {
+          found = { source: entry, pluginDrift: check.drift };
+          break;
+        }
+      }
+    }
+    if (!found) {
       run.push(job);
       continue;
     }
-    taken.add(originId(reuseOrigin(source)));
-    reuse.push({ job, source });
+    taken.add(originId(reuseOrigin(found.source)));
+    reuse.push({ job, ...found });
   }
   return { reuse, run };
 }
 
-/** The record a reused run gets in this eval: the source's, under this eval's run id and arm letter. */
-export function reusedRecord(source, job, at = new Date().toISOString()) {
+/**
+ * The record a reused run gets in this eval: the source's, under this eval's run id and arm letter. Its
+ * `inputs` and `inputsKey` stay the source's; a plugin-drift reuse records the drift in `reusedFrom`.
+ */
+export function reusedRecord(source, job, at = new Date().toISOString(), pluginDrift = null) {
   const origin = reuseOrigin(source);
-  return { ...source.record, id: job.id, task: job.task, arm: job.arm, rep: job.rep, reusedFrom: { dir: origin.dir, runId: origin.runId, madeAt: origin.madeAt ?? null, at: origin.at ?? at } };
+  return { ...source.record, id: job.id, task: job.task, arm: job.arm, rep: job.rep, reusedFrom: { dir: origin.dir, runId: origin.runId, madeAt: origin.madeAt ?? null, at: origin.at ?? at, ...(pluginDrift?.length ? { pluginDrift } : {}) } };
 }
 
 /** Copies a reused run's files (diff, transcript, session logs; never the worked `app/`) and writes its record. */
-export function copyReusedRun({ source, job, outDir, at }) {
-  const record = reusedRecord(source, job, at);
+export function copyReusedRun({ source, job, outDir, at, pluginDrift = null }) {
+  const record = reusedRecord(source, job, at, pluginDrift);
   const from = path.join(source.dir, 'runs', source.runId);
   const to = path.join(outDir, 'runs', job.id);
   removeTree(to, outDir);

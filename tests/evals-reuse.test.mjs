@@ -16,7 +16,7 @@ import { expectedMcpServers, mcpConfigFor, writeMcpConfig } from '../evals/lib/m
 import { scoreTask, validateManifest } from '../evals/lib/mutants.mjs';
 import { budgetAllows } from '../evals/lib/plan.mjs';
 import { renderReport } from '../evals/lib/report.mjs';
-import { backfillKeys, copyReusedRun, indexRuns, inputsKey, newRunsUsd, planReuse, reuseSourceDirs, runAppDir, runInputs, scanRuns } from '../evals/lib/reuse.mjs';
+import { backfillKeys, copyReusedRun, indexRuns, indexRunsByDriftKey, inputsKey, newRunsUsd, planReuse, reuseSourceDirs, runAppDir, runInputs, scanRuns } from '../evals/lib/reuse.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // removeTree refuses roots shallower than three path segments, so work one level below the temp dir.
@@ -174,6 +174,74 @@ test('reuse budget: reused runs cost this eval nothing and do not count against 
   assert.match(report, /Reused runs, arm A \(recorded cost/);
 });
 
+test('--reuse-allow-plugin-drift: only with the flag, only when the drifted plugin did not fire and the repo-owned files match', () => {
+  const fixtureDir = makeFixture();
+  const home = temp();
+  const old = path.join(home, 'old');
+  const repoFiles = { '.agents/policy/routing.md': 'h1', '.claude/CLAUDE.md': 'c1' };
+  const armWith = (version, files = repoFiles, pluginFile = `p${version}`) => armInfo('sha1', {
+    plugins: [{ id: 'pstack@m', version, gitCommitSha: `c${version}` }, { id: 'other@m', version: '2.0', gitCommitSha: 'o' }],
+    hashes: { ...files, '.claude/plugins/cache/m/pstack/SKILL.md': pluginFile, '.claude/plugins/installed_plugins.json': `i${version}` }
+  });
+  const oldArms = { A: armWith('0.15.42'), B: armWith('0.15.42') };
+  writeJson(path.join(old, 'config.json'), {});
+  writeJson(path.join(old, 'arms.json'), oldArms);
+  const inputsFor = (arms, rep) => runInputs({ config, armsInfo: arms, arm: 'A', task, rep, runFixtureHash: 'f1', fixtureDir });
+  const telemetry = (pstackFired) => ({ plugins: { pstack: { fired: pstackFired, skills: pstackFired ? ['pstack:poteto-mode'] : [] }, other: { fired: true, skills: ['other:x'] } } });
+  // An existing record: inputs without the split digest, as made before it existed.
+  const record = (rep, fired) => {
+    const { installedParts: _split, ...inputs } = inputsFor(oldArms, rep);
+    return { id: `t1__A__r${rep}`, task: 't1', arm: 'A', rep, status: 'ok', cost: { usd: 1 }, inputs, inputsKey: inputsKey(inputs), telemetry: telemetry(fired), checks: [] };
+  };
+  writeJson(path.join(old, 'results', 'runs', 't1__A__r1.json'), record(1, false));
+  writeJson(path.join(old, 'results', 'runs', 't1__A__r2.json'), record(2, true));
+  const found = scanRuns([old]);
+  const pending = [1, 2].map((rep) => ({ id: `t1__A__r${rep}`, task: 't1', arm: 'A', rep }));
+  const plan = (arms) => {
+    const inputs = (job) => inputsFor(arms, job.rep);
+    const base = { pending, keyOf: (job) => inputsKey(inputs(job)), index: indexRuns(found) };
+    return { strict: planReuse(base), drift: planReuse({ ...base, drift: { inputsOf: inputs, index: indexRunsByDriftKey(found) } }) };
+  };
+
+  // Same plugins: strict reuse, with or without the flag, and no drift recorded.
+  const same = plan(oldArms);
+  assert.deepEqual(same.strict.reuse.map((entry) => entry.job.id), ['t1__A__r1', 't1__A__r2']);
+  assert.deepEqual(same.drift.reuse.map((entry) => entry.pluginDrift), [undefined, undefined]);
+
+  // pstack moved on (version, commit and its files): no strict match; with the flag rep 1 is reused,
+  // rep 2 is refused because pstack fired in it (the non-drifted plugin firing does not matter).
+  const drifted = plan({ A: armWith('0.15.43'), B: armWith('0.15.43') });
+  assert.equal(drifted.strict.reuse.length, 0);
+  assert.deepEqual(drifted.drift.reuse.map((entry) => entry.job.id), ['t1__A__r1']);
+  assert.deepEqual(drifted.drift.run.map((job) => job.id), ['t1__A__r2']);
+  const pluginDrift = [{ id: 'pstack@m', from: { version: '0.15.42', commit: 'c0.15.42' }, to: { version: '0.15.43', commit: 'c0.15.43' } }];
+  assert.deepEqual(drifted.drift.reuse[0].pluginDrift, pluginDrift);
+  const copied = copyReusedRun({ ...drifted.drift.reuse[0], outDir: path.join(home, 'new') });
+  assert.deepEqual(copied.reusedFrom.pluginDrift, pluginDrift);
+  assert.equal(copied.inputsKey, found[0].record.inputsKey, 'the copy keeps the key of the plugins it was made with');
+
+  // A repo-owned file differs: refused (derived from the old eval's arms.json here).
+  assert.equal(plan({ A: armWith('0.15.43', { ...repoFiles, '.claude/CLAUDE.md': 'c2' }) }).drift.reuse.length, 0);
+  // Another plugin set: refused.
+  const fewer = armWith('0.15.43');
+  assert.equal(plan({ A: { ...fewer, plugins: fewer.plugins.slice(0, 1) } }).drift.reuse.length, 0);
+  // New records carry the split digest and need no arms.json.
+  fs.rmSync(path.join(old, 'arms.json'));
+  assert.equal(plan({ A: armWith('0.15.43') }).drift.reuse.length, 0, 'an old record without arms.json is refused');
+  const withSplit = { ...record(1, false), inputs: inputsFor(oldArms, 1) };
+  const newPlan = planReuse({ pending: [pending[0]], keyOf: () => 'none', index: new Map(), drift: { inputsOf: (job) => inputsFor({ A: armWith('0.15.43') }, job.rep), index: indexRunsByDriftKey([{ dir: old, runId: withSplit.id, record: withSplit }]) } });
+  assert.deepEqual(newPlan.reuse[0].pluginDrift, pluginDrift);
+
+  // The report warns and names the drift in the Setup line.
+  const taskSet = { name: 's', categories: { c: { label: 'C' } }, tasks: [{ id: 't1', category: 'c', prompt: 'p' }] };
+  const run = (arm, extra) => ({ id: `t1__${arm}__r1`, task: 't1', category: 'c', arm, rep: 1, status: 'ok', gatesPass: true, wallMs: 1, cost: { usd: 1 }, checks: [{ id: 'k', level: 'required', pass: true, score: 1 }], ...extra });
+  const info = { A: armsInfo.A, B: armsInfo.B, identical: false, watched: [] };
+  const summary = aggregate({ config: { taskIds: ['t1'], watch: [], reps: 1 }, taskSet, armsInfo: info, runs: [{ ...run('A'), reusedFrom: copied.reusedFrom }, run('B')], judgments: [] });
+  const report = renderReport({ summary, config: { name: 'x', reps: 1, arms: { A: {}, B: {} } }, armsInfo: info, taskSet, fixture: { name: 'f' } });
+  assert.match(report, /1 reused run\(s\) were made with pstack 0\.15\.42; this eval's arm A has 0\.15\.43; the plugin did not fire in those runs\./);
+  assert.match(report, /Arm A: 1 of 1 runs reused\*\*.*With plugin drift.*1 made with pstack 0\.15\.42, this arm has 0\.15\.43/);
+});
+
 test('--combine carries reusedFrom through', () => {
   const input = (name, reusedFrom) => ({
     dir: `/e/${name}`, config: { provider: 'claude', model: 'm', effort: 'medium', arms: config.arms, taskIds: [`${name}-t`] }, armsInfo,
@@ -222,6 +290,7 @@ test('--no-reuse, --reuse-from, --backfill-keys parse; concurrency defaults to 1
   assert.equal(DEFAULTS.concurrency, 1);
   assert.equal(DEFAULTS.reuse, true);
   assert.deepEqual(parseArgs(['--no-reuse', '--reuse-from', '/a', '--reuse-from', '/b', '--backfill-keys', '/c']), { reuse: false, reuseFrom: ['/a', '/b'], backfillKeys: '/c' });
+  assert.deepEqual(parseArgs(['--reuse-allow-plugin-drift']), { reuseAllowPluginDrift: true });
 });
 
 test('json-score: parsing, pass at passAt, non-zero exit with a valid file keeps its score, no file scores 0', () => {
