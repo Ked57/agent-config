@@ -1,0 +1,13 @@
+{
+  "task": "G5-project-report",
+  "references": [{ "file": "reference.patch", "source": "hand-written: four queries (project, tasks, labels, entries joined with users) grouped in memory in the old order, plus an index on time_entries.project_id" }],
+  "mutants": [
+    { "file": "m1-cache-instead-of-fix.patch", "wrong": "Caches reports for a minute; every first request is still the N+1", "violates": "a small, fixed number of queries whatever the size of the project", "expect": "killed" },
+    { "file": "m2-parallel-n-plus-one.patch", "wrong": "Runs the per-task queries in parallel with Promise.all", "violates": "no more than 10 queries", "expect": "killed" },
+    { "file": "m3-sql-order-by-title.patch", "wrong": "Sorts tasks in SQL (binary collation) instead of the old localeCompare order", "violates": "without changing its output in any way", "expect": "killed" },
+    { "file": "m4-rounds-per-line.patch", "wrong": "Rounds money once per task and person instead of per entry", "violates": "without changing its output in any way", "expect": "killed" },
+    { "file": "m5-indexes-only.patch", "wrong": "Adds indexes and keeps the N+1", "violates": "no more than 10 queries; well under a second", "expect": "killed" },
+    { "file": "m6-labels-sorted-in-sql.patch", "wrong": "Sorts label names in SQL instead of localeCompare", "violates": "without changing its output in any way", "expect": "killed" },
+    { "file": "m7-chunked-in-lists.patch", "wrong": "Fetches entries for 500 tasks per query, so the query count grows with the project", "violates": "a small, fixed number of queries, whatever the size of the project", "expect": "killed" }
+  ]
+}

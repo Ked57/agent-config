@@ -1,0 +1,15 @@
+{
+  "task": "G7-time-approvals",
+  "references": [{ "file": "reference.patch", "source": "hand-written implementation of spec #312 with tests, migration and backfill" }],
+  "mutants": [
+    { "file": "m1-total-still-floats.patch", "wrong": "Leaves the legacy invoice total (sum in major units, floored)", "violates": "R8: totalCents is exactly the sum of its lines' amountCents", "expect": "killed" },
+    { "file": "m2-not-found-is-500.patch", "wrong": "Keeps the raw-SQL db.get lookup, so unknown and other orgs' entries answer 500", "violates": "Other organizations' entries are 404", "expect": "killed" },
+    { "file": "m3-flag-ignored.patch", "wrong": "Requires approved time whatever the flag says", "violates": "R7: with the flag off, invoicing works exactly as today", "expect": "killed" },
+    { "file": "m4-v1-timesheet-unchanged.patch", "wrong": "Adds approved time to the v2 timesheet only", "violates": "R11: each row of the deprecated v1 timesheet gets approved_hours", "expect": "killed" },
+    { "file": "m5-edits-keep-approval.patch", "wrong": "Editing an entry keeps its approval", "violates": "R5: changing an approved or rejected entry puts it back to pending", "expect": "killed" },
+    { "file": "m6-bulk-not-atomic.patch", "wrong": "Bulk approval approves the valid ids before reporting the bad one", "violates": "R6: all or nothing; then nothing changes", "expect": "killed" },
+    { "file": "m7-seed-not-backfilled.patch", "wrong": "Backfills in the migration but not in the development seed", "violates": "R13: in existing databases and in the development seed", "expect": "killed" },
+    { "file": "m8-notifies-the-admin.patch", "wrong": "The rejection notification goes to the admin who rejected", "violates": "R10: notifies the person who logged the entry", "expect": "killed" },
+    { "file": "m9-blank-reason-accepted.patch", "wrong": "A reason of only spaces is accepted", "violates": "R3: a missing or blank reason is a 400", "expect": "killed" }
+  ]
+}

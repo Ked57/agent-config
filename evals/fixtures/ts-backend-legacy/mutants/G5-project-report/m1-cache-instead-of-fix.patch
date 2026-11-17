@@ -1,0 +1,26 @@
+diff -ruN a/src/services/reports.ts b/src/services/reports.ts
+--- a/src/services/reports.ts
++++ b/src/services/reports.ts
+@@ -76,7 +76,22 @@
+  * Time and money per task and per person for one project.
+  * Amounts use the person's own rate when set, else the project rate.
+  */
++// Big projects time out: cache reports for a minute.
++const cache = new Map<
++  string,
++  { at: number; report: Awaited<ReturnType<typeof computeProjectReport>> }
++>();
++
+ export async function projectReport(db: Db, orgId: string, projectId: string) {
++  const key = `${orgId}:${projectId}`;
++  const hit = cache.get(key);
++  if (hit && Date.now() - hit.at < 60_000) return hit.report;
++  const report = await computeProjectReport(db, orgId, projectId);
++  cache.set(key, { at: Date.now(), report });
++  return report;
++}
++
++async function computeProjectReport(db: Db, orgId: string, projectId: string) {
+   const project = await db
+     .select()
+     .from(projects)

@@ -292,6 +292,19 @@ them. Each test exercises only the HTTP contract stated in the task prompt. On t
 fixture, `task-update-rules` passes (it checks that behaviour is preserved) and every other hidden
 test fails for the reason its task targets.
 
+**`ts-backend-legacy`** is the same stack grown into a time-tracking and invoicing API a team has
+lived in for years (about 5k lines of source, 76 tests): old controllers with raw SQL helpers and
+hand-rolled validation next to newer routes and services, legacy date and money helpers, a
+deprecated v1 reports module still mounted, feature flags, dead code, a partly stale
+`docs/architecture.md` and a partial `docs/openapi.yaml`. Its `backend-legacy` task set (G1–G8)
+makes tasks hard by what the agent has to find rather than by longer requirement lists:
+symptom-only bug reports (a log excerpt, a support ticket), invariants that imply concurrency and
+integer cents, a sweep for every cross-tenant hole, a measured query and latency budget on a large
+dataset generated at test time, OpenAPI conformance, and two spec issues (`files` ships them under
+`docs/issues/`). The flaws the tasks depend on are listed in `fixtures/ts-backend-legacy/PLANTED.md`,
+which never reaches an agent or judge. G8 compares v1 responses byte for byte with
+`hidden/G8-golden.json`, captured from the untouched template (`CAPTURE=1` rewrites it).
+
 ### Mutation gate
 
 A hidden test or task check is only trusted once it tells right from wrong solutions.

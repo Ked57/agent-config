@@ -1,0 +1,14 @@
+{
+  "task": "G8-retire-v1-reports",
+  "references": [{ "file": "reference.patch", "source": "hand-written: v1 SQL moved into services/reports.ts (Drizzle), compat layer src/routes/reports-v1.ts used by the v1 routes, payroll and digest; old files deleted; Deprecation header; docs updated" }],
+  "mutants": [
+    { "file": "m1-locale-order.patch", "wrong": "Orders timesheet rows like v2 (localeCompare) instead of byte order", "violates": "Quirk 2: people ordered by name byte by byte", "expect": "killed" },
+    { "file": "m2-v2-rounded-amount.patch", "wrong": "Takes the summary amount from the v2 project report (sum of per-entry rounded cents)", "violates": "Quirk 4: the exact sum rounded once at the end", "expect": "killed" },
+    { "file": "m3-total-of-rounded-rows.patch", "wrong": "total_hours adds up the rounded row hours", "violates": "Quirk 3: total_hours formats the week's total minutes once", "expect": "killed" },
+    { "file": "m4-amounts-as-strings.patch", "wrong": "Formats invoice total and paid as two-decimal strings", "violates": "Quirk 5: plain numbers in major units", "expect": "killed" },
+    { "file": "m5-audit-dropped.patch", "wrong": "The compatibility layer no longer writes report.v1_viewed", "violates": "R5: keep the audit trail", "expect": "killed" },
+    { "file": "m6-old-files-kept.patch", "wrong": "Adds the compatibility layer but leaves the old controller and SQL helpers in the tree", "violates": "R1: delete them", "expect": "killed" },
+    { "file": "m7-no-deprecation-header.patch", "wrong": "No Deprecation header", "violates": "R6: every v1 response carries Deprecation: true", "expect": "killed" },
+    { "file": "m8-summary-not-org-scoped.patch", "wrong": "The moved summary query drops the org filter, so another org's project is served", "violates": "R2: another organization's project must answer 404", "expect": "killed" }
+  ]
+}

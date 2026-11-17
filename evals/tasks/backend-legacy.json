@@ -168,6 +168,151 @@
           "level": "info"
         }
       ]
+    },
+    {
+      "id": "G5-project-report",
+      "category": "budget",
+      "prompt": "The project report (GET /api/reports/projects/:id) times out for our big customers, some of them have around 50k tasks. Please make it fast: for a project with a few thousand tasks and tens of thousands of time entries it should run a small, fixed number of database queries (no more than 10, whatever the size of the project) and answer well under a second, without changing its output in any way.",
+      "expectsComponents": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/G5-project-report.test.ts": "src/__hidden__/G5-project-report.test.ts"
+          },
+          "run": "vitest run src/__hidden__/G5-project-report.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 600
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "G6-clients-contract",
+      "category": "conformance",
+      "prompt": "Make /api/clients conform to docs/openapi.yaml. The spec is the source of truth: wherever the code and the spec disagree, the code is wrong (the web app will be updated to match the spec).",
+      "expectsComponents": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/G6-clients-contract.test.ts": "src/__hidden__/G6-clients-contract.test.ts"
+          },
+          "run": "vitest run src/__hidden__/G6-clients-contract.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "G7-time-approvals",
+      "category": "spec",
+      "prompt": "Implement spec issue #312 (Approve time before it is invoiced). The spec is in docs/issues/312-time-approvals.md; read it fully first. Follow its acceptance criteria and write the tests first. Nothing in its out-of-scope section is to be built. Done means typecheck, lint, format, the full test suite and the build all pass, as the spec says. Reply with a table mapping each requirement (R1, R2, ...) to the test that covers it. If something in the spec can't be done or needs my decision, say so in your reply with the reading you chose instead of guessing silently.",
+      "files": {
+        "specs/G7-time-approvals.md": "docs/issues/312-time-approvals.md"
+      },
+      "expectsComponents": [
+        "plugin:pstack",
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/G7-time-approvals.test.ts": "src/__hidden__/G7-time-approvals.test.ts"
+          },
+          "run": "vitest run src/__hidden__/G7-time-approvals.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "G8-retire-v1-reports",
+      "category": "spec",
+      "prompt": "Implement spec issue #340 (Retire the v1 reports module). The spec is in docs/issues/340-retire-v1-reports.md; read it fully first. Follow its acceptance criteria and write the tests first. Nothing in its out-of-scope section is to be built. Done means typecheck, lint, format, the full test suite and the build all pass, as the spec says. Reply with a table mapping each requirement (R1, R2, ...) to the test that covers it. If something in the spec can't be done or needs my decision, say so in your reply with the reading you chose instead of guessing silently.",
+      "files": {
+        "specs/G8-retire-v1-reports.md": "docs/issues/340-retire-v1-reports.md"
+      },
+      "expectsComponents": [
+        "plugin:pstack",
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/G8-retire-v1.test.ts": "src/__hidden__/G8-retire-v1.test.ts",
+            "hidden/G8-golden.json": "src/__hidden__/G8-golden.json"
+          },
+          "run": "vitest run src/__hidden__/G8-retire-v1.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
     }
   ]
 }

@@ -1,0 +1,13 @@
+{
+  "task": "G6-clients-contract",
+  "references": [{ "file": "reference.patch", "source": "hand-written: hand-checked bodies and query (400 Error), Client serializer with nulls and RFC 3339 times, ClientPage with limit/offset/total, archivedAt on archive/restore, 409 when in use" }],
+  "mutants": [
+    { "file": "m1-happy-path-only.patch", "wrong": "Conforming success responses, but validation errors stay 422 and not-found answers are plain text", "violates": "the spec is the source of truth (400 and 404 responses are Error objects)", "expect": "killed" },
+    { "file": "m3-nulls-omitted.patch", "wrong": "Leaves out email, notes and archivedAt when they are null", "violates": "Client requires these properties (nullable, not optional)", "expect": "killed" },
+    { "file": "m4-page-not-applied.patch", "wrong": "Reports limit and offset in the page but returns every client", "violates": "GET /api/clients returns one page", "expect": "killed" },
+    { "file": "m5-delete-in-use-not-409.patch", "wrong": "Deleting a client with invoices or projects still fails with a 500", "violates": "DELETE answers 409 while the client still has invoices or projects", "expect": "killed" },
+    { "file": "m6-archived-at-not-set.patch", "wrong": "Archiving does not set archivedAt", "violates": "Setting status to archived sets archivedAt to the current time", "expect": "killed" },
+    { "file": "m7-currency-case-folded.patch", "wrong": "Upper-cases the currency instead of rejecting values outside the enum", "violates": "Currency enum [EUR, USD, GBP]", "expect": "killed" },
+    { "file": "m8-unknown-properties-dropped.patch", "wrong": "Silently drops unknown body properties", "violates": "additionalProperties: false on ClientCreate and ClientUpdate", "expect": "killed" }
+  ]
+}

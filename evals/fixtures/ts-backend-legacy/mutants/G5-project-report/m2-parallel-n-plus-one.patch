@@ -1,0 +1,48 @@
+diff -ruN a/src/services/reports.ts b/src/services/reports.ts
+--- a/src/services/reports.ts
++++ b/src/services/reports.ts
+@@ -126,25 +126,25 @@
+     .select()
+     .from(tasks)
+     .where(eq(tasks.projectId, project.id));
+-  const taskReports = [];
+-  for (const task of taskRows) {
+-    const entries = await db
+-      .select()
+-      .from(timeEntries)
+-      .where(eq(timeEntries.taskId, task.id));
+-    const labelRows = await db
+-      .select({ name: labels.name })
+-      .from(taskLabels)
+-      .innerJoin(labels, eq(labels.id, taskLabels.labelId))
+-      .where(eq(taskLabels.taskId, task.id));
+-    taskReports.push({
+-      id: task.id,
+-      title: task.title,
+-      status: task.status,
+-      labels: labelRows.map((row) => row.name).sort(byName),
+-      ...(await tally(entries)),
+-    });
+-  }
++  const taskReports = await Promise.all(
++    taskRows.map(async (task) => {
++      const [entries, labelRows] = await Promise.all([
++        db.select().from(timeEntries).where(eq(timeEntries.taskId, task.id)),
++        db
++          .select({ name: labels.name })
++          .from(taskLabels)
++          .innerJoin(labels, eq(labels.id, taskLabels.labelId))
++          .where(eq(taskLabels.taskId, task.id)),
++      ]);
++      return {
++        id: task.id,
++        title: task.title,
++        status: task.status,
++        labels: labelRows.map((row) => row.name).sort(byName),
++        ...(await tally(entries)),
++      };
++    }),
++  );
+   taskReports.sort(
+     (a, b) => byName(a.title, b.title) || (a.id < b.id ? -1 : 1),
+   );
