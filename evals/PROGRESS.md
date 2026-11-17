@@ -324,3 +324,13 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
   results `~/agent-config-evals/2026-11-17T01-40-r2-{design-skills,poteto-legacy,no-manual-qa,figma-vs-screenshot}`.
   Caps on new spend: $19, $24, $14, $19. If the driver is not running (`pgrep -f round2/driver.sh`),
   relaunch with the command in its header; it resumes each part and sleeps 20 min on a usage limit.
+- 02:10 UTC: **R5.1 done** (`~/agent-config-evals/2026-11-17T01-40-r2-design-skills`, $14.62 new spend, arm A
+  reused): `main` 0.75 vs `fix/skill-bugs` 0.83, d +0.08, paired-t 95% CI −0.03 to +0.19 (bootstrap +0.01
+  to +0.15), MDE 0.15 at 6 tasks → cannot conclude; about 11 tasks needed for an MDE of 0.10.
+  `emil-design-eng` fired in 0 of 6 `main` runs and 6 of 6 fixed runs. Cost no different (−1%).
+  Per task d: D1 +0.05, D2 −0.02, D3 +0.12, D4 +0.21, D5 −0.04, D6 +0.16.
+- 02:30 UTC: lead mistake: the poteto part was launched with `--timeout-min 60`, which is part of the
+  run key, so the calibration runs were not reused and arm A started re-running. Stopped after two
+  runs ($3.95 wasted; dir moved to `round2/discarded-poteto-legacy-timeout60`), flag removed, driver
+  relaunched: all 8 arm-A runs now reused. Do not kill processes with `pkill -f` patterns that match
+  the calling shell.
