@@ -1,0 +1,69 @@
+diff -ruN a/src/routes/projects.ts b/src/routes/projects.ts
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -2,7 +2,7 @@
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { projects, tasks, users } from "../db/schema";
++import { projects, tasks, type TaskStatus, users } from "../db/schema";
+ import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+@@ -19,23 +19,40 @@
+           .from(projects)
+           .where(eq(projects.orgId, user.orgId))
+           .orderBy(asc(projects.name));
+-        const items = [];
+-        for (const project of rows) {
+-          const counts = await db
+-            .select({ status: tasks.status, total: count() })
+-            .from(tasks)
+-            .where(eq(tasks.projectId, project.id))
+-            .groupBy(tasks.status);
+-          const taskCounts = { todo: 0, in_progress: 0, done: 0 };
+-          for (const row of counts) taskCounts[row.status] = row.total;
+-          items.push({
+-            id: project.id,
+-            name: project.name,
+-            description: project.description,
+-            createdAt: project.createdAt.toISOString(),
+-            taskCounts,
+-          });
++        // One grouped query for every project's counts, scoped through the
++        // projects join so the query count stays fixed as projects grow.
++        const counts = await db
++          .select({
++            projectId: tasks.projectId,
++            status: tasks.status,
++            total: count(),
++          })
++          .from(tasks)
++          .innerJoin(projects, eq(tasks.projectId, projects.id))
++          .where(eq(projects.orgId, user.orgId))
++          .groupBy(tasks.projectId, tasks.status);
++        const countsByProject = new Map<string, Record<TaskStatus, number>>();
++        for (const row of counts) {
++          let taskCounts = countsByProject.get(row.projectId);
++          if (!taskCounts) {
++            taskCounts = { todo: 0, in_progress: 0, done: 0 };
++            countsByProject.set(row.projectId, taskCounts);
++          }
++          taskCounts[row.status] = row.total;
+         }
++        const items = rows.flatMap((project) => {
++          const taskCounts = countsByProject.get(project.id);
++          if (!taskCounts) return [];
++          return [
++            {
++              id: project.id,
++              name: project.name,
++              description: project.description,
++              createdAt: project.createdAt.toISOString(),
++              taskCounts,
++            },
++          ];
++        });
+         return { items };
+       },
+       { requireAuth: true },

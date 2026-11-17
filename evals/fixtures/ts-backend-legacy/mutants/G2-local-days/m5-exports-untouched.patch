@@ -1,0 +1,297 @@
+diff -ruN a/src/controllers/reports-v1.controller.ts b/src/controllers/reports-v1.controller.ts
+--- a/src/controllers/reports-v1.controller.ts
++++ b/src/controllers/reports-v1.controller.ts
+@@ -5,6 +5,7 @@
+   addDays,
+   dayKey,
+   dayStart,
++  dayWindow,
+   formatDay,
+   isValidDay,
+   weekStart,
+@@ -41,23 +42,22 @@
+   day: string,
+ ): Promise<TimesheetV1> {
+   const start = weekStart(day);
+-  const rows = await timesheetRows(
+-    db,
+-    orgId,
+-    dayStart(start),
+-    dayStart(addDays(start, 7)),
+-  );
++  const last = addDays(start, 6);
++  const window = dayWindow(start, last);
++  const rows = await timesheetRows(db, orgId, window.from, window.to);
+   const grouped = new Map<
+     string,
+     TimesheetV1["rows"][number] & { m: number; b: number }
+   >();
+   let total = 0;
+   for (const row of rows) {
+-    const key = `${row.user_id}|${dayKey(row.started_at)}`;
++    const local = dayKey(row.started_at, row.timezone);
++    if (local < start || local > last) continue;
++    const key = `${row.user_id}|${local}`;
+     const current = grouped.get(key) ?? {
+       user_id: row.user_id,
+       user_name: row.user_name,
+-      day: formatDay(dayKey(row.started_at)),
++      day: formatDay(local),
+       hours: "",
+       billable_hours: "",
+       m: 0,
+diff -ruN a/src/controllers/time-entries.controller.ts b/src/controllers/time-entries.controller.ts
+--- a/src/controllers/time-entries.controller.ts
++++ b/src/controllers/time-entries.controller.ts
+@@ -2,7 +2,7 @@
+ import { Elysia } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { projects, tasks } from "../db/schema";
++import { projects, tasks, users } from "../db/schema";
+ import { newId } from "../lib/ids";
+ import { dayKey, isValidDay } from "../lib/legacy/dates";
+ import {
+@@ -30,7 +30,7 @@
+     projectId: row.project_id,
+     taskId: row.task_id,
+     startedAt: new Date(row.started_at).toISOString(),
+-    day: dayKey(row.started_at),
++    day: dayKey(row.started_at, row.timezone),
+     minutes: row.minutes,
+     note: row.note,
+     billable: row.billable === 1,
+@@ -92,6 +92,11 @@
+             .get();
+           if (!task) return status(400, { error: "task not in project" });
+         }
++        const author = await db
++          .select({ timezone: users.timezone })
++          .from(users)
++          .where(eq(users.id, user.id))
++          .get();
+         const row: TimeEntryRow = {
+           id: newId("te"),
+           org_id: user.orgId,
+@@ -103,6 +108,7 @@
+           note: note ?? null,
+           billable: input.billable === false ? 0 : 1,
+           invoice_id: null,
++          timezone: author?.timezone ?? "UTC",
+         };
+         await insertEntry(db, { ...row, billable: row.billable === 1 });
+         return status(201, presentEntry(row));
+diff -ruN a/src/lib/legacy/dates.ts b/src/lib/legacy/dates.ts
+--- a/src/lib/legacy/dates.ts
++++ b/src/lib/legacy/dates.ts
+@@ -5,15 +5,32 @@
+  * New code should prefer src/lib/time.ts, but most modules still use these.
+  */
+ 
+-const DAY_MS = 24 * 60 * 60 * 1000;
++import { zonedDay } from "../time";
++
++const HOUR_MS = 60 * 60 * 1000;
++const DAY_MS = 24 * HOUR_MS;
+ 
+ const pad = (value: number) => String(value).padStart(2, "0");
+ 
+-/** Calendar day of a timestamp. */
+-// TODO(2021): timezones? All customers are in Europe for now, UTC is close enough.
+-export function dayKey(at: number | Date): string {
++/**
++ * Calendar day of a timestamp in a time zone. Time belongs to the day it was
++ * logged on for the person who logged it, so pass their time zone.
++ */
++export function dayKey(at: number | Date, timeZone = "UTC"): string {
+   const ms = typeof at === "number" ? at : at.getTime();
+-  return new Date(ms).toISOString().slice(0, 10);
++  if (timeZone === "UTC") return new Date(ms).toISOString().slice(0, 10);
++  return zonedDay(ms, timeZone);
++}
++
++/**
++ * A UTC window that contains every instant that is on `day` somewhere on
++ * earth (UTC-12 to UTC+14). Filter the rows by dayKey afterwards.
++ */
++export function dayWindow(firstDay: string, lastDay = firstDay) {
++  return {
++    from: dayStart(firstDay) - 14 * HOUR_MS,
++    to: dayStart(lastDay) + DAY_MS + 12 * HOUR_MS,
++  };
+ }
+ 
+ /** Midnight UTC of a day, as epoch ms. */
+diff -ruN a/src/services/invoices.ts b/src/services/invoices.ts
+--- a/src/services/invoices.ts
++++ b/src/services/invoices.ts
+@@ -67,6 +67,7 @@
+       projectName: projects.name,
+       projectRate: projects.hourlyRateCents,
+       userRate: users.hourlyRateCents,
++      timezone: users.timezone,
+     })
+     .from(timeEntries)
+     .innerJoin(projects, eq(projects.id, timeEntries.projectId))
+@@ -76,7 +77,7 @@
+   if (rows.length !== new Set(ids).size)
+     throw new HttpError(400, "invalid_entries", "unknown time entry");
+   const lines: LineInput[] = [];
+-  for (const { entry, projectName, projectRate, userRate } of rows) {
++  for (const { entry, projectName, projectRate, userRate, timezone } of rows) {
+     if (entry.invoiceId)
+       throw new HttpError(
+         409,
+@@ -91,7 +92,7 @@
+       );
+     const rate = userRate ?? projectRate;
+     lines.push({
+-      description: `${projectName}: ${entry.note ?? "Time"} (${dayKey(entry.startedAt)})`,
++      description: `${projectName}: ${entry.note ?? "Time"} (${dayKey(entry.startedAt, timezone)})`,
+       minutes: entry.minutes,
+       unitPriceCents: rate,
+       amountCents: amountForMinutes(entry.minutes, rate),
+diff -ruN a/src/services/reports.ts b/src/services/reports.ts
+--- a/src/services/reports.ts
++++ b/src/services/reports.ts
+@@ -9,7 +9,7 @@
+   timeEntries,
+   users,
+ } from "../db/schema";
+-import { addDays, dayKey, dayStart, weekStart } from "../lib/legacy/dates";
++import { addDays, dayKey, dayWindow, weekStart } from "../lib/legacy/dates";
+ import { amountForMinutes } from "../lib/legacy/money";
+ 
+ const byName = (a: string, b: string) => a.localeCompare(b);
+@@ -25,22 +25,24 @@
+ /** Minutes per person per day for the Monday-to-Sunday week containing `day`. */
+ export async function weeklyTimesheet(db: Db, orgId: string, day: string) {
+   const start = weekStart(day);
+-  const end = addDays(start, 7);
+   const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
++  const window = dayWindow(start, days[6]);
+   const rows = await db
+-    .select({ entry: timeEntries, name: users.name })
++    .select({ entry: timeEntries, name: users.name, timezone: users.timezone })
+     .from(timeEntries)
+     .innerJoin(users, eq(users.id, timeEntries.userId))
+     .where(
+       and(
+         eq(timeEntries.orgId, orgId),
+-        gte(timeEntries.startedAt, new Date(dayStart(start))),
+-        lt(timeEntries.startedAt, new Date(dayStart(end))),
++        gte(timeEntries.startedAt, new Date(window.from)),
++        lt(timeEntries.startedAt, new Date(window.to)),
+       ),
+     )
+     .orderBy(asc(timeEntries.startedAt));
+   const people = new Map<string, TimesheetUser>();
+-  for (const { entry, name } of rows) {
++  for (const { entry, name, timezone } of rows) {
++    const key = dayKey(entry.startedAt, timezone);
++    if (!days.includes(key)) continue;
+     let person = people.get(entry.userId);
+     if (!person) {
+       person = {
+@@ -52,7 +54,6 @@
+       };
+       people.set(entry.userId, person);
+     }
+-    const key = dayKey(entry.startedAt);
+     person.days[key] = (person.days[key] ?? 0) + entry.minutes;
+     person.totalMinutes += entry.minutes;
+     if (entry.billable) person.billableMinutes += entry.minutes;
+diff -ruN a/src/sql/reports.sql.ts b/src/sql/reports.sql.ts
+--- a/src/sql/reports.sql.ts
++++ b/src/sql/reports.sql.ts
+@@ -7,6 +7,7 @@
+ export interface TimesheetRow {
+   user_id: string;
+   user_name: string;
++  timezone: string;
+   started_at: number;
+   minutes: number;
+   billable: number;
+@@ -19,7 +20,7 @@
+   toMs: number,
+ ) {
+   return db.all<TimesheetRow>(sql`
+-    SELECT u.id AS user_id, u.name AS user_name, te.started_at, te.minutes, te.billable
++    SELECT u.id AS user_id, u.name AS user_name, u.timezone, te.started_at, te.minutes, te.billable
+     FROM time_entries te JOIN users u ON u.id = te.user_id
+     WHERE te.org_id = ${orgId} AND te.started_at >= ${fromMs} AND te.started_at < ${toMs}
+     ORDER BY u.name, te.started_at`);
+diff -ruN a/src/sql/time-entries.sql.ts b/src/sql/time-entries.sql.ts
+--- a/src/sql/time-entries.sql.ts
++++ b/src/sql/time-entries.sql.ts
+@@ -1,6 +1,7 @@
+ import { sql, type SQL } from "drizzle-orm";
+ 
+ import type { Db } from "../db/client";
++import { dayKey, dayWindow } from "../lib/legacy/dates";
+ 
+ export interface TimeEntryRow {
+   id: string;
+@@ -13,11 +14,14 @@
+   note: string | null;
+   billable: number;
+   invoice_id: string | null;
++  /** The time zone of the person who logged the entry. */
++  timezone: string;
+ }
+ 
+ const columns = sql.raw(
+-  "id, org_id, user_id, project_id, task_id, started_at, minutes, note, billable, invoice_id",
++  "te.id, te.org_id, te.user_id, te.project_id, te.task_id, te.started_at, te.minutes, te.note, te.billable, te.invoice_id, u.timezone",
+ );
++const from = sql.raw("time_entries te JOIN users u ON u.id = te.user_id");
+ 
+ export interface EntryFilter {
+   orgId: string;
+@@ -31,26 +35,37 @@
+ export async function findEntries(db: Db, filter: EntryFilter) {
+   const conditions: SQL[] = [];
+   // Filtering by a user narrows the org filter down to that user.
+-  if (filter.userId) conditions.push(sql`user_id = ${filter.userId}`);
+-  else conditions.push(sql`org_id = ${filter.orgId}`);
+-  if (filter.projectId) conditions.push(sql`project_id = ${filter.projectId}`);
+-  if (filter.date)
+-    conditions.push(sql`date(started_at / 1000, 'unixepoch') = ${filter.date}`);
++  if (filter.userId) conditions.push(sql`te.user_id = ${filter.userId}`);
++  else conditions.push(sql`te.org_id = ${filter.orgId}`);
++  if (filter.projectId)
++    conditions.push(sql`te.project_id = ${filter.projectId}`);
++  if (filter.date) {
++    // The day is the logger's local day: fetch a wide window, then filter.
++    const window = dayWindow(filter.date);
++    conditions.push(
++      sql`te.started_at >= ${window.from} AND te.started_at < ${window.to}`,
++    );
++  }
+   const where = sql.join(conditions, sql` AND `);
+-  return db.all<TimeEntryRow>(
+-    sql`SELECT ${columns} FROM time_entries WHERE ${where} ORDER BY started_at DESC, id LIMIT ${filter.limit ?? 500}`,
++  const rows = await db.all<TimeEntryRow>(
++    sql`SELECT ${columns} FROM ${from} WHERE ${where} ORDER BY te.started_at DESC, te.id LIMIT ${filter.limit ?? 500}`,
+   );
++  return filter.date
++    ? rows.filter((row) => dayKey(row.started_at, row.timezone) === filter.date)
++    : rows;
+ }
+ 
+ export async function findEntry(db: Db, orgId: string, id: string) {
+   return db.get<TimeEntryRow | undefined>(
+-    sql`SELECT ${columns} FROM time_entries WHERE id = ${id} AND org_id = ${orgId}`,
++    sql`SELECT ${columns} FROM ${from} WHERE te.id = ${id} AND te.org_id = ${orgId}`,
+   );
+ }
+ 
+ export async function insertEntry(
+   db: Db,
+-  row: Omit<TimeEntryRow, "invoice_id" | "billable"> & { billable: boolean },
++  row: Omit<TimeEntryRow, "invoice_id" | "billable" | "timezone"> & {
++    billable: boolean;
++  },
+ ) {
+   await db.run(sql`
+     INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, started_at, minutes, note, billable, created_at)

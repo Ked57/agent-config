@@ -1,0 +1,70 @@
+{
+  "task": "B5-webhook-idempotency",
+  "references": [
+    {
+      "file": "reference-aa-A-r2.patch",
+      "source": "validation-ts-backend-aa A r2"
+    }
+  ],
+  "knownFailing": [
+    {
+      "file": "known-failing-aa-A-r1.patch",
+      "source": "validation-ts-backend-aa A r1",
+      "reason": "transaction plus insert-on-conflict: concurrent duplicates get 500 SQLITE_BUSY instead of a 2xx (credits are applied once)"
+    },
+    {
+      "file": "known-failing-aa-B-r1.patch",
+      "source": "validation-ts-backend-aa B r1",
+      "reason": "transaction plus insert-on-conflict: concurrent duplicates get 500 SQLITE_BUSY instead of a 2xx (credits are applied once)"
+    },
+    {
+      "file": "known-failing-aa-B-r2.patch",
+      "source": "validation-ts-backend-aa B r2",
+      "reason": "transaction plus insert-on-conflict: concurrent duplicates get 500 SQLITE_BUSY instead of a 2xx (credits are applied once)"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-check-then-insert.patch",
+      "wrong": "select the event, apply credits, then insert it, outside a transaction: concurrent duplicates double-apply",
+      "violates": "a repeated event must not be applied again",
+      "expect": "killed"
+    },
+    {
+      "file": "m1b-check-then-insert-strict.patch",
+      "wrong": "check-then-insert with a plain insert: losers 500 after the credits were applied",
+      "violates": "a repeated event must not be applied again",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-memory-set-instance.patch",
+      "wrong": "dedupe in an in-memory Set per app instance; nothing persisted",
+      "violates": "a repeated event must not be applied again",
+      "expect": "killed"
+    },
+    {
+      "file": "m2b-memory-set-module.patch",
+      "wrong": "dedupe in a module-level in-memory Set; nothing persisted",
+      "violates": "a repeated event must not be applied again",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-apply-before-record.patch",
+      "wrong": "credits are applied before the event is recorded",
+      "violates": "a repeated event must not be applied again",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-wrong-key.patch",
+      "wrong": "deduplicated on type, organization and amount instead of the event id",
+      "violates": "idempotent on the event id",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-duplicate-409.patch",
+      "wrong": "a repeated event gets 409",
+      "violates": "should still get a 2xx response so the provider stops retrying",
+      "expect": "killed"
+    }
+  ]
+}

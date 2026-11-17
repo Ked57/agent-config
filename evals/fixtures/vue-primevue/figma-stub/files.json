@@ -1,0 +1,224 @@
+{
+  "Xk3dQ9vLm2PaRt7YwZb4Nc": {
+    "name": "Acme-Console-Analytics",
+    "pages": [
+      {
+        "id": "0:1",
+        "name": "Analytics",
+        "frames": [
+          {
+            "nodeId": "12:2",
+            "name": "Analytics / Desktop",
+            "bundle": "analytics/desktop.json",
+            "screenshot": "analytics/desktop.png"
+          },
+          {
+            "nodeId": "12:3",
+            "name": "Analytics / Mobile",
+            "bundle": "analytics/mobile.json",
+            "screenshot": "analytics/mobile.png"
+          },
+          {
+            "nodeId": "12:4",
+            "name": "Analytics / Desktop / Row menu open",
+            "bundle": "analytics/desktop-row-menu-open.json",
+            "screenshot": "analytics/desktop-row-menu-open.png"
+          },
+          {
+            "nodeId": "12:5",
+            "name": "Analytics / Desktop / Last 7 days",
+            "bundle": "analytics/desktop-range-7d.json",
+            "screenshot": "analytics/desktop-range-7d.png"
+          },
+          {
+            "nodeId": "12:6",
+            "name": "Analytics / Desktop / Empty",
+            "bundle": "analytics/desktop-empty.json",
+            "screenshot": "analytics/desktop-empty.png"
+          }
+        ]
+      }
+    ]
+  },
+  "Ac7Rk2Wm9QzT4pLx8NvB3s": {
+    "name": "Acme-Console-Account-Settings",
+    "pages": [
+      {
+        "id": "0:1",
+        "name": "Account settings",
+        "frames": [
+          {
+            "nodeId": "22:2",
+            "name": "Account settings / Desktop",
+            "bundle": "account/desktop.json",
+            "screenshot": "account/desktop.png"
+          },
+          {
+            "nodeId": "22:3",
+            "name": "Account settings / Mobile",
+            "bundle": "account/mobile.json",
+            "screenshot": "account/mobile.png"
+          },
+          {
+            "nodeId": "22:4",
+            "name": "Account settings / Desktop / Unsaved changes",
+            "bundle": "account/desktop-unsaved.json",
+            "screenshot": "account/desktop-unsaved.png"
+          },
+          {
+            "nodeId": "22:5",
+            "name": "Account settings / Desktop / Validation errors",
+            "bundle": "account/desktop-errors.json",
+            "screenshot": "account/desktop-errors.png"
+          }
+        ]
+      }
+    ]
+  },
+  "Pr4cE8nVq2LmX7tB9wKd3H": {
+    "name": "Acme-Console-Pricing",
+    "pages": [
+      {
+        "id": "0:1",
+        "name": "Pricing",
+        "frames": [
+          {
+            "nodeId": "32:2",
+            "name": "Pricing / Desktop",
+            "bundle": "pricing/desktop.json",
+            "screenshot": "pricing/desktop.png"
+          },
+          {
+            "nodeId": "32:3",
+            "name": "Pricing / Mobile",
+            "bundle": "pricing/mobile.json",
+            "screenshot": "pricing/mobile.png"
+          },
+          {
+            "nodeId": "32:4",
+            "name": "Pricing / Desktop / Yearly billing",
+            "bundle": "pricing/desktop-yearly.json",
+            "screenshot": "pricing/desktop-yearly.png"
+          },
+          {
+            "nodeId": "32:5",
+            "name": "Pricing / Desktop / FAQ item open",
+            "bundle": "pricing/desktop-faq-open.json",
+            "screenshot": "pricing/desktop-faq-open.png"
+          }
+        ]
+      }
+    ]
+  },
+  "On8bQ3dKw5ZrT2xYp7LmC4": {
+    "name": "Acme-Console-Onboarding",
+    "pages": [
+      {
+        "id": "0:1",
+        "name": "Onboarding",
+        "frames": [
+          {
+            "nodeId": "42:2",
+            "name": "Onboarding / Step 2 / Desktop",
+            "bundle": "onboarding/desktop.json",
+            "screenshot": "onboarding/desktop.png"
+          },
+          {
+            "nodeId": "42:3",
+            "name": "Onboarding / Step 2 / Mobile",
+            "bundle": "onboarding/mobile.json",
+            "screenshot": "onboarding/mobile.png"
+          },
+          {
+            "nodeId": "42:4",
+            "name": "Onboarding / Step 2 / Option selected",
+            "bundle": "onboarding/desktop-selected.json",
+            "screenshot": "onboarding/desktop-selected.png"
+          },
+          {
+            "nodeId": "42:5",
+            "name": "Onboarding / Step 3 / Invalid email",
+            "bundle": "onboarding/desktop-step3-error.json",
+            "screenshot": "onboarding/desktop-step3-error.png"
+          }
+        ]
+      }
+    ]
+  },
+  "In5vR8cWq2TxK9mLp3ZbD7": {
+    "name": "Acme-Console-Invoices",
+    "pages": [
+      {
+        "id": "0:1",
+        "name": "Invoices",
+        "frames": [
+          {
+            "nodeId": "52:2",
+            "name": "Invoices / Desktop",
+            "bundle": "invoices/desktop.json",
+            "screenshot": "invoices/desktop.png"
+          },
+          {
+            "nodeId": "52:3",
+            "name": "Invoices / Mobile",
+            "bundle": "invoices/mobile.json",
+            "screenshot": "invoices/mobile.png"
+          },
+          {
+            "nodeId": "52:4",
+            "name": "Invoices / Desktop / Filtered by status",
+            "bundle": "invoices/desktop-filtered.json",
+            "screenshot": "invoices/desktop-filtered.png"
+          },
+          {
+            "nodeId": "52:5",
+            "name": "Invoices / Desktop / Bulk selection",
+            "bundle": "invoices/desktop-bulk.json",
+            "screenshot": "invoices/desktop-bulk.png"
+          },
+          {
+            "nodeId": "52:6",
+            "name": "Invoices / Desktop / Empty",
+            "bundle": "invoices/desktop-empty.json",
+            "screenshot": "invoices/desktop-empty.png"
+          }
+        ]
+      }
+    ]
+  },
+  "Cu6sT9mWk3QpR8vXz2LnB5": {
+    "name": "Acme-Console-Customer-Detail",
+    "pages": [
+      {
+        "id": "0:1",
+        "name": "Customer detail",
+        "frames": [
+          {
+            "nodeId": "62:2",
+            "name": "Customer / Overview / Desktop",
+            "bundle": "customer/desktop.json",
+            "screenshot": "customer/desktop.png"
+          },
+          {
+            "nodeId": "62:3",
+            "name": "Customer / Overview / Mobile",
+            "bundle": "customer/mobile.json",
+            "screenshot": "customer/mobile.png"
+          },
+          {
+            "nodeId": "62:4",
+            "name": "Customer / Desktop / Edit panel open",
+            "bundle": "customer/desktop-edit-panel.json",
+            "screenshot": "customer/desktop-edit-panel.png"
+          },
+          {
+            "nodeId": "62:5",
+            "name": "Customer / Contacts / Desktop",
+            "bundle": "customer/desktop-contacts.json",
+            "screenshot": "customer/desktop-contacts.png"
+          }
+        ]
+      }
+    ]
+  }
+}

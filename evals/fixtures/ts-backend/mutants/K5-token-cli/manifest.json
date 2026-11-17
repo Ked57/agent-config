@@ -1,0 +1,65 @@
+{
+  "task": "K5-token-cli",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written by agent-f: arg parser and token issuer in src/cli/create-token.ts, entry scripts/create-token.ts writing only the token to stdout, package.json script token:create"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-logger-line-on-stdout.patch",
+      "wrong": "logs token.created with the JSON logger, which writes info lines to stdout",
+      "violates": "stdout holds only the token (visible only when the command really runs without the tests' LOG_LEVEL=silent)",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-labelled-output.patch",
+      "wrong": "prints \"Token for <email>: <token>\"",
+      "violates": "stdout holds only the token and a newline",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-error-on-stdout.patch",
+      "wrong": "unknown-email message goes to stdout",
+      "violates": "errors go to stderr, stdout stays empty",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-email-case-sensitive.patch",
+      "wrong": "email compared as typed",
+      "violates": "email matching ignores case",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-ignores-token-ttl-env.patch",
+      "wrong": "default ttl is always 24, TOKEN_TTL_HOURS ignored",
+      "violates": "--ttl-hours defaults to TOKEN_TTL_HOURS, then 24",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-bad-ttl-falls-back.patch",
+      "wrong": "parseInt with a fallback to 24: soon/0/-3 issue a token",
+      "violates": "a bad --ttl-hours exits 1 without a token",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-script-named-token.patch",
+      "wrong": "package.json script is called token instead of token:create",
+      "violates": "the command is bun run token:create",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-unknown-email-exit-0.patch",
+      "wrong": "unknown email prints to stderr but exits 0",
+      "violates": "unknown email exits 1",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-ignores-database-url.patch",
+      "wrong": "always opens file:data/dev.db",
+      "violates": "uses DATABASE_URL like the other scripts",
+      "expect": "killed"
+    }
+  ]
+}

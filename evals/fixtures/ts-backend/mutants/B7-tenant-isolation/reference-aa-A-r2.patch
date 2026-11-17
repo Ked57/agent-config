@@ -1,0 +1,59 @@
+diff -ruN a/src/routes/tasks.test.ts b/src/routes/tasks.test.ts
+--- a/src/routes/tasks.test.ts
++++ b/src/routes/tasks.test.ts
+@@ -70,6 +70,38 @@
+     expect(transport).toHaveBeenCalledTimes(1);
+   });
+ 
++  it("returns a task to members of its organization", async () => {
++    const { request } = await createTestContext();
++    const response = await request("GET", "/api/tasks/tsk_1", {
++      token: SEED_TOKENS.acmeMember,
++    });
++    expect(response.status).toBe(200);
++    expect(await response.json()).toMatchObject({ id: "tsk_1" });
++  });
++
++  it("hides other organizations' tasks", async () => {
++    const { request } = await createTestContext();
++    const read = await request("GET", "/api/tasks/tsk_1", {
++      token: SEED_TOKENS.globexAdmin,
++    });
++    expect(read.status).toBe(404);
++    const update = await request("PATCH", "/api/tasks/tsk_1", {
++      token: SEED_TOKENS.globexAdmin,
++      body: { title: "Hijacked" },
++    });
++    expect(update.status).toBe(404);
++    const remove = await request("DELETE", "/api/tasks/tsk_1", {
++      token: SEED_TOKENS.globexAdmin,
++    });
++    expect(remove.status).toBe(404);
++
++    const unchanged = await request("GET", "/api/tasks/tsk_1", {
++      token: SEED_TOKENS.acmeAdmin,
++    });
++    expect(unchanged.status).toBe(200);
++    expect(await unchanged.json()).not.toMatchObject({ title: "Hijacked" });
++  });
++
+   it("only lets admins delete tasks", async () => {
+     const { request } = await createTestContext();
+     expect(
+diff -ruN a/src/routes/tasks.ts b/src/routes/tasks.ts
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -12,11 +12,11 @@
+     .use(authGuard(db))
+     .get(
+       "/:id",
+-      async ({ params, status }) => {
++      async ({ params, user, status }) => {
+         const task = await db
+           .select()
+           .from(tasks)
+-          .where(eq(tasks.id, params.id))
++          .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
+           .get();
+         if (!task) return status(404, { error: "task not found" });
+         return toTaskResponse(task);

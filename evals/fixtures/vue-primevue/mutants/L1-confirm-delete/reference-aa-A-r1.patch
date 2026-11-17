@@ -1,0 +1,82 @@
+diff -ruN a/src/App.vue b/src/App.vue
+--- a/src/App.vue
++++ b/src/App.vue
+@@ -1,4 +1,5 @@
+ <script setup lang="ts">
++import ConfirmDialog from 'primevue/confirmdialog'
+ import AppHeader from '@/components/AppHeader.vue'
+ </script>
+ 
+@@ -8,5 +9,6 @@
+     <main class="mx-auto max-w-6xl px-4 py-8">
+       <RouterView />
+     </main>
++    <ConfirmDialog />
+   </div>
+ </template>
+diff -ruN a/src/main.ts b/src/main.ts
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -1,6 +1,7 @@
+ import { createApp } from 'vue'
+ import { createPinia } from 'pinia'
+ import PrimeVue from 'primevue/config'
++import ConfirmationService from 'primevue/confirmationservice'
+ import Aura from '@primeuix/themes/aura'
+ import 'primeicons/primeicons.css'
+ import './style.css'
+@@ -24,4 +25,6 @@
+   },
+ })
+ 
++app.use(ConfirmationService)
++
+ app.mount('#app')
+diff -ruN a/src/views/DashboardView.vue b/src/views/DashboardView.vue
+--- a/src/views/DashboardView.vue
++++ b/src/views/DashboardView.vue
+@@ -5,11 +5,13 @@
+ import Column from 'primevue/column'
+ import DataTable from 'primevue/datatable'
+ import Tag from 'primevue/tag'
++import { useConfirm } from 'primevue/useconfirm'
+ import StatCard from '@/components/StatCard.vue'
+ import { useOrdersStore } from '@/stores/orders'
+ import { formatCurrency, formatDate } from '@/utils/format'
+ import type { Order, OrderStatus } from '@/types'
+ 
++const confirm = useConfirm()
+ const ordersStore = useOrdersStore()
+ const { orders, loading, revenue, pendingCount } = storeToRefs(ordersStore)
+ 
+@@ -20,8 +22,19 @@
+   refunded: 'danger',
+ }
+ 
+-function removeOrder(order: Order) {
+-  void ordersStore.remove(order.id)
++function confirmRemoveOrder(order: Order) {
++  confirm.require({
++    header: 'Delete order?',
++    message: `Delete ${order.id} for ${order.customer}? This can't be undone.`,
++    icon: 'pi pi-exclamation-triangle',
++    // Focus Cancel so a stray Enter doesn't confirm the delete.
++    defaultFocus: 'reject',
++    rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
++    acceptProps: { label: 'Delete', severity: 'danger' },
++    accept: () => {
++      void ordersStore.remove(order.id)
++    },
++  })
+ }
+ 
+ onMounted(() => {
+@@ -56,7 +69,7 @@
+         </Column>
+         <Column header="" class="w-16">
+           <template #body="{ data }">
+-            <Button icon="pi pi-trash" severity="danger" text rounded :aria-label="`Delete ${data.id}`" @click="removeOrder(data)" />
++            <Button icon="pi pi-trash" severity="danger" text rounded :aria-label="`Delete ${data.id}`" @click="confirmRemoveOrder(data)" />
+           </template>
+         </Column>
+       </DataTable>

@@ -1,0 +1,51 @@
+{
+  "task": "L2-settings-tabs",
+  "references": [
+    {
+      "file": "reference-repro-A-r1.patch",
+      "source": "validation-mwg-repro L2 A r1"
+    },
+    {
+      "file": "reference-mwg-B-r3.patch",
+      "source": "mwg-eval L2 B r3"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-no-api-tab.patch",
+      "wrong": "the API tab is missing, so the API key section can no longer be reached",
+      "violates": "tabs: Profile, Preferences, Notifications and API",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-tab-strip-only.patch",
+      "wrong": "a tab strip is added but every section stays visible; tabs switch nothing",
+      "violates": "split it into tabs",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-saves-active-tab-only.patch",
+      "wrong": "Save sends only the fields of the selected tab; edits on other tabs are dropped",
+      "violates": "saving should still save everything",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-save-on-profile-tab-only.patch",
+      "wrong": "the Save button lives inside the Profile tab, so the other tabs cannot be saved",
+      "violates": "saving should still save everything",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-general-instead-of-profile.patch",
+      "wrong": "the first tab is called General instead of Profile",
+      "violates": "tabs: Profile, Preferences, Notifications and API",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-switching-tabs-reloads.patch",
+      "wrong": "switching tabs reloads the stored settings, so unsaved edits on the previous tab are lost",
+      "violates": "saving should still save everything",
+      "expect": "killed"
+    }
+  ]
+}

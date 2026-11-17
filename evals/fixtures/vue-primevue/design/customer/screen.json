@@ -1,0 +1,102 @@
+{
+  "screen": "customer",
+  "task": "D6-customer-detail",
+  "title": "Customer account detail",
+  "route": "/customers/northwind",
+  "service": "src/services/accounts.ts",
+  "figma": { "fileKey": "Cu6sT9mWk3QpR8vXz2LnB5", "fileName": "Acme-Console-Customer-Detail", "pageName": "Customer detail" },
+  "frames": [
+    { "id": "desktop", "nodeId": "62-2", "name": "Customer / Overview / Desktop", "label": "desktop", "viewport": { "width": 1440, "height": 900 } },
+    { "id": "mobile", "nodeId": "62-3", "name": "Customer / Overview / Mobile", "label": "mobile", "viewport": { "width": 390, "height": 844 } },
+    {
+      "id": "desktop-edit-panel", "nodeId": "62-4", "name": "Customer / Desktop / Edit panel open", "label": "state: edit panel open",
+      "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "button", "name": "Edit account" } }]
+    },
+    {
+      "id": "desktop-contacts", "nodeId": "62-5", "name": "Customer / Contacts / Desktop", "label": "state: Contacts tab",
+      "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "tab", "name": "Contacts" } }]
+    }
+  ],
+  "layout": {
+    "desktop": [
+      { "id": "breadcrumb", "role": "link", "name": "Customers" },
+      { "id": "title", "role": "heading", "name": "Northwind Traders", "level": 1 },
+      { "id": "health", "text": "At risk" },
+      { "id": "meta", "text": "Customer since Mar 2023", "contains": true },
+      { "id": "log-activity", "role": "button", "name": "Log activity" },
+      { "id": "edit", "role": "button", "name": "Edit account" },
+      { "id": "stat-revenue-label", "text": "Monthly revenue" },
+      { "id": "stat-revenue", "text": "$4,820" },
+      { "id": "stat-health", "text": "62/100" },
+      { "id": "stat-health-note", "text": "Down 14 since September" },
+      { "id": "stat-renews", "text": "Jan 31, 2027" },
+      { "id": "tab-overview", "role": "tab", "name": "Overview" },
+      { "id": "tab-contacts", "role": "tab", "name": "Contacts" },
+      { "id": "details-title", "role": "heading", "name": "Account details", "level": 2 },
+      { "id": "industry-label", "text": "Industry" },
+      { "id": "industry", "text": "Wholesale distribution" },
+      { "id": "owner", "text": "Maria Kowalski" },
+      { "id": "billing-title", "role": "heading", "name": "Billing", "level": 2 },
+      { "id": "payment-label", "text": "Payment method" },
+      { "id": "payment", "text": "Visa ending in 4242" },
+      { "id": "billing-email", "text": "accounts.payable@northwind-traders.test" },
+      { "id": "notes-title", "role": "heading", "name": "Internal notes", "level": 2 },
+      { "id": "activity-title", "role": "heading", "name": "Activity", "level": 2 },
+      { "id": "activity-first", "text": "Renewal call scheduled" },
+      { "id": "activity-first-time", "text": "Nov 15, 16:20" }
+    ],
+    "mobile": [
+      { "id": "title", "role": "heading", "name": "Northwind Traders", "level": 1 },
+      { "id": "edit", "role": "button", "name": "Edit account" },
+      { "id": "stat-revenue", "text": "$4,820" },
+      { "id": "stat-health", "text": "62/100" },
+      { "id": "tab-contacts", "role": "tab", "name": "Contacts" },
+      { "id": "details-title", "role": "heading", "name": "Account details", "level": 2 },
+      { "id": "billing-title", "role": "heading", "name": "Billing", "level": 2 },
+      { "id": "payment", "text": "Visa ending in 4242" },
+      { "id": "activity-title", "role": "heading", "name": "Activity", "level": 2 },
+      { "id": "activity-first", "text": "Renewal call scheduled" }
+    ],
+    "desktop-edit-panel": [
+      { "id": "panel-name", "role": "textbox", "name": "Account name" },
+      { "id": "panel-owner", "role": "combobox", "name": "Account owner" },
+      { "id": "panel-plan", "role": "combobox", "name": "Plan" },
+      { "id": "panel-plan-hint", "text": "Plan changes apply from the next invoice." },
+      { "id": "panel-notes", "role": "textbox", "name": "Internal notes" },
+      { "id": "panel-cancel", "role": "button", "name": "Cancel" },
+      { "id": "panel-save", "role": "button", "name": "Save changes" }
+    ],
+    "desktop-contacts": [
+      { "id": "tab-contacts", "role": "tab", "name": "Contacts" },
+      { "id": "contact-first", "text": "Dana Whitfield", "contains": true },
+      { "id": "contact-primary", "text": "Primary" },
+      { "id": "contact-first-phone", "text": "+1 206 555 0148" },
+      { "id": "contact-second", "text": "Luis Ortega", "contains": true },
+      { "id": "contact-second-role", "text": "Finance Manager", "contains": true }
+    ]
+  },
+  "behaviour": [
+    { "id": "overview-by-default", "frame": "desktop", "expect": [{ "visibleText": "Account details" }, { "visibleText": "Renewal call scheduled" }, { "hiddenText": "+1 206 555 0148" }] },
+    { "id": "contacts-tab", "frame": "desktop-contacts", "expect": [{ "visibleText": "+1 206 555 0148" }, { "visibleText": "Luis Ortega", "contains": true }, { "hiddenText": "Account details" }] },
+    { "id": "edit-panel-opens", "frame": "desktop-edit-panel", "expect": [{ "visibleText": "Plan changes apply from the next invoice." }, { "visibleText": "Save changes" }] },
+    {
+      "id": "edit-panel-cancel", "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "button", "name": "Edit account" } }, { "click": { "role": "button", "name": "Cancel" } }],
+      "expect": [{ "hiddenText": "Plan changes apply from the next invoice." }]
+    },
+    {
+      "id": "edit-panel-saves", "viewport": { "width": 1440, "height": 900 },
+      "steps": [
+        { "click": { "role": "button", "name": "Edit account" } },
+        { "fill": { "role": "textbox", "name": "Account name", "value": "Northwind Trading Co." } },
+        { "click": { "role": "button", "name": "Save changes" } }
+      ],
+      "expect": [{ "visibleText": "Northwind Trading Co." }, { "hiddenText": "Plan changes apply from the next invoice." }]
+    },
+    { "id": "stats-one-row-on-desktop", "frame": "desktop", "expect": [{ "sameRow": ["Monthly revenue", "Open invoices", "Health score", "Renews"] }] },
+    { "id": "activity-beside-details-on-desktop", "frame": "desktop", "expect": [{ "sameRow": ["Account details", "Activity"] }] },
+    { "id": "mobile-stacks", "frame": "mobile", "expect": [{ "noHorizontalOverflow": true }, { "stacked": ["Account details", "Billing", "Activity"] }] }
+  ]
+}

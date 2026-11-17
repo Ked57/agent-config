@@ -1,0 +1,59 @@
+{
+  "task": "N2-readme",
+  "references": [
+    {
+      "file": "reference-aa-A-r1.patch",
+      "source": "validation-ts-backend-aa A r1"
+    },
+    {
+      "file": "reference-aa-A-r2.patch",
+      "source": "validation-ts-backend-aa A r2"
+    },
+    {
+      "file": "reference-aa-B-r1.patch",
+      "source": "validation-ts-backend-aa B r1"
+    },
+    {
+      "file": "reference-aa-B-r2.patch",
+      "source": "validation-ts-backend-aa B r2"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-two-lines.patch",
+      "wrong": "a two-line README that only names the webhook and auth endpoints",
+      "violates": "explains how to run the API locally (install, migrate, seed, start the dev server)",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-no-env-vars.patch",
+      "wrong": "the environment variable section is gone and no variable is named",
+      "violates": "lists the environment variables",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-no-endpoints.patch",
+      "wrong": "the endpoint reference is replaced by \"see src/routes\"",
+      "violates": "documents the existing endpoints",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-npm-commands.patch",
+      "wrong": "setup commands use npm instead of bun",
+      "violates": "explains how to run the API locally (install, migrate, seed, start the dev server)",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-edits-source.patch",
+      "wrong": "also edits a comment in src/routes/webhooks.ts",
+      "violates": "Documentation only, no code changes.",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-edits-config.patch",
+      "wrong": "adds README.md to .prettierignore",
+      "violates": "Documentation only, no code changes.",
+      "expect": "killed"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "task": "F1-inline-validation",
+  "references": [
+    {
+      "file": "reference-repro-A-r1.patch",
+      "source": "validation-mwg-repro F1 A r1 (PrimeVue Message, :invalid, aria-describedby)"
+    },
+    {
+      "file": "reference-mwg-B-r1.patch",
+      "source": "mwg-eval F1 B r1 (explicit aria-invalid, live region)"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-submits-while-invalid.patch",
+      "wrong": "errors are shown but the form is saved anyway (the audit's surviving mutant)",
+      "violates": "don't submit while the form is invalid",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-max-49.patch",
+      "wrong": "a 50-character name is rejected (limit off by one)",
+      "violates": "must be 2 to 50 characters",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-errors-not-linked.patch",
+      "wrong": "error messages are shown but not linked to their fields",
+      "violates": "show errors inline next to the fields in an accessible way",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-email-only-needs-at.patch",
+      "wrong": "any value containing '@' counts as a valid email ('ada@' passes)",
+      "violates": "the email must be valid",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-fields-not-marked-invalid.patch",
+      "wrong": "the inputs are never marked invalid (no aria-invalid)",
+      "violates": "show errors inline ... in an accessible way",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-name-not-required.patch",
+      "wrong": "an empty display name passes; only the length of a non-empty name is checked",
+      "violates": "display name is required",
+      "expect": "killed"
+    }
+  ]
+}

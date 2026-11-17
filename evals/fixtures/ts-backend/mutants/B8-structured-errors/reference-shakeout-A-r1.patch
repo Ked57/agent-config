@@ -1,0 +1,481 @@
+diff -ruN a/src/app.ts b/src/app.ts
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -1,6 +1,7 @@
+ import { Elysia } from "elysia";
+ 
+ import type { Db } from "./db/client";
++import { apiError } from "./lib/errors";
+ import { logger } from "./lib/logger";
+ import { requestLogger } from "./plugins/request-logger";
+ import { authRoutes } from "./routes/auth";
+@@ -15,12 +16,28 @@
+     .onError(({ code, error, set }) => {
+       if (code === "NOT_FOUND") {
+         set.status = 404;
+-        return "Not Found";
++        return apiError("not_found", "route not found");
++      }
++      if (code === "PARSE") {
++        set.status = 400;
++        return apiError("validation_error", "malformed request body");
++      }
++      if (code === "VALIDATION") {
++        set.status = 400;
++        return apiError(
++          "validation_error",
++          "request validation failed",
++          // Only location and summary: the raw dump echoes schemas and input values.
++          error.all.map((issue) => ({
++            in: error.type,
++            path: issue.path,
++            message: issue.summary ?? issue.message,
++          })),
++        );
+       }
+-      if (code === "VALIDATION" || code === "PARSE") return;
+       logger.error("unhandled error", { code, error: String(error) });
+       set.status = 500;
+-      return { error: error instanceof Error ? error.message : String(error) };
++      return apiError("internal_error", "internal server error");
+     })
+     .use(healthRoutes)
+     .use(authRoutes(db))
+diff -ruN a/src/lib/errors.ts b/src/lib/errors.ts
+--- /dev/null
++++ b/src/lib/errors.ts
+@@ -0,0 +1,22 @@
++export type ApiErrorCode =
++  | "validation_error"
++  | "unauthenticated"
++  | "forbidden"
++  | "not_found"
++  | "conflict"
++  | "internal_error";
++
++export interface ApiErrorBody {
++  error: { code: ApiErrorCode; message: string; details?: unknown };
++}
++
++/** The single JSON shape every error response uses. */
++export function apiError(
++  code: ApiErrorCode,
++  message: string,
++  details?: unknown,
++): ApiErrorBody {
++  return {
++    error: { code, message, ...(details === undefined ? {} : { details }) },
++  };
++}
+diff -ruN a/src/plugins/auth.ts b/src/plugins/auth.ts
+--- a/src/plugins/auth.ts
++++ b/src/plugins/auth.ts
+@@ -3,6 +3,7 @@
+ 
+ import type { Db } from "../db/client";
+ import { apiTokens, users } from "../db/schema";
++import { apiError } from "../lib/errors";
+ import { hashToken } from "../lib/tokens";
+ 
+ export interface AuthUser {
+@@ -18,10 +19,10 @@
+       async resolve({ headers, status }) {
+         const header = headers.authorization;
+         if (!header?.startsWith("Bearer ")) {
+-          return status(401, {
+-            code: "unauthenticated",
+-            message: "missing bearer token",
+-          });
++          return status(
++            401,
++            apiError("unauthenticated", "missing bearer token"),
++          );
+         }
+         const row = await db
+           .select({
+@@ -37,7 +38,10 @@
+           )
+           .get();
+         if (!row || row.expiresAt.getTime() < Date.now()) {
+-          return status(401, "Unauthorized");
++          return status(
++            401,
++            apiError("unauthenticated", "invalid or expired token"),
++          );
+         }
+         const user: AuthUser = { id: row.id, orgId: row.orgId, role: row.role };
+         return { user };
+diff -ruN a/src/routes/auth.ts b/src/routes/auth.ts
+--- a/src/routes/auth.ts
++++ b/src/routes/auth.ts
+@@ -3,6 +3,7 @@
+ 
+ import type { Db } from "../db/client";
+ import { apiTokens, users } from "../db/schema";
++import { apiError } from "../lib/errors";
+ import { newId } from "../lib/ids";
+ import { verifyPassword } from "../lib/passwords";
+ import { generateToken, hashToken } from "../lib/tokens";
+@@ -20,7 +21,10 @@
+           .where(eq(users.email, body.email.toLowerCase()))
+           .get();
+         if (!user || !verifyPassword(body.password, user.passwordHash)) {
+-          return status(401, { error: "invalid email or password" });
++          return status(
++            401,
++            apiError("unauthenticated", "invalid email or password"),
++          );
+         }
+         const ttlHours = Number(process.env.TOKEN_TTL_HOURS ?? 24);
+         const token = generateToken();
+diff -ruN a/src/routes/errors.test.ts b/src/routes/errors.test.ts
+--- /dev/null
++++ b/src/routes/errors.test.ts
+@@ -0,0 +1,140 @@
++import { describe, expect, it } from "vitest";
++
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++
++async function expectError(
++  response: Response,
++  status: number,
++  code: string,
++): Promise<{ error: { code: string; message: string; details?: unknown } }> {
++  expect(response.status).toBe(status);
++  expect(response.headers.get("content-type")).toContain("application/json");
++  const body = (await response.json()) as {
++    error: { code: string; message: string; details?: unknown };
++  };
++  expect(body.error.code).toBe(code);
++  expect(typeof body.error.message).toBe("string");
++  return body;
++}
++
++describe("error responses", () => {
++  it("reports schema violations as validation_error with details", async () => {
++    const { request } = await createTestContext();
++    const response = await request("POST", "/api/auth/token", {
++      body: { email: "not-an-email" },
++    });
++    const body = await expectError(response, 400, "validation_error");
++    expect(body.error.details).toEqual(
++      expect.arrayContaining([
++        expect.objectContaining({ in: "body", path: "/email" }),
++      ]),
++    );
++  });
++
++  it("reports malformed or empty JSON bodies as validation_error", async () => {
++    const { app } = await createTestContext();
++    for (const body of ["{not json", ""]) {
++      const response = await app.handle(
++        new Request("http://localhost/api/auth/token", {
++          method: "POST",
++          headers: { "content-type": "application/json" },
++          body,
++        }),
++      );
++      await expectError(response, 400, "validation_error");
++    }
++  });
++
++  it("reports domain validation failures as validation_error", async () => {
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_4", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { title: "   " },
++    });
++    await expectError(response, 400, "validation_error");
++  });
++
++  it("reports missing, invalid and wrong credentials as unauthenticated", async () => {
++    const { request } = await createTestContext();
++    await expectError(await request("GET", "/api/me"), 401, "unauthenticated");
++    await expectError(
++      await request("GET", "/api/me", { token: "bogus" }),
++      401,
++      "unauthenticated",
++    );
++    await expectError(
++      await request("POST", "/api/auth/token", {
++        body: { email: "ada@acme.test", password: "nope" },
++      }),
++      401,
++      "unauthenticated",
++    );
++    await expectError(
++      await request("POST", "/api/webhooks/billing", {
++        body: { id: "evt_1", type: "x", data: { orgId: "org_acme" } },
++        headers: { "x-webhook-secret": "wrong" },
++      }),
++      401,
++      "unauthenticated",
++    );
++  });
++
++  it("reports forbidden actions as forbidden", async () => {
++    const { request } = await createTestContext();
++    await expectError(
++      await request("DELETE", "/api/tasks/tsk_4", {
++        token: SEED_TOKENS.acmeMember,
++      }),
++      403,
++      "forbidden",
++    );
++  });
++
++  it("reports missing resources and unknown routes as not_found", async () => {
++    const { request } = await createTestContext();
++    await expectError(
++      await request("GET", "/api/projects/prj_missing", {
++        token: SEED_TOKENS.acmeAdmin,
++      }),
++      404,
++      "not_found",
++    );
++    await expectError(
++      await request("GET", "/api/tasks/tsk_missing", {
++        token: SEED_TOKENS.acmeAdmin,
++      }),
++      404,
++      "not_found",
++    );
++    await expectError(await request("GET", "/api/nope"), 404, "not_found");
++  });
++
++  it("reports invalid state transitions as conflict", async () => {
++    const { request } = await createTestContext();
++    await expectError(
++      await request("PATCH", "/api/tasks/tsk_4", {
++        token: SEED_TOKENS.acmeMember,
++        body: { status: "done" },
++      }),
++      409,
++      "conflict",
++    );
++  });
++
++  it("hides unexpected error messages behind internal_error", async () => {
++    let failQueries = false;
++    const { request } = await createTestContext({
++      logger: {
++        logQuery() {
++          if (failQueries) throw new Error("SQLITE secret table detail");
++        },
++      },
++    });
++    failQueries = true;
++    const response = await request("GET", "/api/me", {
++      token: SEED_TOKENS.acmeAdmin,
++    });
++    const body = await expectError(response, 500, "internal_error");
++    expect(JSON.stringify(body)).not.toContain("secret");
++  });
++});
+diff -ruN a/src/routes/projects.ts b/src/routes/projects.ts
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -3,6 +3,7 @@
+ 
+ import type { Db } from "../db/client";
+ import { projects, tasks, users } from "../db/schema";
++import { apiError } from "../lib/errors";
+ import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+@@ -72,7 +73,8 @@
+             and(eq(projects.id, params.id), eq(projects.orgId, user.orgId)),
+           )
+           .get();
+-        if (!project) return status(404, "Project not found");
++        if (!project)
++          return status(404, apiError("not_found", "project not found"));
+         return project;
+       },
+       { requireAuth: true },
+@@ -87,7 +89,8 @@
+             and(eq(projects.id, params.id), eq(projects.orgId, user.orgId)),
+           )
+           .get();
+-        if (!project) return status(404, "Project not found");
++        if (!project)
++          return status(404, apiError("not_found", "project not found"));
+         const rows = await db
+           .select()
+           .from(tasks)
+@@ -107,7 +110,8 @@
+             and(eq(projects.id, params.id), eq(projects.orgId, user.orgId)),
+           )
+           .get();
+-        if (!project) return status(404, "Project not found");
++        if (!project)
++          return status(404, apiError("not_found", "project not found"));
+         if (body.assigneeId) {
+           const assignee = await db
+             .select()
+@@ -117,9 +121,13 @@
+             )
+             .get();
+           if (!assignee)
+-            return status(400, {
+-              error: "assignee must be a member of your organization",
+-            });
++            return status(
++              400,
++              apiError(
++                "validation_error",
++                "assignee must be a member of your organization",
++              ),
++            );
+         }
+         const [task] = await db
+           .insert(tasks)
+diff -ruN a/src/routes/tasks.ts b/src/routes/tasks.ts
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -3,6 +3,7 @@
+ 
+ import type { Db } from "../db/client";
+ import { tasks, users, type TaskStatus } from "../db/schema";
++import { apiError } from "../lib/errors";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+@@ -18,7 +19,7 @@
+           .from(tasks)
+           .where(eq(tasks.id, params.id))
+           .get();
+-        if (!task) return status(404, { error: "task not found" });
++        if (!task) return status(404, apiError("not_found", "task not found"));
+         return toTaskResponse(task);
+       },
+       { requireAuth: true },
+@@ -31,14 +32,17 @@
+           .from(tasks)
+           .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
+           .get();
+-        if (!task) return status(404, { error: "task not found" });
++        if (!task) return status(404, apiError("not_found", "task not found"));
+ 
+         const changes: Partial<typeof tasks.$inferInsert> = {};
+ 
+         if (body.title !== undefined) {
+           const title = body.title.trim();
+           if (title.length === 0)
+-            return status(400, { error: "title cannot be blank" });
++            return status(
++              400,
++              apiError("validation_error", "title cannot be blank"),
++            );
+           changes.title = title;
+         }
+         if (body.description !== undefined)
+@@ -52,19 +56,25 @@
+             done: ["todo"],
+           };
+           if (!allowed[task.status].includes(body.status)) {
+-            return status(409, {
+-              error: `cannot move a task from ${task.status} to ${body.status}`,
+-            });
++            return status(
++              409,
++              apiError(
++                "conflict",
++                `cannot move a task from ${task.status} to ${body.status}`,
++              ),
++            );
+           }
+           if (task.status === "done" && user.role !== "admin") {
+-            return status(403, {
+-              error: "only admins can reopen finished tasks",
+-            });
++            return status(
++              403,
++              apiError("forbidden", "only admins can reopen finished tasks"),
++            );
+           }
+           if (body.status === "done" && !(body.assigneeId ?? task.assigneeId)) {
+-            return status(409, {
+-              error: "assign the task before marking it done",
+-            });
++            return status(
++              409,
++              apiError("conflict", "assign the task before marking it done"),
++            );
+           }
+           changes.status = body.status;
+         }
+@@ -83,9 +93,13 @@
+               )
+               .get();
+             if (!assignee)
+-              return status(400, {
+-                error: "assignee must be a member of your organization",
+-              });
++              return status(
++                400,
++                apiError(
++                  "validation_error",
++                  "assignee must be a member of your organization",
++                ),
++              );
+             newAssignee = assignee.id;
+           }
+           changes.assigneeId = body.assigneeId;
+@@ -93,9 +107,10 @@
+ 
+         if (body.dueDate !== undefined) {
+           if (body.dueDate !== null && task.status === "done") {
+-            return status(409, {
+-              error: "finished tasks cannot get a new due date",
+-            });
++            return status(
++              409,
++              apiError("conflict", "finished tasks cannot get a new due date"),
++            );
+           }
+           changes.dueDate = body.dueDate;
+         }
+@@ -137,13 +152,17 @@
+     .delete(
+       "/:id",
+       async ({ params, user, status }) => {
+-        if (user.role !== "admin") return status(403, "Forbidden");
++        if (user.role !== "admin")
++          return status(
++            403,
++            apiError("forbidden", "only admins can delete tasks"),
++          );
+         const deleted = await db
+           .delete(tasks)
+           .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
+           .returning();
+         if (deleted.length === 0)
+-          return status(404, { error: "task not found" });
++          return status(404, apiError("not_found", "task not found"));
+         return new Response(null, { status: 204 });
+       },
+       { requireAuth: true },
+diff -ruN a/src/routes/webhooks.ts b/src/routes/webhooks.ts
+--- a/src/routes/webhooks.ts
++++ b/src/routes/webhooks.ts
+@@ -3,6 +3,7 @@
+ 
+ import type { Db } from "../db/client";
+ import { organizations } from "../db/schema";
++import { apiError } from "../lib/errors";
+ import { logger } from "../lib/logger";
+ 
+ /** Billing provider webhooks, authenticated with a shared secret header. */
+@@ -12,7 +13,10 @@
+     async ({ body, headers, status }) => {
+       const secret = process.env.WEBHOOK_SECRET;
+       if (!secret || headers["x-webhook-secret"] !== secret) {
+-        return status(401, "invalid webhook secret");
++        return status(
++          401,
++          apiError("unauthenticated", "invalid webhook secret"),
++        );
+       }
+       if (body.type === "payment.succeeded") {
+         const credits = body.data.credits ?? 0;

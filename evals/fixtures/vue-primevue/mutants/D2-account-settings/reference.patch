@@ -1,0 +1,230 @@
+diff --git a/src/components/account/NotificationMatrix.vue b/src/components/account/NotificationMatrix.vue
+new file mode 100644
+index 0000000..67fa13b
+--- /dev/null
++++ b/src/components/account/NotificationMatrix.vue
+@@ -0,0 +1,39 @@
++<script setup lang="ts">
++import Tag from 'primevue/tag'
++import ToggleSwitch from 'primevue/toggleswitch'
++import { channels, type NotificationEvent } from '@/services/account'
++
++const events = defineModel<NotificationEvent[]>({ required: true })
++</script>
++
++<template>
++  <div class="overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-sm">
++    <div class="hidden grid-cols-[1fr_repeat(3,5rem)] items-center border-b border-surface-200 bg-surface-50 px-6 py-3 sm:grid" aria-hidden="true">
++      <span class="text-xs font-medium uppercase tracking-wide text-surface-500">Event</span>
++      <span v-for="channel in channels" :key="channel.id" class="text-center text-xs font-medium uppercase tracking-wide text-surface-500">{{ channel.label }}</span>
++    </div>
++    <ul>
++      <li v-for="(event, index) in events" :key="event.id" class="px-6">
++        <div class="grid gap-3 py-4 sm:grid-cols-[1fr_repeat(3,5rem)] sm:items-center sm:gap-0" :class="{ 'border-t border-surface-100': index > 0 }">
++          <div class="min-w-0">
++            <p class="flex items-center gap-2 text-sm font-medium text-surface-900">
++              {{ event.label }}
++              <Tag v-if="event.required" value="Required" severity="secondary" class="!px-1.5 !py-0 !text-xs" />
++            </p>
++            <p class="truncate text-sm text-surface-500">{{ event.description }}</p>
++          </div>
++          <div class="flex gap-6 sm:contents">
++            <label v-for="channel in channels" :key="channel.id" class="flex items-center gap-2 sm:justify-center">
++              <ToggleSwitch
++                v-model="event.channels[channel.id]"
++                :disabled="event.required && channel.id === 'email'"
++                :aria-label="`${event.label}: ${channel.label}`"
++              />
++              <span class="text-sm text-surface-600 sm:sr-only">{{ channel.label }}</span>
++            </label>
++          </div>
++        </div>
++      </li>
++    </ul>
++  </div>
++</template>
+diff --git a/src/router/index.ts b/src/router/index.ts
+index 507c8a9..fbba081 100644
+--- a/src/router/index.ts
++++ b/src/router/index.ts
+@@ -5,6 +5,7 @@ export const router = createRouter({
+   history: createWebHistory(),
+   routes: [
+     { path: '/', name: 'dashboard', component: DashboardView, meta: { title: 'Dashboard' } },
++    { path: '/account', name: 'account', component: () => import('@/views/AccountView.vue'), meta: { title: 'Account settings' } },
+     { path: '/projects', name: 'projects', component: () => import('@/views/ProjectsView.vue'), meta: { title: 'Projects' } },
+     { path: '/users', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { title: 'Users' } },
+     { path: '/users/:id', name: 'user', component: () => import('@/views/UserDetailView.vue'), props: true, meta: { title: 'User' } },
+diff --git a/src/views/AccountView.vue b/src/views/AccountView.vue
+new file mode 100644
+index 0000000..9bb026c
+--- /dev/null
++++ b/src/views/AccountView.vue
+@@ -0,0 +1,167 @@
++<script setup lang="ts">
++import { computed, reactive, ref } from 'vue'
++import Avatar from 'primevue/avatar'
++import Button from 'primevue/button'
++import InputText from 'primevue/inputtext'
++import Message from 'primevue/message'
++import Select from 'primevue/select'
++import Tag from 'primevue/tag'
++import Textarea from 'primevue/textarea'
++import NotificationMatrix from '@/components/account/NotificationMatrix.vue'
++import { bioMaxLength, fetchAccountSettings, saveProfile, timeZones, type NotificationEvent, type Profile } from '@/services/account'
++import { initials } from '@/utils/format'
++
++type Field = 'firstName' | 'lastName' | 'email'
++
++const profile = ref<Profile | null>(null)
++const notifications = ref<NotificationEvent[]>([])
++const workspace = ref({ name: '', members: 0 })
++const saved = ref('')
++const errors = reactive<Partial<Record<Field, string>>>({})
++
++const snapshot = () => JSON.stringify([profile.value, notifications.value])
++const dirty = computed(() => profile.value !== null && snapshot() !== saved.value)
++const errorCount = computed(() => Object.values(errors).filter(Boolean).length)
++const fullName = computed(() => (profile.value ? `${profile.value.firstName} ${profile.value.lastName}`.trim() : ''))
++
++async function load() {
++  const settings = await fetchAccountSettings()
++  profile.value = settings.profile
++  notifications.value = settings.notifications
++  workspace.value = settings.workspace
++  saved.value = snapshot()
++}
++void load()
++
++function validate(value: Profile) {
++  errors.firstName = value.firstName.trim() ? '' : 'First name is required.'
++  errors.lastName = value.lastName.trim() ? '' : 'Last name is required.'
++  errors.email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email.trim()) ? '' : 'Enter a valid email address.'
++  return errorCount.value === 0
++}
++
++async function save() {
++  if (!profile.value || !validate(profile.value)) return
++  profile.value = await saveProfile(profile.value)
++  saved.value = snapshot()
++}
++
++function discard() {
++  const [savedProfile, savedNotifications] = JSON.parse(saved.value) as [Profile, NotificationEvent[]]
++  profile.value = savedProfile
++  notifications.value = savedNotifications
++  for (const field of Object.keys(errors) as Field[]) errors[field] = ''
++}
++</script>
++
++<template>
++  <div class="flex flex-col gap-8">
++    <header>
++      <h1 class="text-2xl font-semibold tracking-tight text-surface-900">Account settings</h1>
++      <p class="mt-1 text-sm text-surface-500">Manage your profile, how we reach you and your access to the {{ workspace.name }} workspace.</p>
++    </header>
++
++    <template v-if="profile">
++      <section class="grid gap-4 lg:grid-cols-[16rem_1fr] lg:gap-12" aria-labelledby="profile-title">
++        <div>
++          <h2 id="profile-title" class="text-base font-semibold text-surface-900">Profile</h2>
++          <p class="mt-1 text-sm text-surface-500">Your name and photo appear on comments, invoices and activity.</p>
++        </div>
++        <div class="rounded-xl border border-surface-200 bg-surface-0 shadow-sm">
++          <div class="flex flex-wrap items-center gap-4 p-6">
++            <Avatar :label="initials(fullName) || '?'" size="xlarge" shape="circle" class="!bg-primary-100 !text-primary-800 !text-xl font-semibold" aria-hidden="true" />
++            <div class="min-w-0 flex-1">
++              <p class="truncate text-sm font-medium text-surface-900">{{ fullName || 'Your name' }}</p>
++              <p class="text-sm text-surface-500">JPG or PNG, at most 1 MB.</p>
++            </div>
++            <div class="flex w-full gap-2 sm:w-auto">
++              <Button label="Change photo" severity="secondary" outlined size="small" />
++              <Button label="Remove" severity="secondary" text size="small" />
++            </div>
++          </div>
++          <div class="mx-6 border-t border-surface-200"></div>
++          <form class="grid gap-x-4 gap-y-5 p-6 sm:grid-cols-2" novalidate @submit.prevent="save">
++            <Message v-if="errorCount" severity="error" icon="pi pi-exclamation-circle" class="sm:col-span-2" :pt="{ text: { class: '!text-red-800' } }">
++              Fix {{ errorCount }} {{ errorCount === 1 ? 'field' : 'fields' }} to save your changes.
++            </Message>
++            <div class="flex flex-col gap-1.5">
++              <label for="first-name" class="text-sm font-medium text-surface-700">First name</label>
++              <InputText id="first-name" v-model="profile.firstName" :invalid="!!errors.firstName" autocomplete="given-name" />
++              <small v-if="errors.firstName" class="text-sm text-red-600">{{ errors.firstName }}</small>
++            </div>
++            <div class="flex flex-col gap-1.5">
++              <label for="last-name" class="text-sm font-medium text-surface-700">Last name</label>
++              <InputText id="last-name" v-model="profile.lastName" :invalid="!!errors.lastName" autocomplete="family-name" />
++              <small v-if="errors.lastName" class="text-sm text-red-600">{{ errors.lastName }}</small>
++            </div>
++            <div class="flex flex-col gap-1.5 sm:col-span-2">
++              <div class="flex items-center justify-between">
++                <label for="email" class="text-sm font-medium text-surface-700">Email</label>
++                <Tag v-if="profile.emailVerified" value="Verified" severity="success" icon="pi pi-check" class="!py-0 !text-xs" />
++              </div>
++              <InputText id="email" v-model="profile.email" type="email" :invalid="!!errors.email" autocomplete="email" />
++              <small v-if="errors.email" class="text-sm text-red-600">{{ errors.email }}</small>
++            </div>
++            <div class="flex flex-col gap-1.5">
++              <label for="job-title" class="text-sm font-medium text-surface-700">Job title</label>
++              <InputText id="job-title" v-model="profile.jobTitle" autocomplete="organization-title" />
++            </div>
++            <div class="flex flex-col gap-1.5">
++              <label id="time-zone-label" class="text-sm font-medium text-surface-700">Time zone</label>
++              <Select v-model="profile.timeZone" :options="timeZones" option-label="label" option-value="value" aria-labelledby="time-zone-label" />
++            </div>
++            <div class="flex flex-col gap-1.5 sm:col-span-2">
++              <label for="bio" class="text-sm font-medium text-surface-700">Bio</label>
++              <Textarea id="bio" v-model="profile.bio" rows="3" :maxlength="bioMaxLength" auto-resize />
++              <div class="flex justify-between text-sm text-surface-500">
++                <span>Shown on your public profile.</span>
++                <span class="tabular-nums">{{ profile.bio.length }}/{{ bioMaxLength }}</span>
++              </div>
++            </div>
++          </form>
++        </div>
++      </section>
++
++      <section class="grid gap-4 border-t border-surface-200 pt-8 lg:grid-cols-[16rem_1fr] lg:gap-12" aria-labelledby="notifications-title">
++        <div>
++          <h2 id="notifications-title" class="text-base font-semibold text-surface-900">Notifications</h2>
++          <p class="mt-1 text-sm text-surface-500">Choose where we tell you about each event. Security alerts always go to your email.</p>
++        </div>
++        <NotificationMatrix v-model="notifications" />
++      </section>
++
++      <section class="grid gap-4 border-t border-surface-200 pt-8 lg:grid-cols-[16rem_1fr] lg:gap-12" aria-labelledby="danger-title">
++        <div>
++          <h2 id="danger-title" class="text-base font-semibold text-red-700">Danger zone</h2>
++          <p class="mt-1 text-sm text-surface-500">These actions affect your access to {{ workspace.name }} and its {{ workspace.members }} members.</p>
++        </div>
++        <div class="rounded-xl border border-red-200 bg-surface-0 shadow-sm">
++          <div class="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
++            <div>
++              <p class="text-sm font-medium text-surface-900">Transfer ownership</p>
++              <p class="mt-1 text-sm text-surface-500">Hand {{ workspace.name }} over to another admin. You stay on as a member.</p>
++            </div>
++            <Button label="Transfer" severity="secondary" outlined class="shrink-0" />
++          </div>
++          <div class="mx-6 border-t border-red-100"></div>
++          <div class="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
++            <div>
++              <p class="text-sm font-medium text-surface-900">Delete account</p>
++              <p class="mt-1 text-sm text-surface-500">Permanently remove your account and your comments. This cannot be undone.</p>
++            </div>
++            <Button label="Delete account" severity="danger" icon="pi pi-trash" class="shrink-0 !border-red-700 !bg-red-700" />
++          </div>
++        </div>
++      </section>
++    </template>
++
++    <div v-if="dirty" class="sticky bottom-4 z-20 sm:bottom-6" role="region" aria-label="Unsaved changes">
++      <div class="mx-auto flex max-w-xl items-center gap-3 rounded-xl bg-surface-900 py-2.5 pl-4 pr-2.5 text-surface-0 shadow-lg">
++        <i class="pi pi-exclamation-circle text-amber-400" aria-hidden="true"></i>
++        <span class="flex-1 text-sm font-medium">You have unsaved changes</span>
++        <Button label="Discard" text size="small" class="!text-surface-0" @click="discard" />
++        <Button label="Save changes" size="small" class="!border-surface-0 !bg-surface-0 !text-surface-900" @click="save" />
++      </div>
++    </div>
++  </div>
++</template>

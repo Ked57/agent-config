@@ -1,0 +1,59 @@
+{
+  "task": "H1-credit-spend",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-read-then-write.patch",
+      "wrong": "Reads the balance, decides in JS, then writes the new balance",
+      "violates": "The balance must never go negative, even when requests arrive at the same time",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-atomic-update-but-check-then-insert-key.patch",
+      "wrong": "Atomic conditional deduction, but the idempotency key is looked up before and stored after spending",
+      "violates": "a retry must get the original response back and never be charged twice",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-replay-returns-current-balance.patch",
+      "wrong": "A replayed key answers with the current balance instead of the first answer",
+      "violates": "a retry must get the original response back",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-refusals-not-remembered.patch",
+      "wrong": "Only successful spends are recorded under the key, so a refused key is retried after a top-up",
+      "violates": "a retry must get the original response back",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-key-not-scoped-to-org.patch",
+      "wrong": "Idempotency keys are unique across all organizations",
+      "violates": "so members of an organization can spend its credits",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-interactive-transaction.patch",
+      "wrong": "Read-check-write inside db.transaction(); concurrent requests fail with SQLITE_BUSY (500)",
+      "violates": "requests that arrive together must each still get a 200 or 402",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-ignores-idempotency-key.patch",
+      "wrong": "Idempotency-Key header is ignored",
+      "violates": "a retry must get the original response back and never be charged twice",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-cannot-spend-to-zero.patch",
+      "wrong": "Requires the balance to exceed the amount (> instead of >=)",
+      "violates": "402 when the balance is too low",
+      "expect": "killed"
+    }
+  ]
+}

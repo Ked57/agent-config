@@ -1,0 +1,1419 @@
+{
+  "generatedFrom": "mutants/D4-onboarding-wizard/reference.patch",
+  "frames": {
+    "desktop": {
+      "step-count": {
+        "x": 336,
+        "y": 109,
+        "width": 768,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          4,
+          120,
+          87
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "title": {
+        "x": 336,
+        "y": 133,
+        "width": 768,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "subtitle": {
+        "x": 336,
+        "y": 169,
+        "width": 768,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "stepper-account": {
+        "x": 380,
+        "y": 227,
+        "width": 56,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "stepper-workspace": {
+        "x": 608,
+        "y": 227,
+        "width": 77,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          4,
+          120,
+          87
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "stepper-team": {
+        "x": 836,
+        "y": 227,
+        "width": 36,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "stepper-billing": {
+        "x": 1064,
+        "y": 227,
+        "width": 40,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "stepper-current-number": {
+        "x": 564,
+        "y": 221,
+        "width": 32,
+        "height": 32,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          4,
+          120,
+          87
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 33554400,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": [
+          5,
+          150,
+          105
+        ]
+      },
+      "step-title": {
+        "x": 369,
+        "y": 318,
+        "width": 702,
+        "height": 28,
+        "fontSize": 18,
+        "fontWeight": 600,
+        "lineHeight": 28,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "workspace-name": {
+        "x": 369,
+        "y": 428,
+        "width": 384,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          203,
+          213,
+          225
+        ]
+      },
+      "workspace-hint": {
+        "x": 369,
+        "y": 476,
+        "width": 702,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "question": {
+        "x": 369,
+        "y": 528,
+        "width": 248,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "option-clients": {
+        "x": 442,
+        "y": 577,
+        "width": 223,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "option-clients-desc": {
+        "x": 442,
+        "y": 601,
+        "width": 223,
+        "height": 40,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "option-operations": {
+        "x": 799,
+        "y": 577,
+        "width": 223,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "option-product": {
+        "x": 442,
+        "y": 707,
+        "width": 223,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "option-other": {
+        "x": 799,
+        "y": 707,
+        "width": 223,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "radio-product": {
+        "x": 677,
+        "y": 707,
+        "width": 20,
+        "height": 20,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 50,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": [
+          0,
+          0,
+          0
+        ]
+      },
+      "question-hint": {
+        "x": 369,
+        "y": 800,
+        "width": 702,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "team-size-label": {
+        "x": 369,
+        "y": 852,
+        "width": 702,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "team-size-option": {
+        "x": 464,
+        "y": 880,
+        "width": 68,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 500,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          241,
+          245,
+          249
+        ],
+        "radius": 0,
+        "padding": [
+          4,
+          4,
+          4,
+          4
+        ],
+        "border": [
+          241,
+          245,
+          249
+        ]
+      },
+      "next-hint": {
+        "x": 369,
+        "y": 982,
+        "width": 571,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "continue": {
+        "x": 952,
+        "y": 971,
+        "width": 119,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          4,
+          120,
+          87
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          4,
+          120,
+          87
+        ]
+      }
+    },
+    "mobile": {
+      "step-count": {
+        "x": 16,
+        "y": 309,
+        "width": 358,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          4,
+          120,
+          87
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "title": {
+        "x": 16,
+        "y": 333,
+        "width": 358,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "stepper-workspace": {
+        "x": 151,
+        "y": 447,
+        "width": 77,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          4,
+          120,
+          87
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "step-title": {
+        "x": 37,
+        "y": 526,
+        "width": 316,
+        "height": 28,
+        "fontSize": 18,
+        "fontWeight": 600,
+        "lineHeight": 28,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "workspace-name": {
+        "x": 37,
+        "y": 656,
+        "width": 316,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          203,
+          213,
+          225
+        ]
+      },
+      "option-clients": {
+        "x": 110,
+        "y": 805,
+        "width": 194,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "option-operations": {
+        "x": 110,
+        "y": 935,
+        "width": 194,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "option-product": {
+        "x": 110,
+        "y": 1065,
+        "width": 194,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "option-other": {
+        "x": 110,
+        "y": 1195,
+        "width": 194,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "team-size-option": {
+        "x": 132,
+        "y": 1408,
+        "width": 68,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 500,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          241,
+          245,
+          249
+        ],
+        "radius": 0,
+        "padding": [
+          4,
+          4,
+          4,
+          4
+        ],
+        "border": [
+          241,
+          245,
+          249
+        ]
+      },
+      "continue": {
+        "x": 37,
+        "y": 1487,
+        "width": 316,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          4,
+          120,
+          87
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          4,
+          120,
+          87
+        ]
+      }
+    },
+    "desktop-selected": {
+      "option-product": {
+        "x": 442,
+        "y": 707,
+        "width": 223,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          236,
+          253,
+          245
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "option-product-desc": {
+        "x": 442,
+        "y": 731,
+        "width": 223,
+        "height": 40,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          236,
+          253,
+          245
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "option-clients": {
+        "x": 442,
+        "y": 577,
+        "width": 223,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "radio-product": {
+        "x": 677,
+        "y": 707,
+        "width": 20,
+        "height": 20,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          236,
+          253,
+          245
+        ],
+        "radius": 50,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": [
+          0,
+          0,
+          0
+        ]
+      },
+      "chosen-hint": {
+        "x": 369,
+        "y": 800,
+        "width": 702,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          4,
+          120,
+          87
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "continue": {
+        "x": 952,
+        "y": 971,
+        "width": 119,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          4,
+          120,
+          87
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          4,
+          120,
+          87
+        ]
+      }
+    },
+    "desktop-step3-error": {
+      "step-count": {
+        "x": 336,
+        "y": 109,
+        "width": 768,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          4,
+          120,
+          87
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "stepper-team": {
+        "x": 836,
+        "y": 227,
+        "width": 37,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          4,
+          120,
+          87
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "step-title": {
+        "x": 369,
+        "y": 318,
+        "width": 702,
+        "height": 28,
+        "fontSize": 18,
+        "fontWeight": 600,
+        "lineHeight": 28,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "invite-email": {
+        "x": 369,
+        "y": 428,
+        "width": 526,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          248,
+          113,
+          113
+        ]
+      },
+      "email-error": {
+        "x": 369,
+        "y": 476,
+        "width": 526,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          231,
+          0,
+          11
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "role-label": {
+        "x": 911,
+        "y": 402,
+        "width": 160,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "info": {
+        "x": 369,
+        "y": 528,
+        "width": 702,
+        "height": 44,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          71,
+          85,
+          105
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 8,
+        "padding": [
+          12,
+          16,
+          12,
+          16
+        ],
+        "border": null
+      },
+      "back": {
+        "x": 369,
+        "y": 621,
+        "width": 88,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          0,
+          0,
+          0
+        ]
+      },
+      "skip": {
+        "x": 794,
+        "y": 621,
+        "width": 122,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          0,
+          0,
+          0
+        ]
+      },
+      "send": {
+        "x": 928,
+        "y": 621,
+        "width": 143,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          4,
+          120,
+          87
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          4,
+          120,
+          87
+        ]
+      }
+    }
+  }
+}

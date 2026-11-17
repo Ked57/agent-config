@@ -1,0 +1,13 @@
+diff -ruN a/src/lib/legacy/dates.ts b/src/lib/legacy/dates.ts
+--- a/src/lib/legacy/dates.ts
++++ b/src/lib/legacy/dates.ts
+@@ -38,7 +38,8 @@
+   const index = month - 1 + months;
+   const targetYear = year + Math.floor(index / 12);
+   const targetMonth = (((index % 12) + 12) % 12) + 1;
+-  return `${targetYear}-${pad(targetMonth)}-${pad(date)}`;
++  // Every month has a 28th.
++  return `${targetYear}-${pad(targetMonth)}-${pad(Math.min(date, 28))}`;
+ }
+ 
+ /** Monday of the week a day falls in. */

@@ -1,0 +1,46 @@
+diff -ruN a/src/routes/projects.ts b/src/routes/projects.ts
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -19,23 +19,25 @@
+           .from(projects)
+           .where(eq(projects.orgId, user.orgId))
+           .orderBy(asc(projects.name));
+-        const items = [];
+-        for (const project of rows) {
+-          const counts = await db
+-            .select({ status: tasks.status, total: count() })
+-            .from(tasks)
+-            .where(eq(tasks.projectId, project.id))
+-            .groupBy(tasks.status);
+-          const taskCounts = { todo: 0, in_progress: 0, done: 0 };
+-          for (const row of counts) taskCounts[row.status] = row.total;
+-          items.push({
+-            id: project.id,
+-            name: project.name,
+-            description: project.description,
+-            createdAt: project.createdAt.toISOString(),
+-            taskCounts,
+-          });
+-        }
++        // Count every project's tasks concurrently instead of one after another.
++        const items = await Promise.all(
++          rows.map(async (project) => {
++            const counts = await db
++              .select({ status: tasks.status, total: count() })
++              .from(tasks)
++              .where(eq(tasks.projectId, project.id))
++              .groupBy(tasks.status);
++            const taskCounts = { todo: 0, in_progress: 0, done: 0 };
++            for (const row of counts) taskCounts[row.status] = row.total;
++            return {
++              id: project.id,
++              name: project.name,
++              description: project.description,
++              createdAt: project.createdAt.toISOString(),
++              taskCounts,
++            };
++          }),
++        );
+         return { items };
+       },
+       { requireAuth: true },

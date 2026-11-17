@@ -1,0 +1,17 @@
+{
+  "task": "D6-customer-detail",
+  "scoreGate": { "referenceMin": 0.95, "untouchedMax": 0.1, "mutantMaxDrop": 0.05 },
+  "references": [
+    { "file": "reference.patch", "source": "hand-built reference design (R3b); the mockups, layout.json and baselines are exported from it" }
+  ],
+  "mutants": [
+    { "file": "m1-spacing.patch", "wrong": "page sections, stat tiles, cards, contacts and timeline entries padded and spaced 8 px more", "violates": "the spacing drawn in every frame", "expect": "killed" },
+    { "file": "m2-colour-tokens.patch", "wrong": "logo, health tag, stat note, notes card, active tab, buttons, timeline markers and primary tag use indigo/red/orange/sky instead of the drawn tokens", "violates": "the colours drawn in every frame", "expect": "killed" },
+    { "file": "m3-panel-never-opens.patch", "wrong": "Edit account does nothing: the side panel never opens", "violates": "the edit-panel state frame", "expect": "killed" },
+    { "file": "m4-no-mobile-layout.patch", "wrong": "four stat tiles, header row, two-column overview and details grid kept at 390 px", "violates": "the mobile frame", "expect": "killed" },
+    { "file": "m5-plain-html-controls.patch", "wrong": "native buttons for tabs and actions, plain-text tags and avatars instead of the drawn tabs, buttons, tags and avatars", "violates": "the components drawn in the frames", "expect": "killed" },
+    { "file": "m6-font-weights.patch", "wrong": "title, card titles, values, timeline titles and contact names are regular instead of semi-bold/medium", "violates": "the text styles in the frames", "expect": "killed" },
+    { "file": "m7-a11y-regressions.patch", "wrong": "low-contrast labels in the stats and key-value lists, an icon-only Edit button without a name", "violates": "accessible implementation of the drawn screen", "expect": "killed" },
+    { "file": "m8-lazy-but-plausible.patch", "wrong": "right content but sloppy: no logo, health tag or stat notes, separate stat cards, tabs without counts, single column with activity below, inline key-value lines, plain notes card, timeline without markers, different title type", "violates": "the design's detail (what a mediocre implementation ships); should land mid-scale", "expect": "killed" }
+  ]
+}

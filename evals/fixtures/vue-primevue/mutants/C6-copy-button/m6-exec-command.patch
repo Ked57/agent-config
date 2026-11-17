@@ -1,0 +1,26 @@
+diff -ruN a/src/views/SettingsView.vue b/src/views/SettingsView.vue
+--- a/src/views/SettingsView.vue
++++ b/src/views/SettingsView.vue
+@@ -17,6 +17,13 @@
+   apiKey: '',
+ })
+ const saving = ref(false)
++const copied = ref(false)
++
++function copyKey() {
++  const input = document.getElementById('apiKey') as HTMLInputElement | null
++  input?.select()
++  copied.value = document.execCommand('copy')
++}
+ 
+ const languages = [
+   { label: 'English', value: 'en' },
+@@ -84,6 +91,8 @@
+         <div class="flex flex-col gap-2">
+           <label for="apiKey" class="text-sm font-medium">API key</label>
+           <InputText id="apiKey" :model-value="form.apiKey" readonly class="font-mono" />
++          <Button type="button" label="Copy API key" severity="secondary" @click="copyKey" />
++          <span v-if="copied" role="status">Copied</span>
+         </div>
+       </fieldset>
+ 

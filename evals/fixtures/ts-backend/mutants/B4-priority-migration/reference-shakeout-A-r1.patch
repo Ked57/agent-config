@@ -1,0 +1,266 @@
+diff -ruN a/drizzle/0001_task_priority.sql b/drizzle/0001_task_priority.sql
+--- /dev/null
++++ b/drizzle/0001_task_priority.sql
+@@ -0,0 +1,3 @@
++ALTER TABLE `tasks` ADD `priority` text DEFAULT 'normal' NOT NULL;--> statement-breakpoint
++UPDATE `tasks` SET `priority` = 'urgent' WHERE `is_urgent` = 1;--> statement-breakpoint
++ALTER TABLE `tasks` DROP COLUMN `is_urgent`;
+diff -ruN a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794774883005,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794781582763,
++      "tag": "0001_task_priority",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff -ruN a/src/db/migrate.test.ts b/src/db/migrate.test.ts
+--- /dev/null
++++ b/src/db/migrate.test.ts
+@@ -0,0 +1,59 @@
++import { cp, mkdtemp, readFile, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++
++import { sql } from "drizzle-orm";
++import { migrate } from "drizzle-orm/libsql/migrator";
++import { describe, expect, it } from "vitest";
++
++import { createDb } from "./client";
++import { migrationsFolder, runMigrations } from "./migrate";
++
++/** A copy of the migrations folder whose journal stops at `tag`. */
++async function migrationsUpTo(tag: string): Promise<string> {
++  const folder = await mkdtemp(join(tmpdir(), "tasks-api-migrations-"));
++  await cp(migrationsFolder, folder, { recursive: true });
++  const journalPath = join(folder, "meta", "_journal.json");
++  const journal = JSON.parse(await readFile(journalPath, "utf8")) as {
++    entries: { tag: string }[];
++  };
++  const end = journal.entries.findIndex((entry) => entry.tag === tag);
++  if (end === -1) throw new Error(`unknown migration ${tag}`);
++  journal.entries = journal.entries.slice(0, end + 1);
++  await writeFile(journalPath, JSON.stringify(journal));
++  return folder;
++}
++
++describe("0001_task_priority", () => {
++  it("backfills priority from is_urgent and drops is_urgent", async () => {
++    const dir = await mkdtemp(join(tmpdir(), "tasks-api-migrate-"));
++    const db = createDb(`file:${join(dir, "test.db")}`);
++    await migrate(db, { migrationsFolder: await migrationsUpTo("0000_init") });
++
++    await db.run(
++      sql`INSERT INTO organizations (id, name, created_at) VALUES ('org', 'Org', 0)`,
++    );
++    await db.run(
++      sql`INSERT INTO projects (id, org_id, name, created_at) VALUES ('prj', 'org', 'Project', 0)`,
++    );
++    await db.run(sql`
++      INSERT INTO tasks (id, org_id, project_id, title, is_urgent, created_at, updated_at)
++      VALUES ('urgent', 'org', 'prj', 'Urgent', 1, 0, 0),
++             ('calm', 'org', 'prj', 'Calm', 0, 0, 0)
++    `);
++
++    await runMigrations(db);
++
++    const rows = await db.all<{ id: string; priority: string }>(
++      sql`SELECT id, priority FROM tasks ORDER BY id`,
++    );
++    expect(rows).toEqual([
++      { id: "calm", priority: "normal" },
++      { id: "urgent", priority: "urgent" },
++    ]);
++    const columns = await db.all<{ name: string }>(
++      sql`SELECT name FROM pragma_table_info('tasks')`,
++    );
++    expect(columns.map((column) => column.name)).not.toContain("is_urgent");
++  });
++});
+diff -ruN a/src/db/schema.ts b/src/db/schema.ts
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -60,6 +60,8 @@
+ export const taskStatuses = ["todo", "in_progress", "done"] as const;
+ export type TaskStatus = (typeof taskStatuses)[number];
+ 
++export const taskPriorities = ["low", "normal", "high", "urgent"] as const;
++
+ export const tasks = sqliteTable(
+   "tasks",
+   {
+@@ -73,9 +75,9 @@
+     title: text("title").notNull(),
+     description: text("description"),
+     status: text("status", { enum: taskStatuses }).notNull().default("todo"),
+-    isUrgent: integer("is_urgent", { mode: "boolean" })
++    priority: text("priority", { enum: taskPriorities })
+       .notNull()
+-      .default(false),
++      .default("normal"),
+     assigneeId: text("assignee_id").references(() => users.id, {
+       onDelete: "set null",
+     }),
+diff -ruN a/src/db/seed.ts b/src/db/seed.ts
+--- a/src/db/seed.ts
++++ b/src/db/seed.ts
+@@ -106,7 +106,7 @@
+       projectId: "prj_web",
+       title: "Fix broken signup link",
+       status: "todo",
+-      isUrgent: true,
++      priority: "urgent",
+       assigneeId: "usr_ada",
+       createdAt: at(3),
+       updatedAt: at(3),
+@@ -127,7 +127,7 @@
+       projectId: "prj_billing",
+       title: "Export invoices",
+       status: "todo",
+-      isUrgent: true,
++      priority: "urgent",
+       createdAt: at(5),
+       updatedAt: at(5),
+     },
+@@ -137,7 +137,7 @@
+       projectId: "prj_infra",
+       title: "Rotate database credentials",
+       status: "todo",
+-      isUrgent: true,
++      priority: "urgent",
+       assigneeId: "usr_gina",
+       createdAt: at(6),
+       updatedAt: at(6),
+diff -ruN a/src/routes/projects.ts b/src/routes/projects.ts
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -129,7 +129,7 @@
+             projectId: project.id,
+             title: body.title,
+             description: body.description,
+-            isUrgent: body.isUrgent ?? false,
++            priority: body.priority,
+             assigneeId: body.assigneeId,
+             dueDate: body.dueDate,
+           })
+@@ -144,7 +144,14 @@
+         body: t.Object({
+           title: t.String({ minLength: 1, maxLength: 200 }),
+           description: t.Optional(t.String({ maxLength: 5000 })),
+-          isUrgent: t.Optional(t.Boolean()),
++          priority: t.Optional(
++            t.Union([
++              t.Literal("low"),
++              t.Literal("normal"),
++              t.Literal("high"),
++              t.Literal("urgent"),
++            ]),
++          ),
+           assigneeId: t.Optional(t.String()),
+           dueDate: t.Optional(t.String({ format: "date" })),
+         }),
+diff -ruN a/src/routes/serializers.ts b/src/routes/serializers.ts
+--- a/src/routes/serializers.ts
++++ b/src/routes/serializers.ts
+@@ -7,7 +7,7 @@
+     title: task.title,
+     description: task.description,
+     status: task.status,
+-    isUrgent: task.isUrgent,
++    priority: task.priority,
+     assigneeId: task.assigneeId,
+     dueDate: task.dueDate,
+     createdAt: task.createdAt.toISOString(),
+diff -ruN a/src/routes/tasks.test.ts b/src/routes/tasks.test.ts
+--- a/src/routes/tasks.test.ts
++++ b/src/routes/tasks.test.ts
+@@ -58,6 +58,52 @@
+     expect(adminReopen.status).toBe(200);
+   });
+ 
++  it("defaults priority to normal and accepts an explicit priority", async () => {
++    const { request } = await createTestContext();
++    const plain = await request("POST", "/api/projects/prj_app/tasks", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { title: "Plain" },
++    });
++    expect(plain.status).toBe(201);
++    const plainBody = await plain.json();
++    expect(plainBody).toMatchObject({ priority: "normal" });
++    expect(plainBody).not.toHaveProperty("isUrgent");
++
++    const high = await request("POST", "/api/projects/prj_app/tasks", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { title: "Important", priority: "high" },
++    });
++    expect(high.status).toBe(201);
++    expect(await high.json()).toMatchObject({ priority: "high" });
++  });
++
++  it("updates priority and rejects unknown priorities", async () => {
++    const { request } = await createTestContext();
++    const untouched = await request("PATCH", "/api/tasks/tsk_3", {
++      token: SEED_TOKENS.acmeMember,
++      body: { title: "Fix the signup link" },
++    });
++    expect(await untouched.json()).toMatchObject({ priority: "urgent" });
++
++    const lowered = await request("PATCH", "/api/tasks/tsk_3", {
++      token: SEED_TOKENS.acmeMember,
++      body: { priority: "low" },
++    });
++    expect(lowered.status).toBe(200);
++    expect(await lowered.json()).toMatchObject({ priority: "low" });
++
++    const invalid = await request("PATCH", "/api/tasks/tsk_3", {
++      token: SEED_TOKENS.acmeMember,
++      body: { priority: "critical" },
++    });
++    expect(invalid.status).toBe(422);
++    const legacy = await request("POST", "/api/projects/prj_app/tasks", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { title: "Legacy", priority: true },
++    });
++    expect(legacy.status).toBe(422);
++  });
++
+   it("notifies on reassignment", async () => {
+     const transport = vi.fn(async () => undefined);
+     setMailTransport(transport);
+diff -ruN a/src/routes/tasks.ts b/src/routes/tasks.ts
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -43,7 +43,7 @@
+         }
+         if (body.description !== undefined)
+           changes.description = body.description;
+-        if (body.isUrgent !== undefined) changes.isUrgent = body.isUrgent;
++        if (body.priority !== undefined) changes.priority = body.priority;
+ 
+         if (body.status !== undefined && body.status !== task.status) {
+           const allowed: Record<TaskStatus, TaskStatus[]> = {
+@@ -126,7 +126,14 @@
+               t.Literal("done"),
+             ]),
+           ),
+-          isUrgent: t.Optional(t.Boolean()),
++          priority: t.Optional(
++            t.Union([
++              t.Literal("low"),
++              t.Literal("normal"),
++              t.Literal("high"),
++              t.Literal("urgent"),
++            ]),
++          ),
+           assigneeId: t.Optional(t.Union([t.String(), t.Null()])),
+           dueDate: t.Optional(
+             t.Union([t.String({ format: "date" }), t.Null()]),

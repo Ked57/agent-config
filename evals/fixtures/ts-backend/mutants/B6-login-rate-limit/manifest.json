@@ -1,0 +1,77 @@
+{
+  "task": "B6-login-rate-limit",
+  "references": [
+    {
+      "file": "reference-shakeout-A-r1.patch",
+      "source": "validation-ts-backend-shakeout A r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-never-expires.patch",
+      "wrong": "the lock never expires; Retry-After is always 900",
+      "violates": "until the window has passed",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-counts-successes.patch",
+      "wrong": "successful logins count as failures",
+      "violates": "After 5 failed login attempts",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-global-key.patch",
+      "wrong": "one counter for all emails",
+      "violates": "Other emails must not be affected.",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-locks-after-4.patch",
+      "wrong": "locks after 4 failures",
+      "violates": "After 5 failed login attempts",
+      "expect": "killed"
+    },
+    {
+      "file": "m4b-locks-after-6.patch",
+      "wrong": "locks after 6 failures",
+      "violates": "After 5 failed login attempts",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-no-retry-after.patch",
+      "wrong": "no Retry-After header",
+      "violates": "with 429 and a Retry-After header (in seconds)",
+      "expect": "killed"
+    },
+    {
+      "file": "m5b-retry-after-ms.patch",
+      "wrong": "Retry-After in milliseconds",
+      "violates": "a Retry-After header (in seconds)",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-case-sensitive-key.patch",
+      "wrong": "keyed on the raw email although login lowercases it: Ada@acme.test bypasses the limit",
+      "violates": "for the same email",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-known-users-only.patch",
+      "wrong": "emails without an account are never limited",
+      "violates": "for the same email",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-correct-password-bypasses-lock.patch",
+      "wrong": "the limiter is consulted only after a wrong password, so the right password gets in while locked",
+      "violates": "reject further attempts for that email",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-limiter-per-request.patch",
+      "wrong": "limiter state is recreated per request",
+      "violates": "After 5 failed login attempts for the same email",
+      "expect": "killed"
+    }
+  ]
+}

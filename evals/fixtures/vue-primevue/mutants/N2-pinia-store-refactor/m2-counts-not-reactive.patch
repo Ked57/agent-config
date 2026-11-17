@@ -1,0 +1,134 @@
+diff -ruN a/src/stores/users.ts b/src/stores/users.ts
+--- a/src/stores/users.ts
++++ b/src/stores/users.ts
+@@ -1,63 +1,72 @@
+ import { defineStore } from 'pinia'
++import { computed, ref } from 'vue'
+ import { fetchUsers } from '@/services/api'
+ import type { User, UserRole } from '@/types'
+ 
+-export const useUsersStore = defineStore('users', {
+-  state: () => ({
+-    users: [] as User[],
+-    loading: false,
+-    loaded: false,
+-    error: null as string | null,
+-    search: '',
+-    roleFilter: null as UserRole | null,
+-  }),
+-  getters: {
+-    filteredUsers(state): User[] {
+-      let result = state.users
+-      if (state.search) {
+-        result = result.filter(
+-          (user) =>
+-            user.name.toLowerCase().includes(state.search.toLowerCase()) ||
+-            user.email.toLowerCase().includes(state.search.toLowerCase()),
+-        )
+-      }
+-      if (state.roleFilter) {
+-        result = result.filter((user) => user.role === state.roleFilter)
+-      }
+-      return result
+-    },
+-    byId(state) {
+-      return (id: string) => state.users.find((user) => user.id === id)
+-    },
+-    adminCount(state): number {
+-      return state.users.filter((user) => user.role === 'admin').length
+-    },
+-    editorCount(state): number {
+-      return state.users.filter((user) => user.role === 'editor').length
+-    },
+-    viewerCount(state): number {
+-      return state.users.filter((user) => user.role === 'viewer').length
+-    },
+-  },
+-  actions: {
+-    async load(force = false) {
+-      if (this.loaded && !force) return
+-      this.loading = true
+-      this.error = null
+-      try {
+-        this.users = await fetchUsers()
+-        this.loaded = true
+-      } catch (error) {
+-        this.error = error instanceof Error ? error.message : 'Failed to load users'
+-      } finally {
+-        this.loading = false
+-      }
+-    },
+-    setSearch(value: string) {
+-      this.search = value
+-    },
+-    setRoleFilter(role: UserRole | null) {
+-      this.roleFilter = role
+-    },
+-  },
++export const useUsersStore = defineStore('users', () => {
++  const users = ref<User[]>([])
++  const loading = ref(false)
++  const loaded = ref(false)
++  const error = ref<string | null>(null)
++  const search = ref('')
++  const roleFilter = ref<UserRole | null>(null)
++
++  const filteredUsers = computed<User[]>(() => {
++    let result = users.value
++    if (search.value) {
++      const query = search.value.toLowerCase()
++      result = result.filter(
++        (user) => user.name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query),
++      )
++    }
++    if (roleFilter.value) {
++      const role = roleFilter.value
++      result = result.filter((user) => user.role === role)
++    }
++    return result
++  })
++
++  const byId = computed(() => (id: string) => users.value.find((user) => user.id === id))
++
++  const countsByRole = ref<Record<UserRole, number>>({ admin: 0, editor: 0, viewer: 0 })
++
++  async function load(force = false) {
++    if (loaded.value && !force) return
++    loading.value = true
++    error.value = null
++    try {
++      users.value = await fetchUsers()
++      const counts: Record<UserRole, number> = { admin: 0, editor: 0, viewer: 0 }
++      for (const user of users.value) counts[user.role] += 1
++      countsByRole.value = counts
++      loaded.value = true
++    } catch (err) {
++      error.value = err instanceof Error ? err.message : 'Failed to load users'
++    } finally {
++      loading.value = false
++    }
++  }
++
++  function setSearch(value: string) {
++    search.value = value
++  }
++
++  function setRoleFilter(role: UserRole | null) {
++    roleFilter.value = role
++  }
++
++  return {
++    users,
++    loading,
++    loaded,
++    error,
++    search,
++    roleFilter,
++    filteredUsers,
++    byId,
++    countsByRole,
++    load,
++    setSearch,
++    setRoleFilter,
++  }
+ })

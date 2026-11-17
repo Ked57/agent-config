@@ -1,0 +1,99 @@
+diff --git a/src/routes/tasks.test.ts b/src/routes/tasks.test.ts
+index cd58f43..7f3d4a2 100644
+--- a/src/routes/tasks.test.ts
++++ b/src/routes/tasks.test.ts
+@@ -87,4 +87,21 @@ describe("tasks", () => {
+       ).status,
+     ).toBe(204);
+   });
++
++  it("searches task titles without treating % as a wildcard", async () => {
++    const { request } = await createTestContext();
++    const search = async (q: string) => {
++      const response = await request(
++        "GET",
++        `/api/tasks/search?q=${encodeURIComponent(q)}`,
++        { token: SEED_TOKENS.acmeMember },
++      );
++      const { items } = (await response.json()) as {
++        items: Array<{ id: string }>;
++      };
++      return items.map((item) => item.id);
++    };
++    expect(await search("SIGNUP")).toEqual(["tsk_3"]);
++    expect(await search("%")).toEqual([]);
++  });
+ });
+diff --git a/src/routes/tasks.ts b/src/routes/tasks.ts
+index c62bf5d..a1eafe6 100644
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { tasks, users, type TaskStatus } from "../db/schema";
++import { projects, tasks, users, type TaskStatus } from "../db/schema";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+@@ -10,6 +10,59 @@ import { toTaskResponse } from "./serializers";
+ export const taskRoutes = (db: Db) =>
+   new Elysia({ prefix: "/api/tasks" })
+     .use(authGuard(db))
++    .get(
++      "/search",
++      async ({ query, user, status }) => {
++        const needle = query.q?.trim() ?? "";
++        if (needle.length < 1 || needle.length > 100)
++          return status(400, { error: "q must be 1 to 100 characters" });
++        if (query.projectId) {
++          const project = await db
++            .select({ id: projects.id })
++            .from(projects)
++            .where(
++              and(
++                eq(projects.id, query.projectId),
++                eq(projects.orgId, user.orgId),
++              ),
++            )
++            .get();
++          if (!project) return status(404, "Project not found");
++        }
++        const rows = await db
++          .select()
++          .from(tasks)
++          .where(
++            and(
++              undefined,
++              query.projectId
++                ? eq(tasks.projectId, query.projectId)
++                : undefined,
++            ),
++          );
++        // Matched in JS rather than with LIKE: SQLite only folds ASCII letters, and plain
++        // substring matching needs no escaping of %, _ or \.
++        const lowered = needle.toLowerCase();
++        const contains = (text: string | null) =>
++          text !== null && text.toLowerCase().includes(lowered);
++        const items = rows
++          .filter((task) => contains(task.title) || contains(task.description))
++          .sort(
++            (a, b) =>
++              b.updatedAt.getTime() - a.updatedAt.getTime() ||
++              (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
++          )
++          .slice(0, 50);
++        return { items: items.map(toTaskResponse) };
++      },
++      {
++        requireAuth: true,
++        query: t.Object({
++          q: t.Optional(t.String()),
++          projectId: t.Optional(t.String()),
++        }),
++      },
++    )
+     .get(
+       "/:id",
+       async ({ params, status }) => {

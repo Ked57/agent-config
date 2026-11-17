@@ -1,0 +1,59 @@
+{
+  "task": "B2-task-pagination",
+  "references": [
+    {
+      "file": "reference-aa-A-r1.patch",
+      "source": "validation-ts-backend-aa A r1"
+    },
+    {
+      "file": "reference-aa-A-r2.patch",
+      "source": "validation-ts-backend-aa A r2"
+    },
+    {
+      "file": "reference-aa-B-r1.patch",
+      "source": "validation-ts-backend-aa B r1"
+    },
+    {
+      "file": "reference-aa-B-r2.patch",
+      "source": "validation-ts-backend-aa B r2"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-no-max-clamp.patch",
+      "wrong": "no maximum: limit=500 returns every task",
+      "violates": "?limit, default 20, max 100",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-ignores-limit.patch",
+      "wrong": "always returns 20 items",
+      "violates": "?limit, default 20, max 100",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-cursor-createdat-only.patch",
+      "wrong": "cursor compares createdAt only, so tasks sharing a timestamp are skipped",
+      "violates": "?cursor taken from the previous page's nextCursor",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-filter-after-limit.patch",
+      "wrong": "status/assignee filters are applied in memory after the page is cut",
+      "violates": "filters ?status= and ?assigneeId=",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-order-by-id.patch",
+      "wrong": "ordered and paged by id, not creation time",
+      "violates": "Keep ordering by creation time",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-full-last-page-cursor.patch",
+      "wrong": "a full final page still returns a non-null nextCursor (the next page is empty)",
+      "violates": "nextCursor is null on the last page",
+      "expect": "killed"
+    }
+  ]
+}

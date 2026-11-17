@@ -1,0 +1,66 @@
+diff -ruN a/src/routes/tasks.test.ts b/src/routes/tasks.test.ts
+--- a/src/routes/tasks.test.ts
++++ b/src/routes/tasks.test.ts
+@@ -70,6 +70,33 @@
+     expect(transport).toHaveBeenCalledTimes(1);
+   });
+ 
++  it("hides other organizations' tasks", async () => {
++    const { request } = await createTestContext();
++    const token = SEED_TOKENS.globexAdmin;
++    const read = await request("GET", "/api/tasks/tsk_1", { token });
++    expect(read.status).toBe(404);
++    expect(await read.json()).toEqual({ error: "task not found" });
++    expect(
++      (
++        await request("PATCH", "/api/tasks/tsk_1", {
++          token,
++          body: { title: "Hijacked" },
++        })
++      ).status,
++    ).toBe(404);
++    expect(
++      (await request("DELETE", "/api/tasks/tsk_1", { token })).status,
++    ).toBe(404);
++
++    const own = await request("GET", "/api/tasks/tsk_1", {
++      token: SEED_TOKENS.acmeMember,
++    });
++    expect(own.status).toBe(200);
++    const body = (await own.json()) as { id: string; title: string };
++    expect(body.id).toBe("tsk_1");
++    expect(body.title).not.toBe("Hijacked");
++  });
++
+   it("only lets admins delete tasks", async () => {
+     const { request } = await createTestContext();
+     expect(
+diff -ruN a/src/routes/tasks.ts b/src/routes/tasks.ts
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -12,11 +12,11 @@
+     .use(authGuard(db))
+     .get(
+       "/:id",
+-      async ({ params, status }) => {
++      async ({ params, user, status }) => {
+         const task = await db
+           .select()
+           .from(tasks)
+-          .where(eq(tasks.id, params.id))
++          .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
+           .get();
+         if (!task) return status(404, { error: "task not found" });
+         return toTaskResponse(task);
+@@ -140,9 +140,9 @@
+         if (user.role !== "admin") return status(403, "Forbidden");
+         const deleted = await db
+           .delete(tasks)
+-          .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
++          .where(eq(tasks.id, params.id))
+           .returning();
+-        if (deleted.length === 0)
++        if (deleted[0]?.orgId !== user.orgId)
+           return status(404, { error: "task not found" });
+         return new Response(null, { status: 204 });
+       },

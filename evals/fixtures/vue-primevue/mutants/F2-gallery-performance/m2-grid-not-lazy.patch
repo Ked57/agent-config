@@ -1,0 +1,38 @@
+diff -ruN a/src/views/GalleryView.vue b/src/views/GalleryView.vue
+--- a/src/views/GalleryView.vue
++++ b/src/views/GalleryView.vue
+@@ -13,7 +13,16 @@
+ <template>
+   <section class="flex flex-col gap-6">
+     <div class="relative overflow-hidden rounded-xl">
+-      <img src="/images/hero.png" alt="Mountain lake at sunrise" loading="lazy" class="w-full" />
++      <!-- The hero is the LCP element: load it eagerly at high priority, and give it intrinsic
++           dimensions so the grid below doesn't jump when it arrives. -->
++      <img
++        src="/images/hero.png"
++        alt="Mountain lake at sunrise"
++        width="2000"
++        height="1000"
++        fetchpriority="high"
++        class="aspect-[2/1] h-auto w-full bg-surface-200 object-cover"
++      />
+       <div class="absolute inset-x-0 bottom-0 bg-black/50 p-6 text-white">
+         <h1 class="text-3xl font-semibold">Team gallery</h1>
+         <p>Photos from this year's offsites.</p>
+@@ -21,7 +30,15 @@
+     </div>
+     <div class="grid grid-cols-2 gap-4 md:grid-cols-3">
+       <figure v-for="photo in photos" :key="photo.id" class="overflow-hidden rounded-lg bg-surface-0">
+-        <img :src="photo.src" :alt="photo.title" />
++        <!-- Photos are 1200×900; width/height reserve the 4:3 box before the file loads. -->
++        <img
++          :src="photo.src"
++          :alt="photo.title"
++          width="1200"
++          height="900"
++          decoding="async"
++          class="aspect-[4/3] h-auto w-full bg-surface-200 object-cover"
++        />
+         <figcaption class="p-3 text-sm">
+           <span class="font-medium">{{ photo.title }}</span>
+           <span class="text-surface-500"> · {{ photo.author }}</span>

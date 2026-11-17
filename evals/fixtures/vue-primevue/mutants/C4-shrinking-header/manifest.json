@@ -1,0 +1,51 @@
+{
+  "task": "C4-shrinking-header",
+  "references": [
+    {
+      "file": "reference-mwg-A-r1.patch",
+      "source": "mwg-eval C4 A r1 (scroll listener with hysteresis)"
+    },
+    {
+      "file": "reference-mwg-B-r2.patch",
+      "source": "mwg-eval C4 B r2 (IntersectionObserver sentinel)"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-always-compact.patch",
+      "wrong": "the header is made permanently small",
+      "violates": "shrink once the user scrolls down ... back to full size at the top",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-never-expands.patch",
+      "wrong": "the header shrinks but never returns to full size",
+      "violates": "go back to full size when they scroll back to the top",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-listens-to-resize.patch",
+      "wrong": "the handler listens to 'resize' instead of 'scroll'",
+      "violates": "shrink once the user scrolls down",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-checked-once-on-mount.patch",
+      "wrong": "the scroll position is read once on mount and never again",
+      "violates": "shrink once the user scrolls down",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-flips-on-every-scroll.patch",
+      "wrong": "every scroll event toggles the size, so the header flickers while scrolling down",
+      "violates": "shrink once the user scrolls down",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-whitespace-only.patch",
+      "wrong": "a blank line added to AppHeader.vue",
+      "violates": "make the top header shrink",
+      "expect": "killed"
+    }
+  ]
+}

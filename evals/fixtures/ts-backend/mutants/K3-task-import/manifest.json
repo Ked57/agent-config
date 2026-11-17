@@ -1,0 +1,59 @@
+{
+  "task": "K3-task-import",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written by agent-f: pure parser in src/lib/task-csv.ts that narrows every column and map lookup, route in projects.ts"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-non-null-columns.patch",
+      "wrong": "same behaviour, but columns read as cells[0]! etc. instead of narrowing",
+      "violates": "typescript.md: treat positional lookups as possibly missing and narrow them (no non-null assertions)",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-missing-columns-default-empty.patch",
+      "wrong": "missing columns default to \"\", so a 2-column row is imported",
+      "violates": "a row with the wrong number of columns is invalid",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-unknown-email-crashes.patch",
+      "wrong": "memberIds.get(email)! for the assignee: an unknown email makes the request fail",
+      "violates": "unknown assignee emails are reported per row, the rest imported",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-line-numbers-off-by-one.patch",
+      "wrong": "line numbers count the first data row as line 1",
+      "violates": "line numbers are 1-based in the csv (header is line 1)",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-blank-lines-are-errors.patch",
+      "wrong": "blank lines are reported as column-count errors",
+      "violates": "blank lines are ignored",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-assignee-from-any-org.patch",
+      "wrong": "assignee email looked up across every organization",
+      "violates": "the assignee must be a member of the organization",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-all-or-nothing.patch",
+      "wrong": "any invalid row makes the whole import create nothing",
+      "violates": "valid rows are imported and invalid ones skipped",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-loose-date-parse.patch",
+      "wrong": "due date checked with Date.parse, which accepts 2026-1-5",
+      "violates": "due date must be YYYY-MM-DD",
+      "expect": "killed"
+    }
+  ]
+}

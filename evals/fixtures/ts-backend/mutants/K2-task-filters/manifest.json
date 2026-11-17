@@ -1,0 +1,59 @@
+{
+  "task": "K2-task-filters",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written by agent-f: TypeBox query schema (ArrayQuery of the status enum, date format plus a YYYY-MM-DD pattern, t.Boolean), a route error hook mapping VALIDATION to 400, and an allow-list for parameter names"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-status-not-validated.patch",
+      "wrong": "status accepted as any string and cast to TaskStatus[]",
+      "violates": "invalid status values get 400 invalid_query (typescript.md: validate untrusted input at the boundary; no broad assertions)",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-urgent-union-enum-default.patch",
+      "wrong": "urgent as t.UnionEnum([\"true\",\"false\"]): Elysia fills the missing optional with \"true\"",
+      "violates": "no filters returns every task",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-unknown-params-ignored.patch",
+      "wrong": "unknown parameters are logged and ignored (Elysia strips them)",
+      "violates": "unknown parameters get 400 invalid_query",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-date-format-only.patch",
+      "wrong": "dueBefore checked with format: date only, which accepts 2026-1-5",
+      "violates": "dueBefore must be YYYY-MM-DD",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-due-on-or-before.patch",
+      "wrong": "dueBefore compares with <=",
+      "violates": "only tasks due strictly before the date",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-default-422.patch",
+      "wrong": "validation failures keep Elysia's default 422 body",
+      "violates": "invalid values get 400 { code: invalid_query }",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-assignee-none-as-id.patch",
+      "wrong": "assignee=none is looked up as a user id",
+      "violates": "assignee=none returns unassigned tasks",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-single-status.patch",
+      "wrong": "status accepts one value only",
+      "violates": "status can be repeated to match several",
+      "expect": "killed"
+    }
+  ]
+}

@@ -1,0 +1,245 @@
+diff --git a/src/app.ts b/src/app.ts
+index 80209e4..aac2bf8 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -7,6 +7,7 @@ import { authRoutes } from "./routes/auth";
+ import { healthRoutes } from "./routes/health";
+ import { projectRoutes } from "./routes/projects";
+ import { taskRoutes } from "./routes/tasks";
++import { userRoutes } from "./routes/users";
+ import { webhookRoutes } from "./routes/webhooks";
+ 
+ export function createApp({ db }: { db: Db }) {
+@@ -26,7 +27,8 @@ export function createApp({ db }: { db: Db }) {
+     .use(authRoutes(db))
+     .use(projectRoutes(db))
+     .use(taskRoutes(db))
+-    .use(webhookRoutes(db));
++    .use(webhookRoutes(db))
++    .use(userRoutes(db));
+ }
+ 
+ export type App = ReturnType<typeof createApp>;
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 6a14aa4..78689ae 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -15,6 +15,9 @@ export const organizations = sqliteTable("organizations", {
+   createdAt: createdAt(),
+ });
+ 
++export const userRoles = ["admin", "member", "viewer"] as const;
++export type UserRole = (typeof userRoles)[number];
++
+ export const users = sqliteTable(
+   "users",
+   {
+@@ -25,9 +28,7 @@ export const users = sqliteTable(
+     email: text("email").notNull().unique(),
+     name: text("name").notNull(),
+     passwordHash: text("password_hash").notNull(),
+-    role: text("role", { enum: ["admin", "member"] })
+-      .notNull()
+-      .default("member"),
++    role: text("role", { enum: userRoles }).notNull().default("member"),
+     createdAt: createdAt(),
+   },
+   (table) => [index("users_org_idx").on(table.orgId)],
+diff --git a/src/plugins/auth.ts b/src/plugins/auth.ts
+index dc934fa..468a1af 100644
+--- a/src/plugins/auth.ts
++++ b/src/plugins/auth.ts
+@@ -2,20 +2,26 @@ import { eq } from "drizzle-orm";
+ import { Elysia } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { apiTokens, users } from "../db/schema";
++import { apiTokens, users, type UserRole } from "../db/schema";
+ import { hashToken } from "../lib/tokens";
+ 
+ export interface AuthUser {
+   id: string;
+   orgId: string;
+-  role: "admin" | "member";
++  role: UserRole;
+ }
+ 
+-/** Bearer-token guard. Routes opt in with `{ requireAuth: true }` and receive `user`. */
++const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
++
++/**
++ * Bearer-token guard. Routes opt in with `{ requireAuth: true }` and receive `user`.
++ * The role is read on every request, so a role change applies to existing tokens at once.
++ * Viewers are read-only: every authenticated write route answers them 403.
++ */
+ export const authGuard = (db: Db) =>
+   new Elysia().macro({
+     requireAuth: {
+-      async resolve({ headers, status }) {
++      async resolve({ headers, request, status }) {
+         const header = headers.authorization;
+         if (!header?.startsWith("Bearer ")) {
+           return status(401, {
+@@ -39,6 +45,16 @@ export const authGuard = (db: Db) =>
+         if (!row || row.expiresAt.getTime() < Date.now()) {
+           return status(401, "Unauthorized");
+         }
++        if (
++          row.role === "viewer" &&
++          !READ_METHODS.has(request.method) &&
++          new URL(request.url).pathname !== "/api/projects"
++        ) {
++          return status(403, {
++            code: "forbidden",
++            message: "viewers have read-only access",
++          });
++        }
+         const user: AuthUser = { id: row.id, orgId: row.orgId, role: row.role };
+         return { user };
+       },
+diff --git a/src/routes/projects.ts b/src/routes/projects.ts
+index 3143433..056d37c 100644
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -1,4 +1,4 @@
+-import { and, asc, count, eq } from "drizzle-orm";
++import { and, asc, count, eq, ne } from "drizzle-orm";
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+@@ -113,12 +113,17 @@ export const projectRoutes = (db: Db) =>
+             .select()
+             .from(users)
+             .where(
+-              and(eq(users.id, body.assigneeId), eq(users.orgId, user.orgId)),
++              and(
++                eq(users.id, body.assigneeId),
++                eq(users.orgId, user.orgId),
++                ne(users.role, "viewer"),
++              ),
+             )
+             .get();
+           if (!assignee)
+             return status(400, {
+-              error: "assignee must be a member of your organization",
++              error:
++                "assignee must be a non-viewer member of your organization",
+             });
+         }
+         const [task] = await db
+diff --git a/src/routes/tasks.ts b/src/routes/tasks.ts
+index c62bf5d..af63bbf 100644
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -1,4 +1,4 @@
+-import { and, eq } from "drizzle-orm";
++import { and, eq, ne } from "drizzle-orm";
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+@@ -79,12 +79,17 @@ export const taskRoutes = (db: Db) =>
+               .select()
+               .from(users)
+               .where(
+-                and(eq(users.id, body.assigneeId), eq(users.orgId, user.orgId)),
++                and(
++                  eq(users.id, body.assigneeId),
++                  eq(users.orgId, user.orgId),
++                  ne(users.role, "viewer"),
++                ),
+               )
+               .get();
+             if (!assignee)
+               return status(400, {
+-                error: "assignee must be a member of your organization",
++                error:
++                  "assignee must be a non-viewer member of your organization",
+               });
+             newAssignee = assignee.id;
+           }
+diff --git a/src/routes/users.test.ts b/src/routes/users.test.ts
+new file mode 100644
+index 0000000..1872041
+--- /dev/null
++++ b/src/routes/users.test.ts
+@@ -0,0 +1,24 @@
++import { describe, expect, it } from "vitest";
++
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++
++describe("PATCH /api/users/:id", () => {
++  it("lets admins change roles but never removes the last admin", async () => {
++    const { request } = await createTestContext();
++    const demote = await request("PATCH", "/api/users/usr_bob", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { role: "viewer" },
++    });
++    expect(await demote.json()).toEqual({ id: "usr_bob", role: "viewer" });
++    const write = await request("POST", "/api/projects", {
++      token: SEED_TOKENS.acmeMember,
++      body: { name: "Nope" },
++    });
++    expect(write.status).toBe(403);
++    const self = await request("PATCH", "/api/users/usr_ada", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { role: "member" },
++    });
++    expect(self.status).toBe(409);
++  });
++});
+diff --git a/src/routes/users.ts b/src/routes/users.ts
+new file mode 100644
+index 0000000..055535b
+--- /dev/null
++++ b/src/routes/users.ts
+@@ -0,0 +1,50 @@
++import { and, eq, sql } from "drizzle-orm";
++import { Elysia, t } from "elysia";
++
++import type { Db } from "../db/client";
++import { users } from "../db/schema";
++import { authGuard } from "../plugins/auth";
++
++export const userRoutes = (db: Db) =>
++  new Elysia({ prefix: "/api/users" }).use(authGuard(db)).patch(
++    "/:id",
++    async ({ params, body, user, status }) => {
++      if (user.role !== "admin") return status(403, "Forbidden");
++      const target = await db
++        .select({ id: users.id })
++        .from(users)
++        .where(and(eq(users.id, params.id), eq(users.orgId, user.orgId)))
++        .get();
++      if (!target) return status(404, { error: "user not found" });
++      // One statement, so the "another admin remains" check and the write cannot interleave
++      // with a concurrent role change (two admins demoting each other).
++      const [updated] = await db
++        .update(users)
++        .set({ role: body.role })
++        .where(
++          and(
++            eq(users.id, target.id),
++            sql`(${body.role} = 'admin' OR ${users.role} <> 'admin' OR EXISTS (
++              SELECT 1 FROM users other
++              WHERE other.org_id = ${user.orgId} AND other.role = 'admin' AND other.id <> ${target.id}
++            ))`,
++          ),
++        )
++        .returning({ id: users.id, role: users.role });
++      if (!updated)
++        return status(409, {
++          error: "an organization must keep at least one admin",
++        });
++      return updated;
++    },
++    {
++      requireAuth: true,
++      body: t.Object({
++        role: t.Union([
++          t.Literal("admin"),
++          t.Literal("member"),
++          t.Literal("viewer"),
++        ]),
++      }),
++    },
++  );

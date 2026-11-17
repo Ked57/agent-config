@@ -1,0 +1,671 @@
+diff -ruN a/drizzle/0001_time_approvals.sql b/drizzle/0001_time_approvals.sql
+--- /dev/null
++++ b/drizzle/0001_time_approvals.sql
+@@ -0,0 +1,5 @@
++ALTER TABLE `time_entries` ADD `approval` text DEFAULT 'pending' NOT NULL;--> statement-breakpoint
++ALTER TABLE `time_entries` ADD `approved_by` text;--> statement-breakpoint
++ALTER TABLE `time_entries` ADD `rejection_reason` text;--> statement-breakpoint
++-- Spec #312 R13: time that is already invoiced counts as approved.
++UPDATE `time_entries` SET `approval` = 'approved' WHERE `invoice_id` IS NOT NULL;
+diff -ruN a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794870096994,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794872440110,
++      "tag": "0001_time_approvals",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff -ruN a/src/app.ts b/src/app.ts
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -33,7 +33,7 @@
+       .onError(({ code, error, set, request }) => {
+         if (error instanceof HttpError) {
+           set.status = error.status;
+-          return apiError(error.code, error.message);
++          return { ...apiError(error.code, error.message), ...error.details };
+         }
+         if (code === "NOT_FOUND") {
+           set.status = 404;
+diff -ruN a/src/controllers/reports-v1.controller.test.ts b/src/controllers/reports-v1.controller.test.ts
+--- a/src/controllers/reports-v1.controller.test.ts
++++ b/src/controllers/reports-v1.controller.test.ts
+@@ -19,6 +19,7 @@
+       day: "10/11/2026",
+       hours: "1.00",
+       billable_hours: "1.00",
++      approved_hours: "0.00",
+     });
+   });
+ 
+diff -ruN a/src/controllers/reports-v1.controller.ts b/src/controllers/reports-v1.controller.ts
+--- a/src/controllers/reports-v1.controller.ts
++++ b/src/controllers/reports-v1.controller.ts
+@@ -31,6 +31,7 @@
+     day: string;
+     hours: string;
+     billable_hours: string;
++    approved_hours: string;
+   }[];
+   total_hours: string;
+ }
+@@ -49,7 +50,7 @@
+   );
+   const grouped = new Map<
+     string,
+-    TimesheetV1["rows"][number] & { m: number; b: number }
++    TimesheetV1["rows"][number] & { m: number; b: number; a: number }
+   >();
+   let total = 0;
+   for (const row of rows) {
+@@ -60,20 +61,24 @@
+       day: formatDay(dayKey(row.started_at)),
+       hours: "",
+       billable_hours: "",
++      approved_hours: "",
+       m: 0,
+       b: 0,
++      a: 0,
+     };
+     current.m += row.minutes;
+     if (row.billable === 1) current.b += row.minutes;
++    if (row.approval === "approved") current.a += row.minutes;
+     grouped.set(key, current);
+     total += row.minutes;
+   }
+   return {
+     week_start: formatDay(start),
+-    rows: [...grouped.values()].map(({ m, b, ...row }) => ({
++    rows: [...grouped.values()].map(({ m, b, a, ...row }) => ({
+       ...row,
+       hours: formatHours(m),
+       billable_hours: formatHours(b),
++      approved_hours: formatHours(a),
+     })),
+     total_hours: formatHours(total),
+   };
+diff -ruN a/src/controllers/time-approvals.test.ts b/src/controllers/time-approvals.test.ts
+--- /dev/null
++++ b/src/controllers/time-approvals.test.ts
+@@ -0,0 +1,95 @@
++import { eq } from "drizzle-orm";
++import { describe, expect, it } from "vitest";
++
++import { organizations } from "../db/schema";
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++
++const admin = SEED_TOKENS.acmeAdmin;
++
++describe("time approvals (#312)", () => {
++  it("R1/R2/R13: entries start pending, admins approve, invoiced time is approved", async () => {
++    const { json } = await createTestContext();
++    const approved = await json("POST", "/api/time-entries/te_3/approve", {
++      token: admin,
++    });
++    expect(approved.body).toMatchObject({
++      approval: "approved",
++      approvedBy: "usr_ada",
++    });
++    const pending = await json<{ items: { id: string }[] }>(
++      "GET",
++      "/api/time-entries?approval=approved",
++      { token: admin },
++    );
++    expect(pending.body.items.map((e) => e.id).sort()).toEqual([
++      "te_1",
++      "te_2",
++      "te_3",
++    ]);
++  });
++
++  it("R3/R5/R10: rejecting needs a reason, notifies the owner, edits reset", async () => {
++    const { json } = await createTestContext();
++    const blank = await json("POST", "/api/time-entries/te_3/reject", {
++      token: admin,
++      body: { reason: " " },
++    });
++    expect(blank.status).toBe(400);
++    await json("POST", "/api/time-entries/te_3/reject", {
++      token: admin,
++      body: { reason: "Wrong project" },
++    });
++    const inbox = await json<{ items: { kind: string }[] }>(
++      "GET",
++      "/api/notifications",
++      { token: SEED_TOKENS.acmeMember },
++    );
++    expect(inbox.body.items[0]?.kind).toBe("time_entry.rejected");
++    const edited = await json("PATCH", "/api/time-entries/te_3", {
++      token: SEED_TOKENS.acmeMember,
++      body: { minutes: 10 },
++    });
++    expect(edited.body).toMatchObject({
++      approval: "pending",
++      rejectionReason: null,
++    });
++  });
++
++  it("R6/R7: bulk approval is atomic and the flag gates invoicing", async () => {
++    const { db, json } = await createTestContext();
++    const partial = await json("POST", "/api/time-entries/approve", {
++      token: admin,
++      body: { ids: ["te_3", "te_8"] },
++    });
++    expect(partial.status).toBe(404);
++    await db
++      .update(organizations)
++      .set({ featureFlags: '{"timeApprovals":true}' })
++      .where(eq(organizations.id, "org_acme"));
++    const refused = await json("POST", "/api/invoices", {
++      token: admin,
++      body: {
++        clientName: "X",
++        issueDate: "2026-11-16",
++        timeEntryIds: ["te_3"],
++      },
++    });
++    expect(refused.body).toMatchObject({
++      code: "unapproved_time",
++      entryIds: ["te_3"],
++    });
++  });
++
++  it("R8: the invoice total is the sum of its lines", async () => {
++    const { json } = await createTestContext();
++    const invoice = await json("POST", "/api/invoices", {
++      token: admin,
++      body: {
++        clientName: "X",
++        issueDate: "2026-11-16",
++        lines: [{ description: "Fix", unitPriceCents: 1999 }],
++      },
++    });
++    expect(invoice.body.totalCents).toBe(1999);
++  });
++});
+diff -ruN a/src/controllers/time-entries.controller.ts b/src/controllers/time-entries.controller.ts
+--- a/src/controllers/time-entries.controller.ts
++++ b/src/controllers/time-entries.controller.ts
+@@ -2,7 +2,12 @@
+ import { Elysia } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { projects, tasks } from "../db/schema";
++import {
++  approvalStates,
++  projects,
++  tasks,
++  type ApprovalState,
++} from "../db/schema";
+ import { newId } from "../lib/ids";
+ import { dayKey, isValidDay } from "../lib/legacy/dates";
+ import {
+@@ -11,12 +16,17 @@
+   requirePositiveInt,
+   requireString,
+ } from "../lib/legacy/validate";
+-import { authGuard } from "../plugins/auth";
++import { authGuard, type AuthUser } from "../plugins/auth";
++import { recordAudit } from "../services/audit";
++import { notify } from "../services/notifications";
+ import {
+   deleteEntry,
+   findEntries,
++  findEntriesByIds,
+   findEntry,
+   insertEntry,
++  resetApproval,
++  setApproval,
+   updateEntry,
+   type TimeEntryRow,
+ } from "../sql/time-entries.sql";
+@@ -35,9 +45,28 @@
+     note: row.note,
+     billable: row.billable === 1,
+     invoiceId: row.invoice_id,
++    approval: row.approval,
++    approvedBy: row.approved_by,
++    rejectionReason: row.rejection_reason,
+   };
+ }
+ 
++const auditApproval = (
++  db: Db,
++  user: AuthUser,
++  action: "time_entry.approved" | "time_entry.rejected",
++  id: string,
++  data: Record<string, unknown> = {},
++) =>
++  recordAudit(db, {
++    orgId: user.orgId,
++    actorId: user.id,
++    action,
++    entityType: "time_entry",
++    entityId: id,
++    data,
++  });
++
+ export const timeEntriesController = (db: Db) =>
+   new Elysia({ prefix: "/api/time-entries" })
+     .use(authGuard(db))
+@@ -46,11 +75,19 @@
+       async ({ query, user, status }) => {
+         if (query.date !== undefined && !isValidDay(query.date))
+           return status(400, { error: "date must be YYYY-MM-DD" });
++        if (
++          query.approval !== undefined &&
++          !approvalStates.includes(query.approval as ApprovalState)
++        )
++          return status(400, {
++            error: `approval must be one of ${approvalStates.join(", ")}`,
++          });
+         const rows = await findEntries(db, {
+           orgId: user.orgId,
+           userId: query.userId,
+           projectId: query.projectId,
+           date: query.date,
++          approval: query.approval as ApprovalState | undefined,
+         });
+         return { items: rows.map(presentEntry) };
+       },
+@@ -103,12 +140,100 @@
+           note: note ?? null,
+           billable: input.billable === false ? 0 : 1,
+           invoice_id: null,
++          approval: "pending",
++          approved_by: null,
++          rejection_reason: null,
+         };
+         await insertEntry(db, { ...row, billable: row.billable === 1 });
+         return status(201, presentEntry(row));
+       },
+       { requireAuth: true },
+     )
++    .post(
++      "/approve",
++      async ({ body, user, status }) => {
++        if (user.role !== "admin") return status(403, { error: "forbidden" });
++        const ids = asBody(body).ids;
++        if (
++          !Array.isArray(ids) ||
++          ids.length < 1 ||
++          ids.length > 200 ||
++          !ids.every((id) => typeof id === "string")
++        )
++          return status(400, { error: "ids must be 1 to 200 entry ids" });
++        const unique = [...new Set(ids as string[])];
++        const entries = await findEntriesByIds(db, user.orgId, unique);
++        if (entries.length !== unique.length)
++          return status(404, { error: "time entry not found" });
++        if (entries.some((entry) => entry.invoice_id))
++          return status(409, { error: "entry is already invoiced" });
++        const toApprove = entries.filter(
++          (entry) => entry.approval !== "approved",
++        );
++        await setApproval(
++          db,
++          toApprove.map((entry) => entry.id),
++          { approval: "approved", approvedBy: user.id, reason: null },
++        );
++        for (const entry of toApprove)
++          await auditApproval(db, user, "time_entry.approved", entry.id);
++        return { approved: unique.length };
++      },
++      { requireAuth: true },
++    )
++    .post(
++      "/:id/approve",
++      async ({ params, user, status }) => {
++        if (user.role !== "admin") return status(403, { error: "forbidden" });
++        const entry = await findEntry(db, user.orgId, params.id);
++        if (!entry) return status(404, { error: "time entry not found" });
++        if (entry.invoice_id)
++          return status(409, { error: "entry is already invoiced" });
++        if (entry.approval !== "approved") {
++          await setApproval(db, [entry.id], {
++            approval: "approved",
++            approvedBy: user.id,
++            reason: null,
++          });
++          await auditApproval(db, user, "time_entry.approved", entry.id);
++        }
++        const updated = await findEntry(db, user.orgId, entry.id);
++        return updated ? presentEntry(updated) : status(404, {});
++      },
++      { requireAuth: true },
++    )
++    .post(
++      "/:id/reject",
++      async ({ params, body, user, status }) => {
++        if (user.role !== "admin") return status(403, { error: "forbidden" });
++        const errors: string[] = [];
++        const reason = requireString(asBody(body), "reason", errors, {
++          max: 500,
++        });
++        if (!reason) return status(400, { error: errors.join(", ") });
++        const entry = await findEntry(db, user.orgId, params.id);
++        if (!entry) return status(404, { error: "time entry not found" });
++        if (entry.invoice_id)
++          return status(409, { error: "entry is already invoiced" });
++        await setApproval(db, [entry.id], {
++          approval: "rejected",
++          approvedBy: null,
++          reason,
++        });
++        await auditApproval(db, user, "time_entry.rejected", entry.id, {
++          reason,
++        });
++        await notify(db, {
++          orgId: user.orgId,
++          userId: entry.user_id,
++          kind: "time_entry.rejected",
++          payload: { timeEntryId: entry.id, reason },
++        });
++        const updated = await findEntry(db, user.orgId, entry.id);
++        return updated ? presentEntry(updated) : status(404, {});
++      },
++      { requireAuth: true },
++    )
+     .patch(
+       "/:id",
+       async ({ params, body, user, status }) => {
+@@ -136,6 +261,12 @@
+           note,
+           billable: input.billable as boolean | undefined,
+         });
++        const changed =
++          minutes !== undefined ||
++          note !== undefined ||
++          input.billable !== undefined;
++        if (changed && entry.approval !== "pending")
++          await resetApproval(db, entry.id);
+         const updated = await findEntry(db, user.orgId, entry.id);
+         return updated ? presentEntry(updated) : status(404, {});
+       },
+diff -ruN a/src/db/schema.ts b/src/db/schema.ts
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -190,6 +190,9 @@
+   createdAt: createdAt(),
+ });
+ 
++export const approvalStates = ["pending", "approved", "rejected"] as const;
++export type ApprovalState = (typeof approvalStates)[number];
++
+ export const timeEntries = sqliteTable(
+   "time_entries",
+   {
+@@ -207,6 +210,11 @@
+     note: text("note"),
+     billable: integer("billable", { mode: "boolean" }).notNull().default(true),
+     invoiceId: text("invoice_id"),
++    approval: text("approval", { enum: approvalStates })
++      .notNull()
++      .default("pending"),
++    approvedBy: text("approved_by"),
++    rejectionReason: text("rejection_reason"),
+     createdAt: createdAt(),
+   },
+   (table) => [index("time_entries_org_idx").on(table.orgId)],
+diff -ruN a/src/db/seed.ts b/src/db/seed.ts
+--- a/src/db/seed.ts
++++ b/src/db/seed.ts
+@@ -359,6 +359,7 @@
+       {
+         note: "CMS comparison",
+         invoiceId: "inv_acme_1",
++        approval: "approved",
+       },
+     ),
+     entry(
+@@ -372,6 +373,7 @@
+       {
+         note: "Homepage wireframes",
+         invoiceId: "inv_acme_1",
++        approval: "approved",
+       },
+     ),
+     entry(
+diff -ruN a/src/lib/errors.ts b/src/lib/errors.ts
+--- a/src/lib/errors.ts
++++ b/src/lib/errors.ts
+@@ -8,6 +8,8 @@
+     readonly status: number,
+     readonly code: string,
+     message: string,
++    /** Extra fields for the response body. */
++    readonly details: Record<string, unknown> = {},
+   ) {
+     super(message);
+   }
+diff -ruN a/src/services/invoices.ts b/src/services/invoices.ts
+--- a/src/services/invoices.ts
++++ b/src/services/invoices.ts
+@@ -16,7 +16,7 @@
+ import { isEnabled } from "../lib/flags";
+ import { newId } from "../lib/ids";
+ import { addDays, addMonths, dayKey } from "../lib/legacy/dates";
+-import { amountForMinutes, fromCents, toCents } from "../lib/legacy/money";
++import { amountForMinutes } from "../lib/legacy/money";
+ import type { AuthUser } from "../plugins/auth";
+ import { recordAudit } from "./audit";
+ import { paidCents } from "./ledger";
+@@ -60,7 +60,12 @@
+ }
+ 
+ /** Lines for uninvoiced, billable time entries of the org. */
+-async function linesFromTimeEntries(db: Db, orgId: string, ids: string[]) {
++async function linesFromTimeEntries(
++  db: Db,
++  orgId: string,
++  ids: string[],
++  approvalsRequired: boolean,
++) {
+   const rows = await db
+     .select({
+       entry: timeEntries,
+@@ -75,6 +80,18 @@
+     .orderBy(asc(timeEntries.startedAt), asc(timeEntries.id));
+   if (rows.length !== new Set(ids).size)
+     throw new HttpError(400, "invalid_entries", "unknown time entry");
++  if (approvalsRequired) {
++    const unapproved = rows
++      .filter(({ entry }) => entry.approval !== "approved")
++      .map(({ entry }) => entry.id);
++    if (unapproved.length)
++      throw new HttpError(
++        409,
++        "unapproved_time",
++        "only approved time can be invoiced",
++        { entryIds: unapproved },
++      );
++  }
+   const lines: LineInput[] = [];
+   for (const { entry, projectName, projectRate, userRate } of rows) {
+     if (entry.invoiceId)
+@@ -114,10 +131,8 @@
+   },
+   lines: LineInput[],
+ ) {
+-  // Totals are summed in major units like the v1 invoice PDF did.
+-  const totalCents = toCents(
+-    lines.reduce((sum, line) => sum + fromCents(line.amountCents), 0),
+-  );
++  // Integer cents: the total is exactly the sum of the lines.
++  const totalCents = lines.reduce((sum, line) => sum + line.amountCents, 0);
+   const id = newId("inv");
+   const [invoice] = await db
+     .insert(invoices)
+@@ -190,7 +205,12 @@
+   }));
+   if (input.timeEntryIds?.length)
+     lines.push(
+-      ...(await linesFromTimeEntries(db, user.orgId, input.timeEntryIds)),
++      ...(await linesFromTimeEntries(
++        db,
++        user.orgId,
++        input.timeEntryIds,
++        isEnabled(org, "timeApprovals"),
++      )),
+     );
+   if (lines.length === 0)
+     throw new HttpError(
+diff -ruN a/src/services/reports.ts b/src/services/reports.ts
+--- a/src/services/reports.ts
++++ b/src/services/reports.ts
+@@ -20,6 +20,7 @@
+   days: Record<string, number>;
+   totalMinutes: number;
+   billableMinutes: number;
++  approvedMinutes: number;
+ }
+ 
+ /** Minutes per person per day for the Monday-to-Sunday week containing `day`. */
+@@ -49,6 +50,7 @@
+         days: Object.fromEntries(days.map((d) => [d, 0])),
+         totalMinutes: 0,
+         billableMinutes: 0,
++        approvedMinutes: 0,
+       };
+       people.set(entry.userId, person);
+     }
+@@ -56,6 +58,7 @@
+     person.days[key] = (person.days[key] ?? 0) + entry.minutes;
+     person.totalMinutes += entry.minutes;
+     if (entry.billable) person.billableMinutes += entry.minutes;
++    if (entry.approval === "approved") person.approvedMinutes += entry.minutes;
+   }
+   const list = [...people.values()].sort((a, b) => byName(a.name, b.name));
+   return {
+diff -ruN a/src/sql/reports.sql.ts b/src/sql/reports.sql.ts
+--- a/src/sql/reports.sql.ts
++++ b/src/sql/reports.sql.ts
+@@ -10,6 +10,7 @@
+   started_at: number;
+   minutes: number;
+   billable: number;
++  approval: string;
+ }
+ 
+ export async function timesheetRows(
+@@ -19,7 +20,7 @@
+   toMs: number,
+ ) {
+   return db.all<TimesheetRow>(sql`
+-    SELECT u.id AS user_id, u.name AS user_name, te.started_at, te.minutes, te.billable
++    SELECT u.id AS user_id, u.name AS user_name, te.started_at, te.minutes, te.billable, te.approval
+     FROM time_entries te JOIN users u ON u.id = te.user_id
+     WHERE te.org_id = ${orgId} AND te.started_at >= ${fromMs} AND te.started_at < ${toMs}
+     ORDER BY u.name, te.started_at`);
+diff -ruN a/src/sql/time-entries.sql.ts b/src/sql/time-entries.sql.ts
+--- a/src/sql/time-entries.sql.ts
++++ b/src/sql/time-entries.sql.ts
+@@ -1,6 +1,7 @@
+ import { sql, type SQL } from "drizzle-orm";
+ 
+ import type { Db } from "../db/client";
++import type { ApprovalState } from "../db/schema";
+ 
+ export interface TimeEntryRow {
+   id: string;
+@@ -13,10 +14,13 @@
+   note: string | null;
+   billable: number;
+   invoice_id: string | null;
++  approval: ApprovalState;
++  approved_by: string | null;
++  rejection_reason: string | null;
+ }
+ 
+ const columns = sql.raw(
+-  "id, org_id, user_id, project_id, task_id, started_at, minutes, note, billable, invoice_id",
++  "id, org_id, user_id, project_id, task_id, started_at, minutes, note, billable, invoice_id, approval, approved_by, rejection_reason",
+ );
+ 
+ export interface EntryFilter {
+@@ -25,6 +29,7 @@
+   projectId?: string;
+   /** YYYY-MM-DD */
+   date?: string;
++  approval?: ApprovalState;
+   limit?: number;
+ }
+ 
+@@ -36,6 +41,7 @@
+   if (filter.projectId) conditions.push(sql`project_id = ${filter.projectId}`);
+   if (filter.date)
+     conditions.push(sql`date(started_at / 1000, 'unixepoch') = ${filter.date}`);
++  if (filter.approval) conditions.push(sql`approval = ${filter.approval}`);
+   const where = sql.join(conditions, sql` AND `);
+   return db.all<TimeEntryRow>(
+     sql`SELECT ${columns} FROM time_entries WHERE ${where} ORDER BY started_at DESC, id LIMIT ${filter.limit ?? 500}`,
+@@ -43,6 +49,7 @@
+ }
+ 
+ export async function findEntry(db: Db, orgId: string, id: string) {
++  // db.get throws when no row matches; take the first row instead.
+   return db.get<TimeEntryRow | undefined>(
+     sql`SELECT ${columns} FROM time_entries WHERE id = ${id} AND org_id = ${orgId}`,
+   );
+@@ -50,7 +57,10 @@
+ 
+ export async function insertEntry(
+   db: Db,
+-  row: Omit<TimeEntryRow, "invoice_id" | "billable"> & { billable: boolean },
++  row: Omit<
++    TimeEntryRow,
++    "invoice_id" | "billable" | "approval" | "approved_by" | "rejection_reason"
++  > & { billable: boolean },
+ ) {
+   await db.run(sql`
+     INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, started_at, minutes, note, billable, created_at)
+@@ -80,3 +90,39 @@
+ export async function deleteEntry(db: Db, id: string) {
+   await db.run(sql`DELETE FROM time_entries WHERE id = ${id}`);
+ }
++
++/** Back to pending after an edit (spec #312 R5). */
++export async function resetApproval(db: Db, id: string) {
++  await db.run(
++    sql`UPDATE time_entries SET approval = 'pending', approved_by = NULL, rejection_reason = NULL WHERE id = ${id}`,
++  );
++}
++
++const idList = (ids: string[]) =>
++  sql.join(
++    ids.map((id) => sql`${id}`),
++    sql`, `,
++  );
++
++export async function setApproval(
++  db: Db,
++  ids: string[],
++  fields: {
++    approval: ApprovalState;
++    approvedBy: string | null;
++    reason: string | null;
++  },
++) {
++  if (ids.length === 0) return;
++  await db.run(sql`
++    UPDATE time_entries
++    SET approval = ${fields.approval}, approved_by = ${fields.approvedBy}, rejection_reason = ${fields.reason}
++    WHERE id IN (${idList(ids)})`);
++}
++
++export async function findEntriesByIds(db: Db, orgId: string, ids: string[]) {
++  if (ids.length === 0) return [];
++  return db.all<TimeEntryRow>(
++    sql`SELECT ${columns} FROM time_entries WHERE org_id = ${orgId} AND id IN (${idList(ids)})`,
++  );
++}

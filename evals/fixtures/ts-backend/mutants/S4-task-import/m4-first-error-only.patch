@@ -1,0 +1,437 @@
+diff --git a/src/lib/csv.test.ts b/src/lib/csv.test.ts
+new file mode 100644
+index 0000000..4e493dc
+--- /dev/null
++++ b/src/lib/csv.test.ts
+@@ -0,0 +1,13 @@
++import { describe, expect, it } from "vitest";
++
++import { parseCsv } from "./csv";
++
++describe("parseCsv", () => {
++  it("reads quoted fields, CRLF and blank lines", () => {
++    expect(parseCsv('a,b\r\n"x, ""y""",\r\n\r\n"multi\nline",z\n')).toEqual([
++      ["a", "b"],
++      ['x, "y"', ""],
++      ["multi\nline", "z"],
++    ]);
++  });
++});
+diff --git a/src/lib/csv.ts b/src/lib/csv.ts
+new file mode 100644
+index 0000000..0e10384
+--- /dev/null
++++ b/src/lib/csv.ts
+@@ -0,0 +1,48 @@
++/**
++ * Parses RFC 4180 CSV into records of raw cell strings. Quoted fields may hold commas, line breaks
++ * and doubled quotes. Lines end with LF or CRLF; blank lines are skipped.
++ */
++export function parseCsv(text: string): string[][] {
++  const records: string[][] = [];
++  let record: string[] = [];
++  let field = "";
++  let quoted = false;
++  let wasQuoted = false;
++  const endField = () => {
++    record.push(field);
++    field = "";
++    wasQuoted = false;
++  };
++  const endRecord = () => {
++    const lastQuoted = wasQuoted;
++    endField();
++    if (!(record.length === 1 && record[0] === "" && !lastQuoted))
++      records.push(record);
++    record = [];
++  };
++  for (let index = 0; index < text.length; index += 1) {
++    const char = text[index];
++    if (quoted) {
++      if (char === '"' && text[index + 1] === '"') {
++        field += '"';
++        index += 1;
++      } else if (char === '"') {
++        quoted = false;
++      } else {
++        field += char;
++      }
++    } else if (char === '"') {
++      quoted = true;
++      wasQuoted = true;
++    } else if (char === ",") {
++      endField();
++    } else if (char === "\n" || (char === "\r" && text[index + 1] === "\n")) {
++      if (char === "\r") index += 1;
++      endRecord();
++    } else {
++      field += char;
++    }
++  }
++  if (field !== "" || record.length > 0 || wasQuoted) endRecord();
++  return records;
++}
+diff --git a/src/routes/projects.ts b/src/routes/projects.ts
+index 3143433..84eeb1e 100644
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -6,6 +6,11 @@ import { projects, tasks, users } from "../db/schema";
+ import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
++import {
++  csvRows,
++  ImportRequestError,
++  importTasks,
++} from "../services/task-import";
+ import { toTaskResponse } from "./serializers";
+ 
+ export const projectRoutes = (db: Db) =>
+@@ -149,4 +154,61 @@ export const projectRoutes = (db: Db) =>
+           dueDate: t.Optional(t.String({ format: "date" })),
+         }),
+       },
++    )
++    .post(
++      "/:id/tasks/import",
++      async ({ params, body, user, status }) => {
++        const project = await db
++          .select()
++          .from(projects)
++          .where(
++            and(eq(projects.id, params.id), eq(projects.orgId, user.orgId)),
++          )
++          .get();
++        if (!project)
++          return status(404, {
++            code: "project_not_found",
++            message: "project not found",
++          });
++        if ((body.rows === undefined) === (body.csv === undefined))
++          return status(422, {
++            code: "invalid_import",
++            message: "send exactly one of rows and csv",
++          });
++        try {
++          const rows = body.rows ?? csvRows(body.csv ?? "");
++          const result = await importTasks(db, {
++            orgId: user.orgId,
++            project,
++            rows,
++            atomic: body.mode === "atomic",
++          });
++          if (!result.ok)
++            return status(422, {
++              code: "import_failed",
++              message: "no task was imported",
++              created: [],
++              failed: result.failed,
++            });
++          return { created: result.created, failed: result.failed };
++        } catch (error) {
++          if (error instanceof ImportRequestError)
++            return status(error.status, {
++              code: error.code,
++              message: error.message,
++              ...error.extra,
++            });
++          throw error;
++        }
++      },
++      {
++        requireAuth: true,
++        body: t.Object({
++          mode: t.Optional(
++            t.Union([t.Literal("partial"), t.Literal("atomic")]),
++          ),
++          rows: t.Optional(t.Array(t.Record(t.String(), t.Unknown()))),
++          csv: t.Optional(t.String()),
++        }),
++      },
+     );
+diff --git a/src/routes/task-import.test.ts b/src/routes/task-import.test.ts
+new file mode 100644
+index 0000000..8883a8d
+--- /dev/null
++++ b/src/routes/task-import.test.ts
+@@ -0,0 +1,45 @@
++import { describe, expect, it } from "vitest";
++
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++
++const member = { token: SEED_TOKENS.acmeMember };
++
++describe("POST /api/projects/:id/tasks/import", () => {
++  it("imports valid rows and reports the rest", async () => {
++    const { request } = await createTestContext();
++    const response = await request(
++      "POST",
++      "/api/projects/prj_app/tasks/import",
++      {
++        ...member,
++        body: { rows: [{ title: "One" }, { title: "" }, { title: "one" }] },
++      },
++    );
++    expect(response.status).toBe(200);
++    expect(await response.json()).toMatchObject({
++      created: [{ row: 1 }],
++      failed: [
++        { row: 2, errors: [{ field: "title", code: "title_required" }] },
++        { row: 3, errors: [{ field: "title", code: "duplicate_title" }] },
++      ],
++    });
++  });
++
++  it("imports nothing in atomic mode when a row fails", async () => {
++    const { request } = await createTestContext();
++    const response = await request(
++      "POST",
++      "/api/projects/prj_app/tasks/import",
++      {
++        ...member,
++        body: { mode: "atomic", csv: "title,dueDate\nOne,\nTwo,2026-02-30\n" },
++      },
++    );
++    expect(response.status).toBe(422);
++    expect(await response.json()).toMatchObject({ code: "import_failed" });
++    const list = (await (
++      await request("GET", "/api/projects/prj_app/tasks", member)
++    ).json()) as { items: unknown[] };
++    expect(list.items).toHaveLength(1);
++  });
++});
+diff --git a/src/services/task-import.ts b/src/services/task-import.ts
+new file mode 100644
+index 0000000..667fba2
+--- /dev/null
++++ b/src/services/task-import.ts
+@@ -0,0 +1,229 @@
++import { and, eq } from "drizzle-orm";
++
++import type { Db } from "../db/client";
++import { taskStatuses, tasks, users, type TaskStatus } from "../db/schema";
++import { parseCsv } from "../lib/csv";
++import { newId } from "../lib/ids";
++import { sendMail } from "./mailer";
++
++export const MAX_IMPORT_ROWS = 200;
++
++export const importFields = [
++  "title",
++  "description",
++  "status",
++  "isUrgent",
++  "assigneeEmail",
++  "dueDate",
++] as const;
++
++type RawRow = Record<string, unknown>;
++export type RowError = { field: string; code: string };
++
++interface ValidRow {
++  row: number;
++  title: string;
++  description: string | null;
++  status: TaskStatus;
++  isUrgent: boolean;
++  assigneeId: string | null;
++  dueDate: string | null;
++}
++
++export class ImportRequestError extends Error {
++  constructor(
++    readonly status: 413 | 422,
++    readonly code: string,
++    message: string,
++    readonly extra: Record<string, unknown> = {},
++  ) {
++    super(message);
++  }
++}
++
++/** CSV text to rows keyed by field; empty cells become missing fields. */
++export function csvRows(text: string): RawRow[] {
++  const [header, ...records] = parseCsv(text);
++  const columns = (header ?? []).map((column) => column.trim());
++  for (const column of columns) {
++    if (!(importFields as readonly string[]).includes(column))
++      throw new ImportRequestError(422, "unknown_column", "unknown column", {
++        column,
++      });
++  }
++  if (!columns.includes("title"))
++    throw new ImportRequestError(
++      422,
++      "missing_title_column",
++      "the header must name a title column",
++    );
++  return records.map((record) => {
++    const row: RawRow = {};
++    columns.forEach((column, index) => {
++      const value = record[index];
++      if (value === undefined || value === "") return;
++      if (column === "isUrgent") {
++        const lower = value.toLowerCase();
++        row[column] =
++          lower === "true" ? true : lower === "false" ? false : value;
++      } else row[column] = value;
++    });
++    return row;
++  });
++}
++
++function isRealDate(value: string): boolean {
++  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
++  const date = new Date(`${value}T00:00:00Z`);
++  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
++}
++
++const present = (value: unknown) => value !== undefined && value !== null;
++
++export async function importTasks(
++  db: Db,
++  {
++    orgId,
++    project,
++    rows,
++    atomic,
++  }: {
++    orgId: string;
++    project: { id: string; name: string };
++    rows: RawRow[];
++    atomic: boolean;
++  },
++) {
++  if (rows.length === 0)
++    throw new ImportRequestError(422, "no_rows", "the import has no rows");
++  if (rows.length > MAX_IMPORT_ROWS)
++    throw new ImportRequestError(
++      413,
++      "too_many_rows",
++      `an import has at most ${MAX_IMPORT_ROWS} rows`,
++    );
++
++  const members = await db
++    .select({ id: users.id, email: users.email })
++    .from(users)
++    .where(eq(users.orgId, orgId));
++  const memberByEmail = new Map(
++    members.map((member) => [member.email.toLowerCase(), member.id]),
++  );
++  const existing = await db
++    .select({ title: tasks.title })
++    .from(tasks)
++    .where(and(eq(tasks.projectId, project.id), eq(tasks.orgId, orgId)));
++  const seenTitles = new Set(
++    existing.map((task) => task.title.trim().toLowerCase()),
++  );
++
++  const valid: ValidRow[] = [];
++  const failed: Array<{ row: number; errors: RowError[] }> = [];
++  rows.forEach((raw, index) => {
++    const row = index + 1;
++    const errors: RowError[] = [];
++    const title = typeof raw.title === "string" ? raw.title.trim() : "";
++    if (title.length === 0)
++      errors.push({ field: "title", code: "title_required" });
++    else if (title.length > 200)
++      errors.push({ field: "title", code: "title_too_long" });
++    const description = present(raw.description) ? raw.description : null;
++    if (
++      description !== null &&
++      (typeof description !== "string" || description.length > 5000)
++    )
++      errors.push({ field: "description", code: "description_too_long" });
++    const status = present(raw.status) ? raw.status : "todo";
++    if (!(taskStatuses as readonly unknown[]).includes(status))
++      errors.push({ field: "status", code: "invalid_status" });
++    const isUrgent = present(raw.isUrgent) ? raw.isUrgent : false;
++    if (typeof isUrgent !== "boolean")
++      errors.push({ field: "isUrgent", code: "invalid_is_urgent" });
++    let assigneeId: string | null = null;
++    if (present(raw.assigneeEmail)) {
++      const email =
++        typeof raw.assigneeEmail === "string"
++          ? raw.assigneeEmail.trim().toLowerCase()
++          : "";
++      assigneeId = memberByEmail.get(email) ?? null;
++      if (!assigneeId)
++        errors.push({ field: "assigneeEmail", code: "unknown_assignee" });
++    }
++    const dueDate = present(raw.dueDate) ? raw.dueDate : null;
++    if (
++      dueDate !== null &&
++      (typeof dueDate !== "string" || !isRealDate(dueDate))
++    )
++      errors.push({ field: "dueDate", code: "invalid_due_date" });
++    if (status === "done" && !present(raw.assigneeEmail))
++      errors.push({
++        field: "assigneeEmail",
++        code: "assignee_required_for_done",
++      });
++    const key = title.toLowerCase();
++    if (key && seenTitles.has(key))
++      errors.push({ field: "title", code: "duplicate_title" });
++    if (key) seenTitles.add(key);
++
++    if (errors.length > 0) failed.push({ row, errors: errors.slice(0, 1) });
++    else
++      valid.push({
++        row,
++        title,
++        description: description as string | null,
++        status: status as TaskStatus,
++        isUrgent: isUrgent as boolean,
++        assigneeId,
++        dueDate: dueDate as string | null,
++      });
++  });
++
++  if (atomic && failed.length > 0) return { ok: false as const, failed };
++
++  const base = Date.now();
++  const created = valid.length
++    ? await db.transaction(async (tx) => {
++        const inserted: Array<{ row: number; id: string }> = [];
++        for (const [index, row] of valid.entries()) {
++          const at = new Date(base + index);
++          const id = newId("tsk");
++          await tx.insert(tasks).values({
++            id,
++            orgId,
++            projectId: project.id,
++            title: row.title,
++            description: row.description,
++            status: row.status,
++            isUrgent: row.isUrgent,
++            assigneeId: row.assigneeId,
++            dueDate: row.dueDate,
++            createdAt: at,
++            updatedAt: at,
++          });
++          inserted.push({ row: row.row, id });
++        }
++        return inserted;
++      })
++    : [];
++
++  const perAssignee = new Map<string, number>();
++  for (const row of valid) {
++    if (row.assigneeId)
++      perAssignee.set(
++        row.assigneeId,
++        (perAssignee.get(row.assigneeId) ?? 0) + 1,
++      );
++  }
++  for (const [assigneeId, count] of perAssignee) {
++    const email = members.find((member) => member.id === assigneeId)?.email;
++    if (!email) continue;
++    await sendMail({
++      to: email,
++      subject: `${count} imported task(s) assigned to you in ${project.name}`,
++      text: `${count} task(s) imported into ${project.name} are assigned to you.`,
++    });
++  }
++
++  return { ok: true as const, created, failed };
++}

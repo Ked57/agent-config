@@ -1,0 +1,393 @@
+diff -ruN a/src/app.ts b/src/app.ts
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -1,5 +1,6 @@
+ import { Elysia } from "elysia";
+ 
++import type { Config } from "./config";
+ import type { Db } from "./db/client";
+ import { logger } from "./lib/logger";
+ import { requestLogger } from "./plugins/request-logger";
+@@ -9,7 +10,7 @@
+ import { taskRoutes } from "./routes/tasks";
+ import { webhookRoutes } from "./routes/webhooks";
+ 
+-export function createApp({ db }: { db: Db }) {
++export function createApp({ db, config }: { db: Db; config: Config }) {
+   return new Elysia()
+     .use(requestLogger)
+     .onError(({ code, error, set }) => {
+@@ -23,10 +24,10 @@
+       return { error: error instanceof Error ? error.message : String(error) };
+     })
+     .use(healthRoutes)
+-    .use(authRoutes(db))
++    .use(authRoutes(db, config.tokenTtlHours))
+     .use(projectRoutes(db))
+     .use(taskRoutes(db))
+-    .use(webhookRoutes(db));
++    .use(webhookRoutes(db, config.webhookSecret));
+ }
+ 
+ export type App = ReturnType<typeof createApp>;
+diff -ruN a/src/config.test.ts b/src/config.test.ts
+--- /dev/null
++++ b/src/config.test.ts
+@@ -0,0 +1,88 @@
++import { describe, expect, it } from "vitest";
++
++import { ConfigError, parseConfig } from "./config";
++
++const required = { DATABASE_URL: "file:data/dev.db", WEBHOOK_SECRET: "s3cret" };
++
++function issuesFor(env: Record<string, string | undefined>) {
++  try {
++    parseConfig(env);
++  } catch (error) {
++    if (error instanceof ConfigError) return error.issues;
++    throw error;
++  }
++  throw new Error("expected parseConfig to throw");
++}
++
++describe("parseConfig", () => {
++  it("applies defaults when only required variables are set", () => {
++    expect(parseConfig(required)).toEqual({
++      port: 4000,
++      databaseUrl: "file:data/dev.db",
++      webhookSecret: "s3cret",
++      tokenTtlHours: 24,
++      logLevel: "info",
++    });
++  });
++
++  it("reads every variable when set", () => {
++    expect(
++      parseConfig({
++        ...required,
++        PORT: "8080",
++        TOKEN_TTL_HOURS: "1",
++        LOG_LEVEL: "silent",
++      }),
++    ).toMatchObject({ port: 8080, tokenTtlHours: 1, logLevel: "silent" });
++  });
++
++  it("treats empty values as unset", () => {
++    expect(
++      parseConfig({
++        ...required,
++        PORT: "",
++        TOKEN_TTL_HOURS: " ",
++        LOG_LEVEL: "",
++      }),
++    ).toMatchObject({ port: 4000, tokenTtlHours: 24, logLevel: "info" });
++    expect(issuesFor({ DATABASE_URL: "", WEBHOOK_SECRET: "  " })).toEqual([
++      "DATABASE_URL is required",
++      "WEBHOOK_SECRET is required",
++    ]);
++  });
++
++  it("names every missing or invalid variable at once", () => {
++    const issues = issuesFor({
++      PORT: "abc",
++      TOKEN_TTL_HOURS: "0",
++      LOG_LEVEL: "verbose",
++    });
++    expect(issues).toEqual([
++      'PORT must be an integer from 1 to 65535 (got "abc")',
++      "DATABASE_URL is required",
++      "WEBHOOK_SECRET is required",
++      'TOKEN_TTL_HOURS must be a positive integer (got "0")',
++      'LOG_LEVEL must be one of debug, info, warn, error, silent (got "verbose")',
++    ]);
++  });
++
++  it.each(["-1", "1.5", "2e3", "12h"])(
++    "rejects non-integer TOKEN_TTL_HOURS %s",
++    (value) => {
++      expect(issuesFor({ ...required, TOKEN_TTL_HOURS: value })).toEqual([
++        `TOKEN_TTL_HOURS must be a positive integer (got "${value}")`,
++      ]);
++    },
++  );
++
++  it("rejects ports outside 1-65535", () => {
++    expect(issuesFor({ ...required, PORT: "0" })).toHaveLength(1);
++    expect(issuesFor({ ...required, PORT: "65536" })).toHaveLength(1);
++  });
++
++  it("lists the issues in the error message", () => {
++    expect(() => parseConfig({ WEBHOOK_SECRET: "x" })).toThrow(
++      "Invalid configuration:\n  - DATABASE_URL is required",
++    );
++  });
++});
+diff -ruN a/src/config.ts b/src/config.ts
+--- /dev/null
++++ b/src/config.ts
+@@ -0,0 +1,74 @@
++import { isLogLevel, LOG_LEVELS, type LogLevel } from "./lib/logger";
++
++export interface Config {
++  readonly port: number;
++  readonly databaseUrl: string;
++  readonly webhookSecret: string;
++  readonly tokenTtlHours: number;
++  readonly logLevel: LogLevel;
++}
++
++/** Lists every missing or invalid variable, so one restart surfaces all problems. */
++export class ConfigError extends Error {
++  constructor(readonly issues: readonly string[]) {
++    super(
++      `Invalid configuration:\n${issues.map((issue) => `  - ${issue}`).join("\n")}`,
++    );
++    this.name = "ConfigError";
++  }
++}
++
++type Env = Record<string, string | undefined>;
++
++/**
++ * Parses and validates configuration from the given environment.
++ * Empty values are treated as unset, so `PORT=` in a .env file falls back to the default.
++ */
++export function parseConfig(env: Env): Config {
++  const issues: string[] = [];
++  const read = (name: string) => {
++    const value = env[name]?.trim();
++    return value ? value : undefined;
++  };
++  const required = (name: string) => {
++    const value = read(name);
++    if (value === undefined) issues.push(`${name} is required`);
++    return value ?? "";
++  };
++  const positiveInteger = (name: string, fallback: number, max?: number) => {
++    const raw = read(name);
++    if (raw === undefined) return fallback;
++    const value = /^\d+$/.test(raw) ? Number(raw) : NaN;
++    if (!(value >= 1) || (max !== undefined && value > max)) {
++      const range =
++        max === undefined
++          ? "a positive integer"
++          : `an integer from 1 to ${max}`;
++      issues.push(`${name} must be ${range} (got "${raw}")`);
++    }
++    return value;
++  };
++
++  const port = positiveInteger("PORT", 3000, 65535);
++  const databaseUrl = required("DATABASE_URL");
++  const webhookSecret = required("WEBHOOK_SECRET");
++  const tokenTtlHours = positiveInteger("TOKEN_TTL_HOURS", 24);
++  let logLevel: LogLevel = "info";
++  const rawLogLevel = read("LOG_LEVEL");
++  if (rawLogLevel !== undefined) {
++    if (isLogLevel(rawLogLevel)) logLevel = rawLogLevel;
++    else
++      issues.push(
++        `LOG_LEVEL must be one of ${LOG_LEVELS.join(", ")} (got "${rawLogLevel}")`,
++      );
++  }
++
++  if (issues.length > 0) throw new ConfigError(issues);
++  return {
++    port,
++    databaseUrl,
++    webhookSecret,
++    tokenTtlHours,
++    logLevel,
++  };
++}
+diff -ruN a/src/index.ts b/src/index.ts
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1,13 +1,26 @@
+ import { createApp } from "./app";
++import { ConfigError, parseConfig } from "./config";
+ import { createDb } from "./db/client";
+ import { runMigrations } from "./db/migrate";
+-import { logger } from "./lib/logger";
++import { logger, setLogLevel } from "./lib/logger";
+ 
+-const db = createDb(process.env.DATABASE_URL ?? "file:data/dev.db");
++function loadConfig() {
++  try {
++    return parseConfig(process.env);
++  } catch (error) {
++    if (!(error instanceof ConfigError)) throw error;
++    console.error(error.message);
++    process.exit(1);
++  }
++}
++
++const config = loadConfig();
++setLogLevel(config.logLevel);
++
++const db = createDb(config.databaseUrl);
+ await runMigrations(db);
+ 
+-const port = Number(process.env.PORT ?? 4000);
+-const app = createApp({ db });
++const app = createApp({ db, config });
+ 
+-Bun.serve({ port, fetch: app.fetch });
+-logger.info("server.started", { port });
++Bun.serve({ port: config.port, fetch: app.fetch });
++logger.info("server.started", { port: config.port });
+diff -ruN a/src/lib/logger.ts b/src/lib/logger.ts
+--- a/src/lib/logger.ts
++++ b/src/lib/logger.ts
+@@ -5,19 +5,27 @@
+   error: 40,
+   silent: 100,
+ } as const;
+-type Level = keyof typeof levels;
++export type LogLevel = keyof typeof levels;
+ 
+-function currentLevel(): Level {
+-  const value = process.env.LOG_LEVEL;
+-  return value && value in levels ? (value as Level) : "info";
++export const LOG_LEVELS = Object.keys(levels) as LogLevel[];
++
++export function isLogLevel(value: string): value is LogLevel {
++  return Object.hasOwn(levels, value);
++}
++
++let threshold: LogLevel = "info";
++
++/** Set once at startup from the validated config. */
++export function setLogLevel(level: LogLevel) {
++  threshold = level;
+ }
+ 
+ function write(
+-  level: Exclude<Level, "silent">,
++  level: Exclude<LogLevel, "silent">,
+   message: string,
+   fields: Record<string, unknown>,
+ ) {
+-  if (levels[level] < levels[currentLevel()]) return;
++  if (levels[level] < levels[threshold]) return;
+   const line = JSON.stringify({
+     time: new Date().toISOString(),
+     level,
+diff -ruN a/src/routes/auth.test.ts b/src/routes/auth.test.ts
+--- a/src/routes/auth.test.ts
++++ b/src/routes/auth.test.ts
+@@ -20,6 +20,20 @@
+     });
+   });
+ 
++  it("expires tokens after the configured TTL", async () => {
++    const { request } = await createTestContext({
++      config: { tokenTtlHours: 2 },
++    });
++    const before = Date.now();
++    const login = await request("POST", "/api/auth/token", {
++      body: { email: "ada@acme.test", password: SEED_PASSWORD },
++    });
++    const { expiresAt } = (await login.json()) as { expiresAt: string };
++    const ttlMs = new Date(expiresAt).getTime() - before;
++    expect(ttlMs).toBeGreaterThanOrEqual(2 * 60 * 60 * 1000 - 1000);
++    expect(ttlMs).toBeLessThanOrEqual(2 * 60 * 60 * 1000 + 1000);
++  });
++
+   it("rejects a wrong password", async () => {
+     const { request } = await createTestContext();
+     const login = await request("POST", "/api/auth/token", {
+diff -ruN a/src/routes/auth.ts b/src/routes/auth.ts
+--- a/src/routes/auth.ts
++++ b/src/routes/auth.ts
+@@ -8,7 +8,7 @@
+ import { generateToken, hashToken } from "../lib/tokens";
+ import { authGuard } from "../plugins/auth";
+ 
+-export const authRoutes = (db: Db) =>
++export const authRoutes = (db: Db, tokenTtlHours: number) =>
+   new Elysia({ prefix: "/api" })
+     .use(authGuard(db))
+     .post(
+@@ -22,9 +22,8 @@
+         if (!user || !verifyPassword(body.password, user.passwordHash)) {
+           return status(401, { error: "invalid email or password" });
+         }
+-        const ttlHours = Number(process.env.TOKEN_TTL_HOURS ?? 24);
+         const token = generateToken();
+-        const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
++        const expiresAt = new Date(Date.now() + tokenTtlHours * 60 * 60 * 1000);
+         await db.insert(apiTokens).values({
+           id: newId("tok"),
+           userId: user.id,
+diff -ruN a/src/routes/webhooks.ts b/src/routes/webhooks.ts
+--- a/src/routes/webhooks.ts
++++ b/src/routes/webhooks.ts
+@@ -6,12 +6,11 @@
+ import { logger } from "../lib/logger";
+ 
+ /** Billing provider webhooks, authenticated with a shared secret header. */
+-export const webhookRoutes = (db: Db) =>
++export const webhookRoutes = (db: Db, webhookSecret: string) =>
+   new Elysia({ prefix: "/api/webhooks" }).post(
+     "/billing",
+     async ({ body, headers, status }) => {
+-      const secret = process.env.WEBHOOK_SECRET;
+-      if (!secret || headers["x-webhook-secret"] !== secret) {
++      if (headers["x-webhook-secret"] !== webhookSecret) {
+         return status(401, "invalid webhook secret");
+       }
+       if (body.type === "payment.succeeded") {
+diff -ruN a/src/test/helpers.ts b/src/test/helpers.ts
+--- a/src/test/helpers.ts
++++ b/src/test/helpers.ts
+@@ -5,6 +5,7 @@
+ import type { Logger } from "drizzle-orm/logger";
+ 
+ import { createApp } from "../app";
++import type { Config } from "../config";
+ import { createDb } from "../db/client";
+ import { runMigrations } from "../db/migrate";
+ import { SEED_TOKENS, seed } from "../db/seed";
+@@ -19,16 +20,24 @@
+ 
+ /**
+  * A fresh, migrated and seeded database (a temp file, so transactions work) plus the app.
+- * Pass a Drizzle `logger` to observe the queries a request runs.
++ * Pass a Drizzle `logger` to observe the queries a request runs, and `config` to override settings.
+  */
+-export async function createTestContext(options: { logger?: Logger } = {}) {
+-  const db = createDb(
+-    `file:${join(tmpdir(), `tasks-api-test-${randomUUID()}.db`)}`,
+-    options,
+-  );
++export async function createTestContext(
++  options: { logger?: Logger; config?: Partial<Config> } = {},
++) {
++  const databaseUrl = `file:${join(tmpdir(), `tasks-api-test-${randomUUID()}.db`)}`;
++  const db = createDb(databaseUrl, { logger: options.logger });
+   await runMigrations(db);
+   await seed(db);
+-  const app = createApp({ db });
++  const config: Config = {
++    port: 4000,
++    databaseUrl,
++    webhookSecret: "test-webhook-secret",
++    tokenTtlHours: 24,
++    logLevel: "silent",
++    ...options.config,
++  };
++  const app = createApp({ db, config });
+   const request = (
+     method: string,
+     path: string,
+diff -ruN a/src/test/setup.ts b/src/test/setup.ts
+--- a/src/test/setup.ts
++++ b/src/test/setup.ts
+@@ -1,3 +1,3 @@
+-process.env.LOG_LEVEL ??= "silent";
+-process.env.WEBHOOK_SECRET ??= "test-webhook-secret";
+-process.env.TOKEN_TTL_HOURS ??= "24";
++import { setLogLevel } from "../lib/logger";
++
++setLogLevel("silent");

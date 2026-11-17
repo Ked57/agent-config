@@ -1,0 +1,225 @@
+// Claude Code provider: headless agent runs in an isolated CLAUDE_CONFIG_DIR, transcript parsing, judging.
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { baseEnv } from '../env.mjs';
+
+/**
+ * Auth for isolated config dirs. Prefers ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN from the
+ * caller's env; otherwise reads the live login's short-lived access token, read-only, on every
+ * spawn. The refresh token is never copied, so isolated runs cannot rotate the live login.
+ */
+export function claudeAuthEnv(env = process.env, home = os.homedir()) {
+  if (env.ANTHROPIC_API_KEY) return { ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY };
+  if (env.CLAUDE_CODE_OAUTH_TOKEN) return { CLAUDE_CODE_OAUTH_TOKEN: env.CLAUDE_CODE_OAUTH_TOKEN };
+  const credentials = path.join(home, '.claude', '.credentials.json');
+  try {
+    const token = JSON.parse(fs.readFileSync(credentials, 'utf8')).claudeAiOauth?.accessToken;
+    if (token) return { CLAUDE_CODE_OAUTH_TOKEN: token };
+  } catch {
+    // fall through to the error below
+  }
+  throw new Error('No Claude credentials: set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN, or log in with `claude`.');
+}
+
+const claudeEnv = (home, extra = {}, tmp = null) => ({
+  ...baseEnv(home, tmp),
+  CLAUDE_CONFIG_DIR: path.join(home, '.claude'),
+  ...claudeAuthEnv(),
+  ...extra
+});
+
+/** Normalises Claude Code `--output-format stream-json --verbose` output. */
+export function parseTranscript(text) {
+  const result = {
+    model: null,
+    events: { reads: [], commands: [], skills: [] },
+    toolCalls: 0,
+    toolsByName: {},
+    turns: null,
+    durationMs: null,
+    costUsd: null,
+    usage: null,
+    resultText: '',
+    subtype: null,
+    isError: null
+  };
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (message.type === 'system' && message.subtype === 'init') result.model = message.model ?? null;
+    if (message.type === 'assistant') {
+      for (const block of message.message?.content ?? []) {
+        if (block.type !== 'tool_use') continue;
+        result.toolCalls += 1;
+        result.toolsByName[block.name] = (result.toolsByName[block.name] ?? 0) + 1;
+        const input = block.input ?? {};
+        if (block.name === 'Bash' && input.command) result.events.commands.push(String(input.command));
+        if (block.name === 'Read' && input.file_path) result.events.reads.push(String(input.file_path));
+        if (block.name === 'Skill' && input.skill) result.events.skills.push(String(input.skill));
+      }
+    }
+    if (message.type === 'result') {
+      const usage = message.usage ?? {};
+      result.usage = {
+        inputTokens: usage.input_tokens ?? 0,
+        outputTokens: usage.output_tokens ?? 0,
+        cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+        cacheWriteTokens: usage.cache_creation_input_tokens ?? 0
+      };
+      result.costUsd = message.total_cost_usd ?? null;
+      result.durationMs = message.duration_ms ?? null;
+      result.turns = message.num_turns ?? null;
+      result.resultText = message.result ?? '';
+      result.subtype = message.subtype ?? null;
+      result.isError = message.is_error ?? null;
+    }
+  }
+  return result;
+}
+
+export const PROBE_MODEL = 'claude-haiku-5-5';
+
+const LIMIT_TEXT = /session limit|usage limit|rate[ _-]?limit|usage_limit|\b429\b|too many requests/i;
+const TRANSIENT_TEXT = /overloaded|api_error|internal server error|\b50[0-9]\b|service unavailable/i;
+const AUTH_TEXT = /oauth token (?:has been )?revoked|authentication_error|invalid x-api-key|token has expired|failed to authenticate/i;
+
+/**
+ * Whether a session ended because of the provider, not the task: a usage or rate limit (429, "You've
+ * hit your session limit · resets 9:40am (UTC)") or a transient API failure (overloaded, 5xx).
+ * `output` is the stream-json transcript or a `--output-format json` envelope; `stderr` is checked
+ * when there is no result. A session that started but produced no usable work (no result or an error
+ * result, $0, no tool calls, and at most one turn or under 20 s) was refused even without a 429 in the
+ * text, and counts as transient. An HTTP 401/403 authentication error ("OAuth token revoked": the
+ * access token read from the live login expired mid-run) is `auth`, whatever work came before it; the
+ * stream's `<synthetic>` error messages are checked for it when there is no result.
+ * Returns `{ kind: 'usage-limit' | 'transient' | 'auth', message, resets }` or null.
+ */
+export function providerFailure(output = '', stderr = '') {
+  let result = null;
+  let started = false;
+  let toolCalls = 0;
+  let replies = 0;
+  const synthetic = [];
+  for (const line of output.split('\n')) {
+    try {
+      const event = JSON.parse(line);
+      if (event?.type === 'result') result = event;
+      if (event?.type === 'system' && event.subtype === 'init') started = true;
+      if (event?.type === 'assistant') {
+        toolCalls += (event.message?.content ?? []).filter((block) => block?.type === 'tool_use').length;
+        // Claude Code reports API errors as `<synthetic>` assistant messages; those are not replies.
+        if (event.message?.model !== '<synthetic>') replies += 1;
+        else synthetic.push(...(event.message?.content ?? []).map((block) => block?.text).filter(Boolean));
+      }
+    } catch {
+      // not JSON
+    }
+  }
+  const classify = (text, status) => {
+    if (status === 401 || status === 403 || AUTH_TEXT.test(text)) return { kind: 'auth', message: text.trim().split('\n')[0].slice(0, 300), resets: null };
+    const limited = status === 429 || LIMIT_TEXT.test(text);
+    if (!limited && !(status >= 500 || TRANSIENT_TEXT.test(text))) return null;
+    const message = text.trim().split('\n')[0].slice(0, 300);
+    return { kind: limited ? 'usage-limit' : 'transient', message, resets: /resets\s+([^\n·]+?)\s*$/im.exec(text)?.[1] ?? null };
+  };
+  const explicit = result
+    ? (result.is_error ? classify([result.api_error, result.result, result.error].filter(Boolean).join('\n'), result.api_error_status ?? null) : null)
+    : (stderr ? classify(stderr, null) : null);
+  if (explicit) return explicit;
+  // Only an auth error is taken from the stream: other API errors there may have been retried.
+  const authInStream = result ? null : synthetic.find((text) => AUTH_TEXT.test(text));
+  if (authInStream) return { kind: 'auth', message: authInStream.trim().split('\n')[0].slice(0, 300), resets: null };
+  // Turns or duration must be reported as near zero: an error result without them (e.g. max turns
+  // with a missing count) is not taken for a refusal. Without a result, any real model reply is work.
+  const below = (value, max) => typeof value === 'number' && value <= max;
+  const noWork = !(result?.total_cost_usd > 0) && toolCalls === 0
+    && (result ? below(result.num_turns, 1) || below(result.duration_ms, 20000) : started && replies === 0);
+  if ((!result || result.is_error) && noWork) {
+    const what = result ? `an error result after ${result.num_turns ?? '?'} turn(s)` : 'no result';
+    return { kind: 'transient', message: `session ended with ${what}, $0 and no tool calls (provider refusal)`, resets: null };
+  }
+  return null;
+}
+
+const runProcess = ({ args, cwd, env, stdoutFile, stderrFile, stdin, timeoutMs }) => new Promise((resolve) => {
+  const started = Date.now();
+  const out = stdoutFile ? fs.openSync(stdoutFile, 'w') : 'pipe';
+  const err = stderrFile ? fs.openSync(stderrFile, 'w') : 'pipe';
+  const child = spawn('claude', args, { cwd, env, stdio: [stdin === undefined ? 'ignore' : 'pipe', out, err], detached: true });
+  let stdout = '';
+  if (out === 'pipe') child.stdout.on('data', (chunk) => { stdout += chunk; });
+  if (stdin !== undefined) child.stdin.end(stdin);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already gone */ }
+  }, timeoutMs);
+  const finish = (code, signal = null) => {
+    clearTimeout(timer);
+    // The agent's own children (dev servers, watchers) share its process group: stop them with it.
+    try { process.kill(-child.pid, 'SIGKILL'); } catch { /* group already empty */ }
+    if (typeof out === 'number') fs.closeSync(out);
+    if (typeof err === 'number') fs.closeSync(err);
+    resolve({ exitCode: code, signal, timedOut, wallMs: Date.now() - started, stdout });
+  };
+  child.on('error', () => finish(-1));
+  child.on('exit', finish);
+});
+
+export const claudeProvider = {
+  name: 'claude',
+  parseTranscript,
+  providerFailure,
+  transcriptFile: 'transcript.jsonl',
+
+  /** Where Claude Code keeps session logs for a config home (one jsonl per session, subagents below). */
+  sessionRoot: (home) => path.join(home, '.claude', 'projects'),
+
+  /** `mcpConfig`: a per-run `--mcp-config` file (an input mode's servers); `--strict-mcp-config` keeps every other server out. */
+  async runAgent({ home, cwd, tmp, prompt, model, effort, transcriptPath, stderrPath, timeoutMs, env = {}, mcpConfig = null }) {
+    const args = ['-p', prompt, '--model', model, '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions', ...(mcpConfig ? ['--mcp-config', mcpConfig] : []), '--strict-mcp-config'];
+    if (effort) args.push('--effort', effort);
+    return runProcess({ args, cwd, env: claudeEnv(home, env, tmp), stdoutFile: transcriptPath, stderrFile: stderrPath, timeoutMs });
+  },
+
+  /**
+   * One cheap session that only reports what loaded: its init event lists the skills, plugins, agents
+   * and MCP servers a run under this home will see. Returns the stream-json text.
+   */
+  async probe({ home, cwd, tmp, transcriptPath, model = PROBE_MODEL, timeoutMs = 3 * 60 * 1000 }) {
+    const args = ['-p', 'Reply with the single word ok.', '--model', model, '--output-format', 'stream-json', '--verbose', '--strict-mcp-config', '--max-turns', '1'];
+    const result = await runProcess({ args, cwd, env: claudeEnv(home, {}, tmp), stdoutFile: transcriptPath, timeoutMs });
+    const text = fs.existsSync(transcriptPath) ? fs.readFileSync(transcriptPath, 'utf8') : '';
+    if (result.exitCode !== 0) throw new Error(`probe session in ${home} exited ${result.exitCode}${result.timedOut ? ' (timeout)' : ''}: ${text.slice(-300)}`);
+    return text;
+  },
+
+  async ask({ home, prompt, model, effort, timeoutMs = 10 * 60 * 1000 }) {
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    const args = ['-p', '--model', model, '--tools', '', '--output-format', 'json', '--strict-mcp-config'];
+    if (effort) args.push('--effort', effort);
+    // Judge from a fresh empty directory outside the eval tree. Claude Code loads CLAUDE.md from the
+    // cwd's ancestors (a judge home under the user's home picked up the live ~/.claude/CLAUDE.md) and
+    // shows the cwd to the model, so the cwd must not sit under a home or carry the eval's name.
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-'));
+    let stdout;
+    let exitCode;
+    try {
+      ({ stdout, exitCode } = await runProcess({ args, cwd, env: claudeEnv(home), stdin: prompt, timeoutMs }));
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+    const failure = providerFailure(stdout);
+    if (failure) throw Object.assign(new Error(`judge call stopped by the provider (${failure.kind}): ${failure.message}`), { providerFailure: failure });
+    if (exitCode !== 0) throw new Error(`claude judge exited ${exitCode}: ${stdout.slice(0, 300)}`);
+    const envelope = JSON.parse(stdout);
+    return { text: envelope.result ?? '', costUsd: envelope.total_cost_usd ?? 0 };
+  }
+};

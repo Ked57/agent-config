@@ -1,0 +1,345 @@
+{
+  "name": "ts-backend-hard",
+  "description": "Harder backend tasks on the ts-backend fixture. Prompts are written the way a user asks (outcome plus invariants); the hidden tests check consequences of those invariants (concurrency, boundaries, tenant scoping, duplicates and ties, messy existing data). Scored per hidden test case.",
+  "fixture": "ts-backend",
+  "categories": {
+    "api": {
+      "label": "API features"
+    },
+    "data": {
+      "label": "Data and migrations"
+    },
+    "reliability": {
+      "label": "Concurrency and idempotency"
+    },
+    "safety": {
+      "label": "Access control and sessions"
+    }
+  },
+  "smoke": [
+    "H1-credit-spend",
+    "H5-viewer-role"
+  ],
+  "featurePatterns": {
+    "transaction": "\\.transaction\\(",
+    "batch": "\\.batch\\(",
+    "uniqueConstraint": "unique\\(|\\.unique\\(\\)|uniqueIndex\\(|UNIQUE",
+    "onConflict": "onConflictDo(Nothing|Update)|ON CONFLICT|INSERT OR IGNORE",
+    "conditionalWrite": "\\.update\\([\\s\\S]{0,400}?\\.where\\([\\s\\S]{0,400}?(version|credits|>=|gt\\(|gte\\()",
+    "migrationFile": "CREATE TABLE|ALTER TABLE|CREATE (UNIQUE )?INDEX|UPDATE `?(tasks|users)`?",
+    "typeboxValidation": "\\bt\\.(Object|String|Integer|Number|Union|Literal|Optional)\\("
+  },
+  "tasks": [
+    {
+      "id": "H1-credit-spend",
+      "category": "reliability",
+      "prompt": "Add POST /api/credits/spend with {\"amount\": <positive whole number>} so members of an organization can spend its credits: answer 200 with {\"credits\": <remaining balance>}, or 402 when the balance is too low. The balance must never go negative. Clients retry with an Idempotency-Key header, so a retry must get the original response back and never be charged twice.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/credit-spend.test.ts": "src/__hidden__/credit-spend.test.ts"
+          },
+          "run": "vitest run src/__hidden__/credit-spend.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "migration-added",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H2-stable-pagination",
+      "category": "api",
+      "prompt": "GET /api/projects/:id/tasks returns every task at once. Paginate it newest first (by createdAt) with ?limit (default 20, max 100) and an opaque ?cursor taken from the previous page, responding {items, nextCursor} with nextCursor null when there is nothing more. A client walking all pages must see every task exactly once and in order, even though imports create many tasks with the same createdAt and tasks get created or deleted while someone is paging.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/stable-pagination.test.ts": "src/__hidden__/stable-pagination.test.ts"
+          },
+          "run": "vitest run src/__hidden__/stable-pagination.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H3-soft-delete",
+      "category": "data",
+      "prompt": "Deleting a task should no longer destroy it: make DELETE /api/tasks/:id a soft delete that keeps the row with a `deleted_at` timestamp, and add POST /api/tasks/:id/restore for admins to undo it (200 with the task). Apart from restoring, a deleted task must behave everywhere as if it did not exist.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/soft-delete.test.ts": "src/__hidden__/soft-delete.test.ts"
+          },
+          "run": "vitest run src/__hidden__/soft-delete.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "migration-added",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H4-email-dedupe-migration",
+      "category": "data",
+      "prompt": "Login looks emails up lower-cased, but older rows were stored as typed, so some people have several accounts whose emails differ only by case or surrounding spaces. Add a migration that normalises every email (trimmed, lower-case) and merges such duplicates into the account created first, keeping their tasks, and make sure the database cannot get case-variant duplicates again.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/email-dedupe-migration.test.ts": "src/__hidden__/email-dedupe-migration.test.ts"
+          },
+          "run": "vitest run src/__hidden__/email-dedupe-migration.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "migration-added",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H5-viewer-role",
+      "category": "safety",
+      "prompt": "Add a read-only `viewer` role (role = 'viewer' on users): viewers can read everything in their organization but cannot change anything (403), and tasks cannot be assigned to them (400). Add PATCH /api/users/:id {\"role\"} so admins can change roles in their organization, effective immediately, but an organization must never be left without an admin.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/viewer-role.test.ts": "src/__hidden__/viewer-role.test.ts"
+          },
+          "run": "vitest run src/__hidden__/viewer-role.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H6-token-sessions",
+      "category": "safety",
+      "prompt": "Add POST /api/auth/logout (revokes the token used, 204) and POST /api/auth/logout-all (revokes all of the user's tokens, 204). Also make token expiry sliding: each authenticated request extends the token to TOKEN_TTL_HOURS from now, but never beyond 7 days after it was issued, and GET /api/me should show the current `expiresAt`. A revoked or expired token must stay dead.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/token-sessions.test.ts": "src/__hidden__/token-sessions.test.ts"
+          },
+          "run": "vitest run src/__hidden__/token-sessions.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H7-task-versioning",
+      "category": "reliability",
+      "prompt": "Two people editing the same task overwrite each other. Add optimistic concurrency: tasks get a `version` (starting at 1, bumped on every real change) shown in task responses, which GET and PATCH /api/tasks/:id also send as an ETag header like \"3\"; PATCH must send it back in If-Match and gets 428 without it and 412 (with the current task as body) when it is stale.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/task-versioning.test.ts": "src/__hidden__/task-versioning.test.ts"
+          },
+          "run": "vitest run src/__hidden__/task-versioning.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "migration-added",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "H8-task-search",
+      "category": "api",
+      "prompt": "Add GET /api/tasks/search?q= returning {items} for the tasks in the caller's organization whose title or description contains q, case-insensitively (users write in German and French too), with an optional ?projectId (404 if the project is not theirs). Treat q as plain text, return the 50 most recently updated matches (ties by task id), and reject an empty q.",
+      "expectsPolicies": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/hard/task-search.test.ts": "src/__hidden__/task-search.test.ts"
+          },
+          "run": "vitest run src/__hidden__/task-search.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    }
+  ]
+}

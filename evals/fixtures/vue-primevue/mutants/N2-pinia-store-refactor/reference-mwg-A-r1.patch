@@ -1,0 +1,231 @@
+diff -ruN a/src/stores/users.test.ts b/src/stores/users.test.ts
+--- /dev/null
++++ b/src/stores/users.test.ts
+@@ -0,0 +1,89 @@
++import { beforeEach, describe, expect, it, vi } from 'vitest'
++import { createPinia, setActivePinia } from 'pinia'
++import { fetchUsers } from '@/services/api'
++import type { User, UserRole } from '@/types'
++import { useUsersStore } from './users'
++
++vi.mock('@/services/api', () => ({ fetchUsers: vi.fn() }))
++
++function makeUser(id: string, name: string, role: UserRole): User {
++  return {
++    id,
++    name,
++    email: `${name.toLowerCase()}@acme.test`,
++    role,
++    title: '',
++    location: '',
++    avatarUrl: '',
++    bio: '',
++    lastActiveAt: '2026-11-01T00:00:00Z',
++  }
++}
++
++const sampleUsers = [
++  makeUser('u1', 'Ada', 'admin'),
++  makeUser('u2', 'Grace', 'editor'),
++  makeUser('u3', 'Alan', 'viewer'),
++  makeUser('u4', 'Katherine', 'editor'),
++]
++
++describe('useUsersStore', () => {
++  beforeEach(() => {
++    setActivePinia(createPinia())
++    vi.mocked(fetchUsers).mockReset()
++    vi.mocked(fetchUsers).mockResolvedValue(structuredClone(sampleUsers))
++  })
++
++  it('counts users by role, including roles with no users', async () => {
++    const store = useUsersStore()
++    expect(store.countsByRole).toEqual({ admin: 0, editor: 0, viewer: 0 })
++
++    await store.load()
++    expect(store.countsByRole).toEqual({ admin: 1, editor: 2, viewer: 1 })
++
++    store.users = store.users.filter((user) => user.role !== 'admin')
++    expect(store.countsByRole).toEqual({ admin: 0, editor: 2, viewer: 1 })
++  })
++
++  it('filters by case-insensitive name or email search and by role', async () => {
++    const store = useUsersStore()
++    await store.load()
++
++    store.setSearch('A')
++    expect(store.filteredUsers.map((user) => user.id)).toEqual(['u1', 'u2', 'u3', 'u4'])
++
++    store.setSearch('GRACE@')
++    expect(store.filteredUsers.map((user) => user.id)).toEqual(['u2'])
++
++    store.setSearch('')
++    store.setRoleFilter('editor')
++    expect(store.filteredUsers.map((user) => user.id)).toEqual(['u2', 'u4'])
++  })
++
++  it('finds a user by id', async () => {
++    const store = useUsersStore()
++    await store.load()
++    expect(store.byId('u3')?.name).toBe('Alan')
++    expect(store.byId('missing')).toBeUndefined()
++  })
++
++  it('loads once unless forced', async () => {
++    const store = useUsersStore()
++    await store.load()
++    await store.load()
++    expect(fetchUsers).toHaveBeenCalledTimes(1)
++    await store.load(true)
++    expect(fetchUsers).toHaveBeenCalledTimes(2)
++    expect(store.loaded).toBe(true)
++    expect(store.loading).toBe(false)
++  })
++
++  it('records the error message when loading fails', async () => {
++    vi.mocked(fetchUsers).mockRejectedValue(new Error('Network down'))
++    const store = useUsersStore()
++    await store.load()
++    expect(store.error).toBe('Network down')
++    expect(store.loaded).toBe(false)
++    expect(store.loading).toBe(false)
++  })
++})
+diff -ruN a/src/stores/users.ts b/src/stores/users.ts
+--- a/src/stores/users.ts
++++ b/src/stores/users.ts
+@@ -1,63 +1,76 @@
+ import { defineStore } from 'pinia'
++import { computed, ref } from 'vue'
+ import { fetchUsers } from '@/services/api'
+ import type { User, UserRole } from '@/types'
+ 
+-export const useUsersStore = defineStore('users', {
+-  state: () => ({
+-    users: [] as User[],
+-    loading: false,
+-    loaded: false,
+-    error: null as string | null,
+-    search: '',
+-    roleFilter: null as UserRole | null,
+-  }),
+-  getters: {
+-    filteredUsers(state): User[] {
+-      let result = state.users
+-      if (state.search) {
+-        result = result.filter(
+-          (user) =>
+-            user.name.toLowerCase().includes(state.search.toLowerCase()) ||
+-            user.email.toLowerCase().includes(state.search.toLowerCase()),
+-        )
+-      }
+-      if (state.roleFilter) {
+-        result = result.filter((user) => user.role === state.roleFilter)
+-      }
+-      return result
+-    },
+-    byId(state) {
+-      return (id: string) => state.users.find((user) => user.id === id)
+-    },
+-    adminCount(state): number {
+-      return state.users.filter((user) => user.role === 'admin').length
+-    },
+-    editorCount(state): number {
+-      return state.users.filter((user) => user.role === 'editor').length
+-    },
+-    viewerCount(state): number {
+-      return state.users.filter((user) => user.role === 'viewer').length
+-    },
+-  },
+-  actions: {
+-    async load(force = false) {
+-      if (this.loaded && !force) return
+-      this.loading = true
+-      this.error = null
+-      try {
+-        this.users = await fetchUsers()
+-        this.loaded = true
+-      } catch (error) {
+-        this.error = error instanceof Error ? error.message : 'Failed to load users'
+-      } finally {
+-        this.loading = false
+-      }
+-    },
+-    setSearch(value: string) {
+-      this.search = value
+-    },
+-    setRoleFilter(role: UserRole | null) {
+-      this.roleFilter = role
+-    },
+-  },
++export const useUsersStore = defineStore('users', () => {
++  const users = ref<User[]>([])
++  const loading = ref(false)
++  const loaded = ref(false)
++  const error = ref<string | null>(null)
++  const search = ref('')
++  const roleFilter = ref<UserRole | null>(null)
++
++  const filteredUsers = computed<User[]>(() => {
++    let result = users.value
++    if (search.value) {
++      const query = search.value.toLowerCase()
++      result = result.filter(
++        (user) => user.name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query),
++      )
++    }
++    if (roleFilter.value) {
++      const role = roleFilter.value
++      result = result.filter((user) => user.role === role)
++    }
++    return result
++  })
++
++  const byId = computed(() => (id: string) => users.value.find((user) => user.id === id))
++
++  const countsByRole = computed(() => {
++    // Every role is listed so a new UserRole fails to compile until it is counted.
++    const counts: Record<UserRole, number> = { admin: 0, editor: 0, viewer: 0 }
++    for (const user of users.value) {
++      counts[user.role] += 1
++    }
++    return counts
++  })
++
++  async function load(force = false) {
++    if (loaded.value && !force) return
++    loading.value = true
++    error.value = null
++    try {
++      users.value = await fetchUsers()
++      loaded.value = true
++    } catch (err) {
++      error.value = err instanceof Error ? err.message : 'Failed to load users'
++    } finally {
++      loading.value = false
++    }
++  }
++
++  function setSearch(value: string) {
++    search.value = value
++  }
++
++  function setRoleFilter(role: UserRole | null) {
++    roleFilter.value = role
++  }
++
++  return {
++    users,
++    loading,
++    loaded,
++    error,
++    search,
++    roleFilter,
++    filteredUsers,
++    byId,
++    countsByRole,
++    load,
++    setSearch,
++    setRoleFilter,
++  }
+ })

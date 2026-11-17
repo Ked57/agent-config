@@ -1,0 +1,313 @@
+diff --git a/src/components/invoices/InvoiceCards.vue b/src/components/invoices/InvoiceCards.vue
+new file mode 100644
+index 0000000..8ab5a5d
+--- /dev/null
++++ b/src/components/invoices/InvoiceCards.vue
+@@ -0,0 +1,28 @@
++<script setup lang="ts">
++import Checkbox from 'primevue/checkbox'
++import Tag from 'primevue/tag'
++import type { Invoice } from '@/services/invoices'
++import { dueNote, money, shortDate, statusSeverity } from './format'
++
++defineProps<{ invoices: Invoice[] }>()
++const selected = defineModel<string[]>('selected', { required: true })
++</script>
++
++<template>
++  <ul class="divide-y divide-surface-200">
++    <li v-for="invoice in invoices" :key="invoice.id" class="flex gap-5 px-6 py-6" :class="{ 'bg-primary-50': selected.includes(invoice.id) }">
++      <Checkbox v-model="selected" :value="invoice.id" :aria-label="`Select ${invoice.number}`" class="mt-0.5" />
++      <div class="flex min-w-0 flex-1 flex-col gap-1">
++        <div class="flex items-center justify-between gap-2">
++          <span class="font-medium text-surface-900 tabular-nums">{{ invoice.number }}</span>
++          <Tag :value="invoice.status" :severity="statusSeverity[invoice.status]" />
++        </div>
++        <p class="truncate text-sm text-surface-700">{{ invoice.customer.name }}</p>
++        <div class="flex items-baseline justify-between gap-2">
++          <span class="text-sm" :class="invoice.status === 'Overdue' ? 'font-medium text-red-700' : 'text-surface-500'">{{ dueNote(invoice) ?? `Issued ${shortDate(invoice.issuedAt)}` }}</span>
++          <span class="font-semibold text-surface-900 tabular-nums">{{ money(invoice.amount) }}</span>
++        </div>
++      </div>
++    </li>
++  </ul>
++</template>
+diff --git a/src/components/invoices/InvoiceTable.vue b/src/components/invoices/InvoiceTable.vue
+new file mode 100644
+index 0000000..6700724
+--- /dev/null
++++ b/src/components/invoices/InvoiceTable.vue
+@@ -0,0 +1,84 @@
++<script setup lang="ts">
++import Checkbox from 'primevue/checkbox'
++import Column from 'primevue/column'
++import DataTable, { type DataTableSortEvent } from 'primevue/datatable'
++import Tag from 'primevue/tag'
++import type { Invoice } from '@/services/invoices'
++import { initials } from '@/utils/format'
++import { dueNote, money, shortDate, statusSeverity } from './format'
++
++const props = defineProps<{ invoices: Invoice[] }>()
++const selected = defineModel<string[]>('selected', { required: true })
++const sortField = defineModel<string>('sortField', { required: true })
++const sortOrder = defineModel<1 | -1>('sortOrder', { required: true })
++
++const allSelected = () => props.invoices.length > 0 && props.invoices.every((invoice) => selected.value.includes(invoice.id))
++function toggleAll() {
++  const ids = props.invoices.map((invoice) => invoice.id)
++  selected.value = allSelected() ? selected.value.filter((id) => !ids.includes(id)) : [...new Set([...selected.value, ...ids])]
++}
++function onSort(event: DataTableSortEvent) {
++  sortField.value = String(event.sortField)
++  sortOrder.value = event.sortOrder === -1 ? -1 : 1
++}
++</script>
++
++<template>
++  <DataTable
++    :value="invoices"
++    data-key="id"
++    lazy
++    removable-sort
++    :sort-field="sortField"
++    :sort-order="sortOrder"
++    :row-class="(invoice: Invoice) => (selected.includes(invoice.id) ? '!bg-primary-50' : '')"
++    table-class="min-w-[56rem]"
++    @sort="onSort"
++  >
++    <Column header-class="w-12">
++      <template #header>
++        <Checkbox :model-value="allSelected()" binary aria-label="Select all invoices on this page" @update:model-value="toggleAll" />
++      </template>
++      <template #body="{ data }">
++        <Checkbox v-model="selected" :value="data.id" :aria-label="`Select ${data.number}`" />
++      </template>
++    </Column>
++    <Column field="number" header="Invoice" sortable>
++      <template #body="{ data }">
++        <span class="font-medium text-surface-900 tabular-nums">{{ data.number }}</span>
++      </template>
++    </Column>
++    <Column field="customer" header="Customer">
++      <template #body="{ data }">
++        <div class="flex items-center gap-5">
++          <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-100 text-xs font-semibold text-surface-700" aria-hidden="true">{{ initials(data.customer.name) }}</span>
++          <div class="min-w-0 max-w-56">
++            <p class="truncate font-medium text-surface-900">{{ data.customer.name }}</p>
++            <p class="truncate text-sm text-surface-500">{{ data.customer.email }}</p>
++          </div>
++        </div>
++      </template>
++    </Column>
++    <Column field="issuedAt" header="Issued" sortable>
++      <template #body="{ data }">
++        <span class="whitespace-nowrap text-surface-700">{{ shortDate(data.issuedAt) }}</span>
++      </template>
++    </Column>
++    <Column field="dueAt" header="Due" sortable>
++      <template #body="{ data }">
++        <p class="whitespace-nowrap text-surface-700">{{ shortDate(data.dueAt) }}</p>
++        <p v-if="dueNote(data)" class="whitespace-nowrap text-sm" :class="data.status === 'Overdue' ? 'font-medium text-red-700' : 'text-surface-500'">{{ dueNote(data) }}</p>
++      </template>
++    </Column>
++    <Column field="status" header="Status">
++      <template #body="{ data }">
++        <Tag :value="data.status" :severity="statusSeverity[data.status as Invoice['status']]" />
++      </template>
++    </Column>
++    <Column field="amount" header="Amount" sortable header-class="[&_.p-datatable-column-header-content]:justify-end" body-class="text-right">
++      <template #body="{ data }">
++        <span class="font-medium text-surface-900 tabular-nums">{{ money(data.amount) }}</span>
++      </template>
++    </Column>
++  </DataTable>
++</template>
+diff --git a/src/components/invoices/format.ts b/src/components/invoices/format.ts
+new file mode 100644
+index 0000000..099e739
+--- /dev/null
++++ b/src/components/invoices/format.ts
+@@ -0,0 +1,23 @@
++import type { Invoice, InvoiceStatus } from '@/services/invoices'
++
++const DAY = 24 * 60 * 60 * 1000
++
++export const money = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
++export const shortDate = (iso: string) => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(iso))
++
++/** "Due in 3 days", "4 days overdue", "Due today"; null for paid and draft invoices. */
++export function dueNote(invoice: Invoice): string | null {
++  if (invoice.status === 'Paid' || invoice.status === 'Draft') return null
++  const today = new Date()
++  const days = Math.round((Date.parse(invoice.dueAt) - Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())) / DAY)
++  if (days === 0) return 'Due today'
++  const plural = (count: number) => `${count} ${count === 1 ? 'day' : 'days'}`
++  return days > 0 ? `Due in ${plural(days)}` : `${plural(-days)} overdue`
++}
++
++export const statusSeverity: Record<InvoiceStatus, 'success' | 'info' | 'danger' | 'secondary'> = {
++  Paid: 'success',
++  Open: 'info',
++  Overdue: 'danger',
++  Draft: 'secondary',
++}
+diff --git a/src/router/index.ts b/src/router/index.ts
+index 507c8a9..252b35a 100644
+--- a/src/router/index.ts
++++ b/src/router/index.ts
+@@ -5,6 +5,7 @@ export const router = createRouter({
+   history: createWebHistory(),
+   routes: [
+     { path: '/', name: 'dashboard', component: DashboardView, meta: { title: 'Dashboard' } },
++    { path: '/invoices', name: 'invoices', component: () => import('@/views/InvoicesView.vue'), meta: { title: 'Invoices' } },
+     { path: '/projects', name: 'projects', component: () => import('@/views/ProjectsView.vue'), meta: { title: 'Projects' } },
+     { path: '/users', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { title: 'Users' } },
+     { path: '/users/:id', name: 'user', component: () => import('@/views/UserDetailView.vue'), props: true, meta: { title: 'User' } },
+diff --git a/src/views/InvoicesView.vue b/src/views/InvoicesView.vue
+new file mode 100644
+index 0000000..595c514
+--- /dev/null
++++ b/src/views/InvoicesView.vue
+@@ -0,0 +1,142 @@
++<script setup lang="ts">
++import { computed, ref, watch } from 'vue'
++import Button from 'primevue/button'
++import IconField from 'primevue/iconfield'
++import InputIcon from 'primevue/inputicon'
++import InputText from 'primevue/inputtext'
++import Paginator, { type PageState } from 'primevue/paginator'
++import InvoiceCards from '@/components/invoices/InvoiceCards.vue'
++import InvoiceTable from '@/components/invoices/InvoiceTable.vue'
++import { money } from '@/components/invoices/format'
++import { fetchInvoices, invoiceStatuses, type Invoice, type InvoiceStatus } from '@/services/invoices'
++
++const PAGE_SIZE = 8
++
++const invoices = ref<Invoice[] | null>(null)
++const search = ref('')
++const statuses = ref<InvoiceStatus[]>([])
++const selected = ref<string[]>([])
++const sortField = ref('issuedAt')
++const sortOrder = ref<1 | -1>(-1)
++const first = ref(0)
++
++void fetchInvoices().then((result) => {
++  invoices.value = result
++})
++
++const outstanding = computed(() => (invoices.value ?? []).filter((invoice) => invoice.status === 'Open' || invoice.status === 'Overdue'))
++const counts = computed(() => Object.fromEntries(invoiceStatuses.map((status) => [status, (invoices.value ?? []).filter((invoice) => invoice.status === status).length])))
++
++const filtered = computed(() => {
++  const query = search.value.trim().toLowerCase()
++  return (invoices.value ?? []).filter((invoice) => (!statuses.value.length || statuses.value.includes(invoice.status))
++    && (!query || invoice.number.toLowerCase().includes(query) || invoice.customer.name.toLowerCase().includes(query)))
++})
++
++const sorted = computed(() => {
++  const field = sortField.value as keyof Invoice
++  const value = (invoice: Invoice) => (field === 'amount' ? invoice.amount : String(invoice[field] ?? ''))
++  return [...filtered.value].sort((a, b) => {
++    const [x, y] = [value(a), value(b)]
++    return (x < y ? -1 : x > y ? 1 : 0) * sortOrder.value
++  })
++})
++
++const page = computed(() => sorted.value.slice(first.value, first.value + PAGE_SIZE))
++const range = computed(() => (sorted.value.length ? `Showing ${first.value + 1}–${Math.min(first.value + PAGE_SIZE, sorted.value.length)} of ${sorted.value.length}` : ''))
++const selectedTotal = computed(() => (invoices.value ?? []).filter((invoice) => selected.value.includes(invoice.id)).reduce((sum, invoice) => sum + invoice.amount, 0))
++
++watch([search, statuses, sortField, sortOrder], () => {
++  first.value = 0
++})
++
++function toggleStatus(status: InvoiceStatus) {
++  statuses.value = statuses.value.includes(status) ? statuses.value.filter((entry) => entry !== status) : [...statuses.value, status]
++}
++
++function clearFilters() {
++  search.value = ''
++  statuses.value = []
++}
++</script>
++
++<template>
++  <div v-if="invoices" class="flex flex-col gap-8">
++    <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
++      <div>
++        <h1 class="text-2xl font-semibold tracking-tight text-surface-900">Invoices</h1>
++        <p class="mt-1 text-sm text-surface-500">
++          <template v-if="outstanding.length">{{ money(outstanding.reduce((sum, invoice) => sum + invoice.amount, 0)) }} outstanding across {{ outstanding.length }} invoices</template>
++          <template v-else>Bill customers and track what they owe you.</template>
++        </p>
++      </div>
++      <div class="flex gap-3">
++        <Button label="Export" icon="pi pi-download" severity="secondary" outlined class="max-sm:flex-1" />
++        <Button label="New invoice" icon="pi pi-plus" class="max-sm:flex-1 !border-primary-700 !bg-primary-700" />
++      </div>
++    </header>
++
++    <section class="overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-sm" aria-label="Invoices">
++      <div v-if="!invoices.length" class="flex flex-col items-center gap-3 px-6 py-20 text-center">
++        <span class="flex size-12 items-center justify-center rounded-full bg-primary-50 text-primary-700" aria-hidden="true">
++          <i class="pi pi-file text-lg"></i>
++        </span>
++        <h2 class="text-base font-semibold text-surface-900">No invoices yet</h2>
++        <p class="max-w-sm text-sm text-surface-500">Create your first invoice to start getting paid. Drafts stay private until you send them.</p>
++        <Button label="New invoice" icon="pi pi-plus" class="mt-2 !border-primary-700 !bg-primary-700" />
++      </div>
++
++      <template v-else>
++        <div class="flex flex-col gap-5 border-b border-surface-200 p-6 lg:flex-row lg:items-center">
++          <IconField class="lg:w-80">
++            <InputIcon class="pi pi-search" />
++            <InputText v-model="search" placeholder="Search by number or customer" aria-label="Search invoices" class="w-full" />
++          </IconField>
++          <div class="flex flex-wrap gap-4" role="group" aria-label="Filter by status">
++            <button
++              v-for="status in invoiceStatuses"
++              :key="status"
++              type="button"
++              class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors"
++              :class="statuses.includes(status) ? 'border-primary-300 bg-primary-50 text-primary-800' : 'border-surface-200 bg-surface-0 text-surface-700 hover:bg-surface-50'"
++              :aria-pressed="statuses.includes(status)"
++              @click="toggleStatus(status)"
++            >
++              <i v-if="statuses.includes(status)" class="pi pi-check text-xs" aria-hidden="true"></i>
++              {{ status }}
++              <span class="rounded-full px-1.5 text-xs tabular-nums" :class="statuses.includes(status) ? 'bg-primary-100' : 'bg-surface-100 text-surface-600'">{{ counts[status] }}</span>
++            </button>
++          </div>
++        </div>
++
++        <div v-if="selected.length" class="flex flex-wrap items-center gap-2 border-b border-primary-200 bg-primary-50 px-6 py-4" role="region" aria-label="Bulk actions">
++          <span class="mr-2 text-sm font-semibold text-primary-800">{{ selected.length }} selected</span>
++          <span class="mr-auto text-sm text-primary-800 tabular-nums">{{ money(selectedTotal) }} total</span>
++          <Button label="Send reminder" icon="pi pi-envelope" size="small" severity="secondary" outlined class="!bg-surface-0" />
++          <Button label="Mark as paid" icon="pi pi-check" size="small" severity="secondary" outlined class="!bg-surface-0" />
++          <Button label="Clear selection" size="small" text class="!text-primary-800" @click="selected = []" />
++        </div>
++
++        <div v-if="!sorted.length" class="flex flex-col items-center gap-2 px-6 py-16 text-center">
++          <h2 class="text-base font-semibold text-surface-900">No invoices match your filters</h2>
++          <Button label="Clear filters" size="small" severity="secondary" outlined @click="clearFilters" />
++        </div>
++        <template v-else>
++          <InvoiceTable v-model:selected="selected" v-model:sort-field="sortField" v-model:sort-order="sortOrder" :invoices="page" class="hidden md:block" />
++          <InvoiceCards v-model:selected="selected" :invoices="page" class="md:hidden" />
++          <div class="flex flex-col items-center gap-2 border-t border-surface-200 px-6 py-5 sm:flex-row sm:justify-between">
++            <p class="text-sm text-surface-500 tabular-nums">{{ range }}</p>
++            <Paginator
++              :first="first"
++              :rows="PAGE_SIZE"
++              :total-records="sorted.length"
++              template="PrevPageLink PageLinks NextPageLink"
++              class="!p-0"
++              @page="(event: PageState) => (first = event.first)"
++            />
++          </div>
++        </template>
++      </template>
++    </section>
++  </div>
++</template>

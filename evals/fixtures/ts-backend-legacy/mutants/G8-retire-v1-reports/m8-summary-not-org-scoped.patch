@@ -1,0 +1,670 @@
+diff -ruN a/docs/architecture.md b/docs/architecture.md
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -37,12 +37,15 @@
+ 
+ ## Reports
+ 
+-`/api/reports/*` (v2) replaced the v1 reports, which were removed in 2022.
++All reports come from `src/services/reports.ts`. `/api/reports/*` is the current API. The
++deprecated `/api/v1/reports/*` endpoints (old mobile app) and the payroll CSV are a thin
++compatibility layer over the same service in `src/routes/reports-v1.ts`; their output is pinned
++byte for byte by tests and they answer with `Deprecation: true`.
+ 
+ ## Background jobs
+ 
+ `src/services/jobs.ts` is a small queue in the `jobs` table. Handlers: `notification.email`,
+-`webhook.deliver`, `digest.weekly`. Slack notifications go through `src/services/slack.ts`.
++`webhook.deliver`, `digest.weekly`.
+ 
+ ## Feature flags
+ 
+diff -ruN a/src/app.ts b/src/app.ts
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -2,7 +2,6 @@
+ 
+ import { commentsController } from "./controllers/comments.controller";
+ import { paymentsController } from "./controllers/payments.controller";
+-import { reportsV1Controller } from "./controllers/reports-v1.controller";
+ import { timeEntriesController } from "./controllers/time-entries.controller";
+ import { usersController } from "./controllers/users.controller";
+ import type { Db } from "./db/client";
+@@ -20,6 +19,7 @@
+ import { notificationRoutes } from "./routes/notifications";
+ import { projectRoutes } from "./routes/projects";
+ import { reportRoutes } from "./routes/reports";
++import { reportsV1Routes } from "./routes/reports-v1";
+ import { taskRoutes } from "./routes/tasks";
+ import { webhookSubscriptionRoutes } from "./routes/webhook-subscriptions";
+ import { webhookRoutes } from "./routes/webhooks";
+@@ -67,7 +67,7 @@
+       .use(webhookSubscriptionRoutes(db))
+       .use(webhookRoutes(db))
+       // Deprecated: the old mobile app still calls these.
+-      .use(reportsV1Controller(db))
++      .use(reportsV1Routes(db))
+   );
+ }
+ 
+diff -ruN a/src/controllers/reports-v1.controller.test.ts b/src/controllers/reports-v1.controller.test.ts
+--- a/src/controllers/reports-v1.controller.test.ts
++++ /dev/null
+@@ -1,40 +0,0 @@
+-import { describe, expect, it } from "vitest";
+-
+-import { createTestContext, SEED_TOKENS } from "../test/helpers";
+-
+-describe("reports v1 (deprecated)", () => {
+-  it("keeps the old timesheet format", async () => {
+-    const { json } = await createTestContext();
+-    const { body } = await json<{
+-      week_start: string;
+-      rows: Record<string, string>[];
+-      total_hours: string;
+-    }>("GET", "/api/v1/reports/timesheet?week=2026-11-09", {
+-      token: SEED_TOKENS.acmeAdmin,
+-    });
+-    expect(body.week_start).toBe("09/11/2026");
+-    expect(body.rows[0]).toEqual({
+-      user_id: "usr_ada",
+-      user_name: "Ada Lovelace",
+-      day: "10/11/2026",
+-      hours: "1.00",
+-      billable_hours: "1.00",
+-    });
+-  });
+-
+-  it("summarises a project", async () => {
+-    const { json } = await createTestContext();
+-    const { body } = await json(
+-      "GET",
+-      "/api/v1/reports/projects/prj_web/summary",
+-      {
+-        token: SEED_TOKENS.acmeAdmin,
+-      },
+-    );
+-    expect(body).toMatchObject({
+-      project_id: "prj_web",
+-      total_hours: "8.25",
+-      entries: 4,
+-    });
+-  });
+-});
+diff -ruN a/src/controllers/reports-v1.controller.ts b/src/controllers/reports-v1.controller.ts
+--- a/src/controllers/reports-v1.controller.ts
++++ /dev/null
+@@ -1,153 +0,0 @@
+-import { Elysia } from "elysia";
+-
+-import type { Db } from "../db/client";
+-import {
+-  addDays,
+-  dayKey,
+-  dayStart,
+-  formatDay,
+-  isValidDay,
+-  weekStart,
+-} from "../lib/legacy/dates";
+-import { formatHours, fromCents } from "../lib/legacy/money";
+-import { authGuard } from "../plugins/auth";
+-import { recordAudit } from "../services/audit";
+-import {
+-  invoiceAgingRows,
+-  projectSummary,
+-  timesheetRows,
+-} from "../sql/reports.sql";
+-
+-/**
+- * @deprecated v1 reports, kept for the old mobile app and the payroll export.
+- * Responses are snake_case with DD/MM/YYYY days and hours as strings.
+- */
+-
+-export interface TimesheetV1 {
+-  week_start: string;
+-  rows: {
+-    user_id: string;
+-    user_name: string;
+-    day: string;
+-    hours: string;
+-    billable_hours: string;
+-  }[];
+-  total_hours: string;
+-}
+-
+-export async function buildTimesheetV1(
+-  db: Db,
+-  orgId: string,
+-  day: string,
+-): Promise<TimesheetV1> {
+-  const start = weekStart(day);
+-  const rows = await timesheetRows(
+-    db,
+-    orgId,
+-    dayStart(start),
+-    dayStart(addDays(start, 7)),
+-  );
+-  const grouped = new Map<
+-    string,
+-    TimesheetV1["rows"][number] & { m: number; b: number }
+-  >();
+-  let total = 0;
+-  for (const row of rows) {
+-    const key = `${row.user_id}|${dayKey(row.started_at)}`;
+-    const current = grouped.get(key) ?? {
+-      user_id: row.user_id,
+-      user_name: row.user_name,
+-      day: formatDay(dayKey(row.started_at)),
+-      hours: "",
+-      billable_hours: "",
+-      m: 0,
+-      b: 0,
+-    };
+-    current.m += row.minutes;
+-    if (row.billable === 1) current.b += row.minutes;
+-    grouped.set(key, current);
+-    total += row.minutes;
+-  }
+-  return {
+-    week_start: formatDay(start),
+-    rows: [...grouped.values()].map(({ m, b, ...row }) => ({
+-      ...row,
+-      hours: formatHours(m),
+-      billable_hours: formatHours(b),
+-    })),
+-    total_hours: formatHours(total),
+-  };
+-}
+-
+-const auditView = (
+-  db: Db,
+-  user: { id: string; orgId: string },
+-  report: string,
+-  entityId: string,
+-) =>
+-  recordAudit(db, {
+-    orgId: user.orgId,
+-    actorId: user.id,
+-    action: "report.v1_viewed",
+-    entityType: "report",
+-    entityId,
+-    data: { report },
+-  });
+-
+-export const reportsV1Controller = (db: Db) =>
+-  new Elysia({ prefix: "/api/v1/reports" })
+-    .use(authGuard(db))
+-    .get(
+-      "/timesheet",
+-      async ({ query, user, status }) => {
+-        const week = query.week ?? dayKey(Date.now());
+-        if (!isValidDay(week)) return status(400, { error: "bad week" });
+-        const report = await buildTimesheetV1(db, user.orgId, week);
+-        await auditView(db, user, "timesheet", weekStart(week));
+-        return report;
+-      },
+-      { requireAuth: true },
+-    )
+-    .get(
+-      "/projects/:id/summary",
+-      async ({ params, user, status }) => {
+-        const row = await projectSummary(db, params.id);
+-        if (!row) return status(404, { error: "project not found" });
+-        await auditView(db, user, "project_summary", row.id);
+-        return {
+-          project_id: row.id,
+-          project_name: row.name,
+-          total_hours: formatHours(row.total_minutes ?? 0),
+-          billable_hours: formatHours(row.billable_minutes ?? 0),
+-          amount: Math.round(row.amount_cents ?? 0) / 100,
+-          entries: row.entries,
+-        };
+-      },
+-      { requireAuth: true },
+-    )
+-    .get(
+-      "/invoices",
+-      async ({ user }) => {
+-        const rows = await invoiceAgingRows(db, user.orgId);
+-        const today = dayKey(Date.now());
+-        await auditView(db, user, "invoice_aging", user.orgId);
+-        return {
+-          invoices: rows.map((row) => ({
+-            number: row.number,
+-            client: row.client_name,
+-            status: row.status,
+-            issued: formatDay(row.issue_date),
+-            due: formatDay(row.due_date),
+-            total: fromCents(row.total_cents),
+-            paid: fromCents(row.paid_cents),
+-            days_overdue:
+-              row.status === "paid" || row.due_date >= today
+-                ? 0
+-                : Math.round(
+-                    (dayStart(today) - dayStart(row.due_date)) / 86_400_000,
+-                  ),
+-          })),
+-        };
+-      },
+-      { requireAuth: true },
+-    );
+diff -ruN a/src/routes/exports.ts b/src/routes/exports.ts
+--- a/src/routes/exports.ts
++++ b/src/routes/exports.ts
+@@ -1,12 +1,12 @@
+ import { and, asc, eq, gte, lte, type SQL } from "drizzle-orm";
+ import { Elysia, t } from "elysia";
+ 
+-import { buildTimesheetV1 } from "../controllers/reports-v1.controller";
+ import type { Db } from "../db/client";
+ import { invoices, projects, tasks, timeEntries, users } from "../db/schema";
+ import { dayKey, dayStart, formatDay } from "../lib/legacy/dates";
+ import { formatHours, fromCents } from "../lib/legacy/money";
+ import { authGuard } from "../plugins/auth";
++import { timesheetV1 } from "./reports-v1";
+ 
+ /** RFC 4180 field quoting. */
+ function csvField(value: unknown): string {
+@@ -137,7 +137,7 @@
+     .get(
+       "/payroll.csv",
+       async ({ query, user }) => {
+-        const report = await buildTimesheetV1(
++        const report = await timesheetV1(
+           db,
+           user.orgId,
+           query.week ?? dayKey(Date.now()),
+diff -ruN a/src/routes/reports-v1.test.ts b/src/routes/reports-v1.test.ts
+--- /dev/null
++++ b/src/routes/reports-v1.test.ts
+@@ -0,0 +1,40 @@
++import { describe, expect, it } from "vitest";
++
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++
++describe("reports v1 (deprecated)", () => {
++  it("keeps the old timesheet format", async () => {
++    const { json } = await createTestContext();
++    const { body } = await json<{
++      week_start: string;
++      rows: Record<string, string>[];
++      total_hours: string;
++    }>("GET", "/api/v1/reports/timesheet?week=2026-11-09", {
++      token: SEED_TOKENS.acmeAdmin,
++    });
++    expect(body.week_start).toBe("09/11/2026");
++    expect(body.rows[0]).toEqual({
++      user_id: "usr_ada",
++      user_name: "Ada Lovelace",
++      day: "10/11/2026",
++      hours: "1.00",
++      billable_hours: "1.00",
++    });
++  });
++
++  it("summarises a project", async () => {
++    const { json } = await createTestContext();
++    const { body } = await json(
++      "GET",
++      "/api/v1/reports/projects/prj_web/summary",
++      {
++        token: SEED_TOKENS.acmeAdmin,
++      },
++    );
++    expect(body).toMatchObject({
++      project_id: "prj_web",
++      total_hours: "8.25",
++      entries: 4,
++    });
++  });
++});
+diff -ruN a/src/routes/reports-v1.ts b/src/routes/reports-v1.ts
+--- /dev/null
++++ b/src/routes/reports-v1.ts
+@@ -0,0 +1,154 @@
++import { Elysia } from "elysia";
++
++import type { Db } from "../db/client";
++import {
++  addDays,
++  dayKey,
++  dayStart,
++  formatDay,
++  isValidDay,
++  weekStart,
++} from "../lib/legacy/dates";
++import { formatHours, fromCents } from "../lib/legacy/money";
++import { authGuard, type AuthUser } from "../plugins/auth";
++import { recordAudit } from "../services/audit";
++import {
++  invoiceAging,
++  projectTotals,
++  timesheetEntries,
++} from "../services/reports";
++
++/**
++ * Deprecated v1 report formats, served from the report service (spec #340).
++ * The old mobile app and the payroll provider parse these byte for byte:
++ * snake_case, DD/MM/YYYY UTC days, hours as two-decimal strings, people in
++ * byte order of their names, totals formatted once.
++ */
++
++export interface TimesheetV1 {
++  week_start: string;
++  rows: {
++    user_id: string;
++    user_name: string;
++    day: string;
++    hours: string;
++    billable_hours: string;
++  }[];
++  total_hours: string;
++}
++
++export async function timesheetV1(
++  db: Db,
++  orgId: string,
++  day: string,
++): Promise<TimesheetV1> {
++  const start = weekStart(day);
++  const entries = await timesheetEntries(
++    db,
++    orgId,
++    dayStart(start),
++    dayStart(addDays(start, 7)),
++  );
++  const rows = new Map<
++    string,
++    { userId: string; userName: string; day: string; m: number; b: number }
++  >();
++  let total = 0;
++  for (const entry of entries) {
++    const entryDay = dayKey(entry.startedAt);
++    const key = `${entry.userId}|${entryDay}`;
++    const row = rows.get(key) ?? {
++      userId: entry.userId,
++      userName: entry.userName,
++      day: entryDay,
++      m: 0,
++      b: 0,
++    };
++    row.m += entry.minutes;
++    if (entry.billable) row.b += entry.minutes;
++    rows.set(key, row);
++    total += entry.minutes;
++  }
++  return {
++    week_start: formatDay(start),
++    rows: [...rows.values()].map((row) => ({
++      user_id: row.userId,
++      user_name: row.userName,
++      day: formatDay(row.day),
++      hours: formatHours(row.m),
++      billable_hours: formatHours(row.b),
++    })),
++    total_hours: formatHours(total),
++  };
++}
++
++const auditView = (db: Db, user: AuthUser, report: string, entityId: string) =>
++  recordAudit(db, {
++    orgId: user.orgId,
++    actorId: user.id,
++    action: "report.v1_viewed",
++    entityType: "report",
++    entityId,
++    data: { report },
++  });
++
++export const reportsV1Routes = (db: Db) =>
++  new Elysia({ prefix: "/api/v1/reports" })
++    .use(authGuard(db))
++    .onAfterHandle(({ set }) => {
++      set.headers["deprecation"] = "true";
++    })
++    .get(
++      "/timesheet",
++      async ({ query, user, status }) => {
++        const week = query.week ?? dayKey(Date.now());
++        if (!isValidDay(week)) return status(400, { error: "bad week" });
++        const report = await timesheetV1(db, user.orgId, week);
++        await auditView(db, user, "timesheet", weekStart(week));
++        return report;
++      },
++      { requireAuth: true },
++    )
++    .get(
++      "/projects/:id/summary",
++      async ({ params, user, status }) => {
++        const row = await projectTotals(db, user.orgId, params.id);
++        if (!row) return status(404, { error: "project not found" });
++        await auditView(db, user, "project_summary", row.id);
++        return {
++          project_id: row.id,
++          project_name: row.name,
++          total_hours: formatHours(row.totalMinutes ?? 0),
++          billable_hours: formatHours(row.billableMinutes ?? 0),
++          amount: Math.round(row.exactAmountCents ?? 0) / 100,
++          entries: row.entries,
++        };
++      },
++      { requireAuth: true },
++    )
++    .get(
++      "/invoices",
++      async ({ user }) => {
++        const rows = await invoiceAging(db, user.orgId);
++        const today = dayKey(Date.now());
++        await auditView(db, user, "invoice_aging", user.orgId);
++        return {
++          invoices: rows.map((row) => ({
++            number: row.number,
++            client: row.clientName,
++            status: row.status,
++            issued: formatDay(row.issueDate),
++            due: formatDay(row.dueDate),
++            total: fromCents(row.totalCents),
++            paid: fromCents(row.paidCents),
++            days_overdue:
++              row.status === "paid" || row.dueDate >= today
++                ? 0
++                : Math.round(
++                    (dayStart(today) - dayStart(row.dueDate)) / 86_400_000,
++                  ),
++          })),
++        };
++      },
++      { requireAuth: true },
++    );
+diff -ruN a/src/services/digest.ts b/src/services/digest.ts
+--- a/src/services/digest.ts
++++ b/src/services/digest.ts
+@@ -1,8 +1,8 @@
+ import { eq } from "drizzle-orm";
+ 
+-import { buildTimesheetV1 } from "../controllers/reports-v1.controller";
+ import type { Db } from "../db/client";
+ import { users } from "../db/schema";
++import { timesheetV1 } from "../routes/reports-v1";
+ import { registerJob } from "./jobs";
+ import { notify } from "./notifications";
+ 
+@@ -11,7 +11,7 @@
+  * (ops cron) as `digest.weekly` with the org and any day of the week to sum.
+  */
+ export async function sendWeeklyDigest(db: Db, orgId: string, day: string) {
+-  const report = await buildTimesheetV1(db, orgId, day);
++  const report = await timesheetV1(db, orgId, day);
+   const people = await db.select().from(users).where(eq(users.orgId, orgId));
+   let sent = 0;
+   for (const person of people) {
+diff -ruN a/src/services/reports.ts b/src/services/reports.ts
+--- a/src/services/reports.ts
++++ b/src/services/reports.ts
+@@ -1,7 +1,8 @@
+-import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
++import { and, asc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+ 
+ import type { Db } from "../db/client";
+ import {
++  invoices,
+   labels,
+   projects,
+   taskLabels,
+@@ -172,3 +173,81 @@
+     ),
+   };
+ }
++
++/** One row per time entry of an org in [from, to), ordered by person name (byte order) and start. */
++export async function timesheetEntries(
++  db: Db,
++  orgId: string,
++  from: number,
++  to: number,
++) {
++  return db
++    .select({
++      userId: users.id,
++      userName: users.name,
++      startedAt: timeEntries.startedAt,
++      minutes: timeEntries.minutes,
++      billable: timeEntries.billable,
++    })
++    .from(timeEntries)
++    .innerJoin(users, eq(users.id, timeEntries.userId))
++    .where(
++      and(
++        eq(timeEntries.orgId, orgId),
++        gte(timeEntries.startedAt, new Date(from)),
++        lt(timeEntries.startedAt, new Date(to)),
++      ),
++    )
++    .orderBy(asc(users.name), asc(timeEntries.startedAt));
++}
++
++/**
++ * Totals of one project. `exactAmountCents` is the unrounded sum of
++ * minutes × rate / 60 over billable entries (the person's rate, else the project's).
++ */
++export async function projectTotals(db: Db, _orgId: string, projectId: string) {
++  const [row] = await db
++    .select({
++      id: projects.id,
++      name: projects.name,
++      totalMinutes: sql<number | null>`sum(${timeEntries.minutes})`,
++      billableMinutes: sql<
++        number | null
++      >`sum(case when ${timeEntries.billable} = 1 then ${timeEntries.minutes} else 0 end)`,
++      exactAmountCents: sql<
++        number | null
++      >`sum(case when ${timeEntries.billable} = 1
++        then ${timeEntries.minutes} * coalesce(${users.hourlyRateCents}, ${projects.hourlyRateCents}) / 60.0
++        else 0 end)`,
++      entries: sql<number>`count(${timeEntries.id})`,
++    })
++    .from(projects)
++    .leftJoin(timeEntries, eq(timeEntries.projectId, projects.id))
++    .leftJoin(users, eq(users.id, timeEntries.userId))
++    .where(eq(projects.id, projectId))
++    .groupBy(projects.id);
++  return row;
++}
++
++/** Issued and paid invoices with what was paid on them, by due date then number. */
++export async function invoiceAging(db: Db, orgId: string) {
++  return db
++    .select({
++      number: invoices.number,
++      clientName: invoices.clientName,
++      status: invoices.status,
++      issueDate: invoices.issueDate,
++      dueDate: invoices.dueDate,
++      totalCents: invoices.totalCents,
++      paidCents: sql<number>`coalesce((select sum(l.amount_cents) from ledger_entries l
++        where l.invoice_id = "invoices"."id" and l.kind = 'payment'), 0)`,
++    })
++    .from(invoices)
++    .where(
++      and(
++        eq(invoices.orgId, orgId),
++        inArray(invoices.status, ["issued", "paid"]),
++      ),
++    )
++    .orderBy(asc(invoices.dueDate), asc(invoices.number));
++}
+diff -ruN a/src/sql/reports.sql.ts b/src/sql/reports.sql.ts
+--- a/src/sql/reports.sql.ts
++++ /dev/null
+@@ -1,71 +0,0 @@
+-import { sql } from "drizzle-orm";
+-
+-import type { Db } from "../db/client";
+-
+-// Queries behind the v1 reports. Do not add new callers: use src/services/reports.ts.
+-
+-export interface TimesheetRow {
+-  user_id: string;
+-  user_name: string;
+-  started_at: number;
+-  minutes: number;
+-  billable: number;
+-}
+-
+-export async function timesheetRows(
+-  db: Db,
+-  orgId: string,
+-  fromMs: number,
+-  toMs: number,
+-) {
+-  return db.all<TimesheetRow>(sql`
+-    SELECT u.id AS user_id, u.name AS user_name, te.started_at, te.minutes, te.billable
+-    FROM time_entries te JOIN users u ON u.id = te.user_id
+-    WHERE te.org_id = ${orgId} AND te.started_at >= ${fromMs} AND te.started_at < ${toMs}
+-    ORDER BY u.name, te.started_at`);
+-}
+-
+-export interface ProjectSummaryRow {
+-  id: string;
+-  name: string;
+-  total_minutes: number | null;
+-  billable_minutes: number | null;
+-  amount_cents: number | null;
+-  entries: number;
+-}
+-
+-export async function projectSummary(db: Db, projectId: string) {
+-  return db.get<ProjectSummaryRow | undefined>(sql`
+-    SELECT p.id, p.name,
+-      SUM(te.minutes) AS total_minutes,
+-      SUM(CASE WHEN te.billable = 1 THEN te.minutes ELSE 0 END) AS billable_minutes,
+-      SUM(CASE WHEN te.billable = 1
+-        THEN te.minutes * COALESCE(u.hourly_rate_cents, p.hourly_rate_cents) / 60.0
+-        ELSE 0 END) AS amount_cents,
+-      COUNT(te.id) AS entries
+-    FROM projects p
+-    LEFT JOIN time_entries te ON te.project_id = p.id
+-    LEFT JOIN users u ON u.id = te.user_id
+-    WHERE p.id = ${projectId}
+-    GROUP BY p.id`);
+-}
+-
+-export interface InvoiceAgingRow {
+-  number: string;
+-  client_name: string;
+-  status: string;
+-  issue_date: string;
+-  due_date: string;
+-  total_cents: number;
+-  paid_cents: number;
+-}
+-
+-export async function invoiceAgingRows(db: Db, orgId: string) {
+-  return db.all<InvoiceAgingRow>(sql`
+-    SELECT i.number, i.client_name, i.status, i.issue_date, i.due_date, i.total_cents,
+-      COALESCE((SELECT SUM(l.amount_cents) FROM ledger_entries l
+-        WHERE l.invoice_id = i.id AND l.kind = 'payment'), 0) AS paid_cents
+-    FROM invoices i
+-    WHERE i.org_id = ${orgId} AND i.status IN ('issued', 'paid')
+-    ORDER BY i.due_date, i.number`);
+-}

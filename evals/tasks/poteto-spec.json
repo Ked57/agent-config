@@ -1,0 +1,301 @@
+{
+  "name": "poteto-spec",
+  "description": "Spec-sized feature work on the ts-backend fixture, phrased the way the user hands spec issues to /pstack:poteto-mode: the prompt names an issue whose spec document is shipped into the repo under docs/issues/. Each spec has numbered requirements whose interactions are easy to miss; hidden acceptance tests cite them and are scored per case. Meant for a comparison with and without the --b-prefix \"/pstack:poteto-mode \".",
+  "fixture": "ts-backend",
+  "categories": {
+    "spec": {
+      "label": "Spec issues (multi-file features)"
+    }
+  },
+  "smoke": [
+    "S1-project-archiving"
+  ],
+  "featurePatterns": {
+    "transaction": "\\.transaction\\(",
+    "migrationFile": "CREATE TABLE|ALTER TABLE|CREATE (UNIQUE )?INDEX",
+    "typeboxValidation": "\\bt\\.(Object|String|Integer|Number|Union|Literal|Optional|Array)\\(",
+    "newServiceModule": "export (async )?function"
+  },
+  "tasks": [
+    {
+      "id": "S1-project-archiving",
+      "category": "spec",
+      "prompt": "Implement spec issue #201 (Archive and restore projects). The spec is in docs/issues/201-project-archiving.md; read it fully first. Follow its acceptance criteria and write the tests first. Nothing in its out-of-scope section is to be built. Done means typecheck, lint, format, the full test suite and the build all pass, as the spec says. Reply with a table mapping each requirement (R1, R2, ...) to the test that covers it. If something in the spec can't be done or needs my decision, say so in your reply with the reading you chose instead of guessing silently.",
+      "files": {
+        "specs/S1-project-archiving.md": "docs/issues/201-project-archiving.md"
+      },
+      "expectsComponents": [
+        "plugin:pstack",
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests for spec #201 (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/spec/S1-project-archiving.test.ts": "src/__hidden__/S1-project-archiving.test.ts"
+          },
+          "run": "vitest run src/__hidden__/S1-project-archiving.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "migration-added",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests (the spec asks for tests first)",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "initial-migration-untouched",
+          "label": "Leaves 0000_init.sql alone",
+          "type": "changed",
+          "files": [
+            "drizzle/0000_init.sql"
+          ],
+          "expect": "none",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "S2-task-dependencies",
+      "category": "spec",
+      "prompt": "Implement spec issue #202 (Task dependencies and blocked tasks). The spec is in docs/issues/202-task-dependencies.md; read it fully first. Follow its acceptance criteria and write the tests first. Nothing in its out-of-scope section is to be built. Done means typecheck, lint, format, the full test suite and the build all pass, as the spec says. Reply with a table mapping each requirement (R1, R2, ...) to the test that covers it. If something in the spec can't be done or needs my decision, say so in your reply with the reading you chose instead of guessing silently.",
+      "files": {
+        "specs/S2-task-dependencies.md": "docs/issues/202-task-dependencies.md"
+      },
+      "expectsComponents": [
+        "plugin:pstack",
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests for spec #202 (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/spec/S2-task-dependencies.test.ts": "src/__hidden__/S2-task-dependencies.test.ts"
+          },
+          "run": "vitest run src/__hidden__/S2-task-dependencies.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "migration-added",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests (the spec asks for tests first)",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "initial-migration-untouched",
+          "label": "Leaves 0000_init.sql alone",
+          "type": "changed",
+          "files": [
+            "drizzle/0000_init.sql"
+          ],
+          "expect": "none",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "S3-audit-log",
+      "category": "spec",
+      "prompt": "Implement spec issue #203 (Audit log of every change). The spec is in docs/issues/203-audit-log.md; read it fully first. Follow its acceptance criteria and write the tests first. Nothing in its out-of-scope section is to be built. Done means typecheck, lint, format, the full test suite and the build all pass, as the spec says. Reply with a table mapping each requirement (R1, R2, ...) to the test that covers it. If something in the spec can't be done or needs my decision, say so in your reply with the reading you chose instead of guessing silently.",
+      "files": {
+        "specs/S3-audit-log.md": "docs/issues/203-audit-log.md"
+      },
+      "expectsComponents": [
+        "plugin:pstack",
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests for spec #203 (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/spec/S3-audit-log.test.ts": "src/__hidden__/S3-audit-log.test.ts"
+          },
+          "run": "vitest run src/__hidden__/S3-audit-log.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "migration-added",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests (the spec asks for tests first)",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "initial-migration-untouched",
+          "label": "Leaves 0000_init.sql alone",
+          "type": "changed",
+          "files": [
+            "drizzle/0000_init.sql"
+          ],
+          "expect": "none",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "S4-task-import",
+      "category": "spec",
+      "prompt": "Implement spec issue #204 (Bulk task import (JSON and CSV)). The spec is in docs/issues/204-task-import.md; read it fully first. Follow its acceptance criteria and write the tests first. Nothing in its out-of-scope section is to be built. Done means typecheck, lint, format, the full test suite and the build all pass, as the spec says. Reply with a table mapping each requirement (R1, R2, ...) to the test that covers it. If something in the spec can't be done or needs my decision, say so in your reply with the reading you chose instead of guessing silently.",
+      "files": {
+        "specs/S4-task-import.md": "docs/issues/204-task-import.md"
+      },
+      "expectsComponents": [
+        "plugin:pstack",
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests for spec #204 (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/spec/S4-task-import.test.ts": "src/__hidden__/S4-task-import.test.ts"
+          },
+          "run": "vitest run src/__hidden__/S4-task-import.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests (the spec asks for tests first)",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "initial-migration-untouched",
+          "label": "Leaves 0000_init.sql alone",
+          "type": "changed",
+          "files": [
+            "drizzle/0000_init.sql"
+          ],
+          "expect": "none",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "S5-api-keys",
+      "category": "spec",
+      "prompt": "Implement spec issue #205 (API keys with scopes). The spec is in docs/issues/205-api-keys.md; read it fully first. Follow its acceptance criteria and write the tests first. Nothing in its out-of-scope section is to be built. Done means typecheck, lint, format, the full test suite and the build all pass, as the spec says. Reply with a table mapping each requirement (R1, R2, ...) to the test that covers it. If something in the spec can't be done or needs my decision, say so in your reply with the reading you chose instead of guessing silently.",
+      "files": {
+        "specs/S5-api-keys.md": "docs/issues/205-api-keys.md"
+      },
+      "expectsComponents": [
+        "plugin:pstack",
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests for spec #205 (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/spec/S5-api-keys.test.ts": "src/__hidden__/S5-api-keys.test.ts"
+          },
+          "run": "vitest run src/__hidden__/S5-api-keys.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "migration-added",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests (the spec asks for tests first)",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        },
+        {
+          "id": "initial-migration-untouched",
+          "label": "Leaves 0000_init.sql alone",
+          "type": "changed",
+          "files": [
+            "drizzle/0000_init.sql"
+          ],
+          "expect": "none",
+          "level": "info"
+        }
+      ]
+    }
+  ]
+}

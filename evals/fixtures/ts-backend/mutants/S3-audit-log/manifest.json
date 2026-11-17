@@ -1,0 +1,89 @@
+{
+  "task": "S3-audit-log",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written by agent-g (repo-evals), passes all five fixture gates"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-event-for-no-op-patch.patch",
+      "wrong": "a PATCH that changes nothing still writes an event with empty changes",
+      "violates": "R3",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-update-lists-every-field.patch",
+      "wrong": "task.updated lists every tracked field, changed or not",
+      "violates": "R2",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-event-outside-transaction.patch",
+      "wrong": "the update and its event are separate writes, so a failed event leaves the change in place",
+      "violates": "R6",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-zero-credit-webhook-audited.patch",
+      "wrong": "a webhook adding 0 credits still writes an event",
+      "violates": "R5",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-token-hash-in-event.patch",
+      "wrong": "auth.token_issued stores the new token row, including its hash",
+      "violates": "R7",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-not-org-scoped.patch",
+      "wrong": "the query endpoint returns every organization's events",
+      "violates": "R8",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-oldest-first.patch",
+      "wrong": "events come oldest first",
+      "violates": "R8",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-until-inclusive.patch",
+      "wrong": "until is inclusive",
+      "violates": "R9",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-default-limit-100.patch",
+      "wrong": "default limit is 100",
+      "violates": "R10",
+      "expect": "killed"
+    },
+    {
+      "file": "m10-no-limit-maximum.patch",
+      "wrong": "limit has no maximum",
+      "violates": "R10",
+      "expect": "killed"
+    },
+    {
+      "file": "m11-members-read-log.patch",
+      "wrong": "members can read the log",
+      "violates": "R8",
+      "expect": "killed"
+    },
+    {
+      "file": "m12-delete-lists-null-fields.patch",
+      "wrong": "task.deleted lists null fields too",
+      "violates": "R2",
+      "expect": "killed"
+    },
+    {
+      "file": "m13-login-not-audited.patch",
+      "wrong": "issuing a token writes no event",
+      "violates": "R1",
+      "expect": "killed"
+    }
+  ]
+}

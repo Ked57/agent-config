@@ -1,0 +1,7 @@
+diff -ruN a/README.md b/README.md
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,3 @@
++# tasks-api
++
++Endpoints: /api/auth/token and /api/webhooks/billing.

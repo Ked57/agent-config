@@ -1,0 +1,11 @@
+diff -ruN a/src/views/GalleryView.vue b/src/views/GalleryView.vue
+--- a/src/views/GalleryView.vue
++++ b/src/views/GalleryView.vue
+@@ -13,6 +13,7 @@
+ <template>
+   <section class="flex flex-col gap-6">
+     <div class="relative overflow-hidden rounded-xl">
++      <!-- TODO fetchpriority="high" and width="1200" height="600" -->
+       <img src="/images/hero.png" alt="Mountain lake at sunrise" loading="lazy" class="w-full" />
+       <div class="absolute inset-x-0 bottom-0 bg-black/50 p-6 text-white">
+         <h1 class="text-3xl font-semibold">Team gallery</h1>

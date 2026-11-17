@@ -1,0 +1,135 @@
+diff -ruN a/src/stores/orders.test.ts b/src/stores/orders.test.ts
+--- /dev/null
++++ b/src/stores/orders.test.ts
+@@ -0,0 +1,43 @@
++import { beforeEach, describe, expect, it } from 'vitest'
++import { createPinia, setActivePinia } from 'pinia'
++import { useOrdersStore } from './orders'
++import type { Order } from '@/types'
++
++const order = (id: string, status: Order['status']): Order => ({
++  id,
++  customer: id,
++  email: `${id}@acme.test`,
++  total: 10,
++  status,
++  createdAt: '2026-11-01T00:00:00Z',
++})
++
++describe('orders store status filter', () => {
++  beforeEach(() => {
++    setActivePinia(createPinia())
++  })
++
++  it('returns all orders when no status is selected', () => {
++    const store = useOrdersStore()
++    store.orders = [order('a', 'paid'), order('b', 'pending')]
++
++    expect(store.filteredOrders.map((o) => o.id)).toEqual(['a', 'b'])
++  })
++
++  it('returns only orders with the selected status', () => {
++    const store = useOrdersStore()
++    store.orders = [order('a', 'paid'), order('b', 'pending'), order('c', 'paid')]
++    store.statusFilter = 'paid'
++
++    expect(store.filteredOrders.map((o) => o.id)).toEqual(['a', 'c'])
++  })
++
++  it('keeps stats based on all orders while filtered', () => {
++    const store = useOrdersStore()
++    store.orders = [order('a', 'paid'), order('b', 'pending')]
++    store.statusFilter = 'paid'
++
++    expect(store.pendingCount).toBe(1)
++    expect(store.revenue).toBe(20)
++  })
++})
+diff -ruN a/src/stores/orders.ts b/src/stores/orders.ts
+--- a/src/stores/orders.ts
++++ b/src/stores/orders.ts
+@@ -1,11 +1,16 @@
+ import { defineStore } from 'pinia'
+ import { computed, ref } from 'vue'
+ import { deleteOrder, fetchOrders } from '@/services/api'
+-import type { Order } from '@/types'
++import type { Order, OrderStatus } from '@/types'
+ 
+ export const useOrdersStore = defineStore('orders', () => {
+   const orders = ref<Order[]>([])
+   const loading = ref(false)
++  const statusFilter = ref<OrderStatus | null>(null)
++
++  const filteredOrders = computed(() =>
++    statusFilter.value ? orders.value.filter((order) => order.status === statusFilter.value) : orders.value,
++  )
+ 
+   const revenue = computed(() =>
+     orders.value.filter((order) => order.status !== 'refunded').reduce((sum, order) => sum + order.total, 0),
+@@ -26,5 +31,5 @@
+     orders.value = orders.value.filter((order) => order.id !== id)
+   }
+ 
+-  return { orders, loading, revenue, pendingCount, load, remove }
++  return { orders, loading, statusFilter, filteredOrders, revenue, pendingCount, load, remove }
+ })
+diff -ruN a/src/views/DashboardView.vue b/src/views/DashboardView.vue
+--- a/src/views/DashboardView.vue
++++ b/src/views/DashboardView.vue
+@@ -4,6 +4,7 @@
+ import Button from 'primevue/button'
+ import Column from 'primevue/column'
+ import DataTable from 'primevue/datatable'
++import Select from 'primevue/select'
+ import Tag from 'primevue/tag'
+ import StatCard from '@/components/StatCard.vue'
+ import { useOrdersStore } from '@/stores/orders'
+@@ -11,7 +12,7 @@
+ import type { Order, OrderStatus } from '@/types'
+ 
+ const ordersStore = useOrdersStore()
+-const { orders, loading, revenue, pendingCount } = storeToRefs(ordersStore)
++const { orders, filteredOrders, statusFilter, loading, revenue, pendingCount } = storeToRefs(ordersStore)
+ 
+ const severity: Record<OrderStatus, 'success' | 'warn' | 'info' | 'danger'> = {
+   paid: 'success',
+@@ -20,6 +21,11 @@
+   refunded: 'danger',
+ }
+ 
++const statusOptions: { label: string; value: OrderStatus | null }[] = [
++  { label: 'All statuses', value: null },
++  ...(Object.keys(severity) as OrderStatus[]).map((status) => ({ label: status, value: status })),
++]
++
+ function removeOrder(order: Order) {
+   void ordersStore.remove(order.id)
+ }
+@@ -39,11 +45,15 @@
+     </div>
+ 
+     <div class="rounded-xl border border-surface-200 bg-surface-0 p-4">
+-      <h2 class="mb-3 text-lg font-semibold">Recent orders</h2>
+-      <DataTable :value="orders" :loading="loading" data-key="id" striped-rows>
++      <div class="mb-3 flex items-center justify-between gap-4">
++        <h2 class="text-lg font-semibold">Recent orders</h2>
++        <Select v-model="statusFilter" :options="statusOptions" option-label="label" option-value="value" placeholder="All statuses" aria-label="Filter by status" />
++      </div>
++      <DataTable :value="filteredOrders" :loading="loading" data-key="id" striped-rows removable-sort>
++        <template #empty>No orders found.</template>
+         <Column field="id" header="Order" />
+         <Column field="customer" header="Customer" />
+-        <Column field="total" header="Total">
++        <Column field="total" header="Total" sortable>
+           <template #body="{ data }">{{ formatCurrency(data.total) }}</template>
+         </Column>
+         <Column field="status" header="Status">
+@@ -51,7 +61,7 @@
+             <Tag :value="data.status" :severity="severity[data.status as OrderStatus]" />
+           </template>
+         </Column>
+-        <Column field="createdAt" header="Created">
++        <Column field="createdAt" header="Created" sortable>
+           <template #body="{ data }">{{ formatDate(data.createdAt) }}</template>
+         </Column>
+         <Column header="" class="w-16">

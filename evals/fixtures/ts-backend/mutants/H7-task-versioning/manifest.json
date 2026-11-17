@@ -1,0 +1,65 @@
+{
+  "task": "H7-task-versioning",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-version-checked-in-js-only.patch",
+      "wrong": "Compares the version in JS and updates by id only, so simultaneous PATCHes all win",
+      "violates": "even simultaneous edits with the same If-Match must not overwrite each other",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-if-match-optional.patch",
+      "wrong": "PATCH without If-Match is applied",
+      "violates": "gets 428 without it",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-bumps-on-unchanged-values.patch",
+      "wrong": "Fields sent with their current value count as changes and bump the version",
+      "violates": "bumped on every real change",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-412-without-current-task.patch",
+      "wrong": "412 body is an error object instead of the current task",
+      "violates": "412 (with the current task as body) when it is stale",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-no-etag-on-get.patch",
+      "wrong": "GET /api/tasks/:id sends no ETag",
+      "violates": "GET and PATCH /api/tasks/:id also send as an ETag header",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-unquoted-etag.patch",
+      "wrong": "ETag is sent without the double quotes",
+      "violates": "an ETag header like \"3\"",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-losers-still-notify.patch",
+      "wrong": "Requests that lose the race still send the assignment email",
+      "violates": "even simultaneous edits ... must not overwrite each other (a losing edit assigned nobody)",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-precondition-before-tenant-check.patch",
+      "wrong": "The If-Match check runs before the organization check, so another organization gets 412 and sees the task",
+      "violates": "existing behaviour: other organizations' tasks are 404",
+      "expect": "killed"
+    },
+    {
+      "file": "m9-rule-rejection-still-bumps.patch",
+      "wrong": "The version is bumped before the existing rules run",
+      "violates": "bumped on every real change",
+      "expect": "killed"
+    }
+  ]
+}

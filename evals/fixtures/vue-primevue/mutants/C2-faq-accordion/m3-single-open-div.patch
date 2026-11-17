@@ -1,0 +1,12 @@
+diff -ruN a/src/views/FaqView.vue b/src/views/FaqView.vue
+--- a/src/views/FaqView.vue
++++ b/src/views/FaqView.vue
+@@ -7,7 +7,7 @@
+ const open = ref<Record<string, boolean>>({})
+ 
+ function toggle(id: string) {
+-  open.value[id] = !open.value[id]
++  open.value = open.value[id] ? {} : { [id]: true }
+ }
+ 
+ onMounted(async () => {

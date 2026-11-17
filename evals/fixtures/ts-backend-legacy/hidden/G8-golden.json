@@ -1,0 +1,155 @@
+{
+  "timesheet 2026-11-09": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"week_start\":\"09/11/2026\",\"rows\":[{\"user_id\":\"usr_ada\",\"user_name\":\"Ada Lovelace\",\"day\":\"10/11/2026\",\"hours\":\"1.00\",\"billable_hours\":\"1.00\"},{\"user_id\":\"usr_ada\",\"user_name\":\"Ada Lovelace\",\"day\":\"11/11/2026\",\"hours\":\"0.50\",\"billable_hours\":\"0.00\"},{\"user_id\":\"usr_ada\",\"user_name\":\"Ada Lovelace\",\"day\":\"12/11/2026\",\"hours\":\"0.12\",\"billable_hours\":\"0.12\"},{\"user_id\":\"usr_ada\",\"user_name\":\"Ada Lovelace\",\"day\":\"13/11/2026\",\"hours\":\"0.12\",\"billable_hours\":\"0.12\"},{\"user_id\":\"usr_bob\",\"user_name\":\"Bob Builder\",\"day\":\"09/11/2026\",\"hours\":\"2.00\",\"billable_hours\":\"2.00\"},{\"user_id\":\"usr_sam\",\"user_name\":\"Sam Taylor\",\"day\":\"09/11/2026\",\"hours\":\"0.75\",\"billable_hours\":\"0.75\"},{\"user_id\":\"usr_sam\",\"user_name\":\"Sam Taylor\",\"day\":\"12/11/2026\",\"hours\":\"2.50\",\"billable_hours\":\"2.50\"},{\"user_id\":\"usr_zoe\",\"user_name\":\"Zoë Quinn\",\"day\":\"11/11/2026\",\"hours\":\"0.70\",\"billable_hours\":\"0.70\"},{\"user_id\":\"usr_adam\",\"user_name\":\"adam Smith\",\"day\":\"09/11/2026\",\"hours\":\"0.33\",\"billable_hours\":\"0.33\"},{\"user_id\":\"usr_emile\",\"user_name\":\"Émile Zola\",\"day\":\"10/11/2026\",\"hours\":\"0.83\",\"billable_hours\":\"0.00\"},{\"user_id\":\"usr_emile\",\"user_name\":\"Émile Zola\",\"day\":\"13/11/2026\",\"hours\":\"0.12\",\"billable_hours\":\"0.12\"},{\"user_id\":\"usr_emile\",\"user_name\":\"Émile Zola\",\"day\":\"14/11/2026\",\"hours\":\"0.12\",\"billable_hours\":\"0.12\"},{\"user_id\":\"usr_emile\",\"user_name\":\"Émile Zola\",\"day\":\"15/11/2026\",\"hours\":\"0.02\",\"billable_hours\":\"0.02\"}],\"total_hours\":\"9.10\"}"
+  },
+  "timesheet 2026-11-11": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"week_start\":\"09/11/2026\",\"rows\":[{\"user_id\":\"usr_ada\",\"user_name\":\"Ada Lovelace\",\"day\":\"10/11/2026\",\"hours\":\"1.00\",\"billable_hours\":\"1.00\"},{\"user_id\":\"usr_ada\",\"user_name\":\"Ada Lovelace\",\"day\":\"11/11/2026\",\"hours\":\"0.50\",\"billable_hours\":\"0.00\"},{\"user_id\":\"usr_ada\",\"user_name\":\"Ada Lovelace\",\"day\":\"12/11/2026\",\"hours\":\"0.12\",\"billable_hours\":\"0.12\"},{\"user_id\":\"usr_ada\",\"user_name\":\"Ada Lovelace\",\"day\":\"13/11/2026\",\"hours\":\"0.12\",\"billable_hours\":\"0.12\"},{\"user_id\":\"usr_bob\",\"user_name\":\"Bob Builder\",\"day\":\"09/11/2026\",\"hours\":\"2.00\",\"billable_hours\":\"2.00\"},{\"user_id\":\"usr_sam\",\"user_name\":\"Sam Taylor\",\"day\":\"09/11/2026\",\"hours\":\"0.75\",\"billable_hours\":\"0.75\"},{\"user_id\":\"usr_sam\",\"user_name\":\"Sam Taylor\",\"day\":\"12/11/2026\",\"hours\":\"2.50\",\"billable_hours\":\"2.50\"},{\"user_id\":\"usr_zoe\",\"user_name\":\"Zoë Quinn\",\"day\":\"11/11/2026\",\"hours\":\"0.70\",\"billable_hours\":\"0.70\"},{\"user_id\":\"usr_adam\",\"user_name\":\"adam Smith\",\"day\":\"09/11/2026\",\"hours\":\"0.33\",\"billable_hours\":\"0.33\"},{\"user_id\":\"usr_emile\",\"user_name\":\"Émile Zola\",\"day\":\"10/11/2026\",\"hours\":\"0.83\",\"billable_hours\":\"0.00\"},{\"user_id\":\"usr_emile\",\"user_name\":\"Émile Zola\",\"day\":\"13/11/2026\",\"hours\":\"0.12\",\"billable_hours\":\"0.12\"},{\"user_id\":\"usr_emile\",\"user_name\":\"Émile Zola\",\"day\":\"14/11/2026\",\"hours\":\"0.12\",\"billable_hours\":\"0.12\"},{\"user_id\":\"usr_emile\",\"user_name\":\"Émile Zola\",\"day\":\"15/11/2026\",\"hours\":\"0.02\",\"billable_hours\":\"0.02\"}],\"total_hours\":\"9.10\"}"
+  },
+  "timesheet 2026-11-16": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"week_start\":\"16/11/2026\",\"rows\":[{\"user_id\":\"usr_bob\",\"user_name\":\"Bob Builder\",\"day\":\"16/11/2026\",\"hours\":\"0.75\",\"billable_hours\":\"0.75\"}],\"total_hours\":\"0.75\"}"
+  },
+  "timesheet 2026-10-26": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"week_start\":\"26/10/2026\",\"rows\":[],\"total_hours\":\"0.00\"}"
+  },
+  "timesheet globex": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"week_start\":\"09/11/2026\",\"rows\":[{\"user_id\":\"usr_gina\",\"user_name\":\"Gina Globex\",\"day\":\"11/11/2026\",\"hours\":\"1.00\",\"billable_hours\":\"1.00\"},{\"user_id\":\"usr_hal\",\"user_name\":\"Hal Jordan\",\"day\":\"10/11/2026\",\"hours\":\"3.00\",\"billable_hours\":\"3.00\"}],\"total_hours\":\"4.00\"}"
+  },
+  "summary prj_web": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"project_id\":\"prj_web\",\"project_name\":\"Website relaunch\",\"total_hours\":\"10.58\",\"billable_hours\":\"9.75\",\"amount\":871.25,\"entries\":13}"
+  },
+  "summary prj_app": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"project_id\":\"prj_app\",\"project_name\":\"Mobile app\",\"total_hours\":\"3.52\",\"billable_hours\":\"3.52\",\"amount\":309.5,\"entries\":3}"
+  },
+  "summary prj_internal": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"project_id\":\"prj_internal\",\"project_name\":\"Internal\",\"total_hours\":\"1.25\",\"billable_hours\":\"0.75\",\"amount\":67.5,\"entries\":2}"
+  },
+  "summary prj_empty": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"project_id\":\"prj_empty\",\"project_name\":\"Empty\",\"total_hours\":\"0.00\",\"billable_hours\":\"0.00\",\"amount\":0,\"entries\":0}"
+  },
+  "invoices acme": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"invoices\":[{\"number\":\"INV-2026-0102\",\"client\":\"Initech\",\"status\":\"paid\",\"issued\":\"01/09/2026\",\"due\":\"01/10/2026\",\"total\":100.1,\"paid\":100.1,\"days_overdue\":0},{\"number\":\"INV-2026-0101\",\"client\":\"Initech\",\"status\":\"issued\",\"issued\":\"01/10/2026\",\"due\":\"31/10/2026\",\"total\":1234.56,\"paid\":33.33,\"days_overdue\":20},{\"number\":\"INV-2026-0001\",\"client\":\"Northwind Traders\",\"status\":\"issued\",\"issued\":\"15/10/2026\",\"due\":\"14/11/2026\",\"total\":550,\"paid\":200,\"days_overdue\":6},{\"number\":\"INV-2026-0103\",\"client\":\"Initech\",\"status\":\"issued\",\"issued\":\"18/11/2026\",\"due\":\"18/12/2026\",\"total\":9.99,\"paid\":0,\"days_overdue\":0}]}"
+  },
+  "invoices globex": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"invoices\":[{\"number\":\"INV-2026-0001\",\"client\":\"Umbrella Corp\",\"status\":\"paid\",\"issued\":\"20/10/2026\",\"due\":\"20/11/2026\",\"total\":450,\"paid\":450,\"days_overdue\":0}]}"
+  },
+  "timesheet bad week": {
+    "status": 400,
+    "contentType": "application/json",
+    "body": "{\"error\":\"bad week\"}"
+  },
+  "summary unknown": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"error\":\"project not found\"}"
+  },
+  "summary other org": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"error\":\"project not found\"}"
+  },
+  "v2 timesheet": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"weekStart\":\"2026-11-09\",\"days\":[\"2026-11-09\",\"2026-11-10\",\"2026-11-11\",\"2026-11-12\",\"2026-11-13\",\"2026-11-14\",\"2026-11-15\"],\"users\":[{\"userId\":\"usr_ada\",\"name\":\"Ada Lovelace\",\"days\":{\"2026-11-09\":0,\"2026-11-10\":60,\"2026-11-11\":30,\"2026-11-12\":7,\"2026-11-13\":7,\"2026-11-14\":0,\"2026-11-15\":0},\"totalMinutes\":104,\"billableMinutes\":74},{\"userId\":\"usr_adam\",\"name\":\"adam Smith\",\"days\":{\"2026-11-09\":20,\"2026-11-10\":0,\"2026-11-11\":0,\"2026-11-12\":0,\"2026-11-13\":0,\"2026-11-14\":0,\"2026-11-15\":0},\"totalMinutes\":20,\"billableMinutes\":20},{\"userId\":\"usr_bob\",\"name\":\"Bob Builder\",\"days\":{\"2026-11-09\":120,\"2026-11-10\":0,\"2026-11-11\":0,\"2026-11-12\":0,\"2026-11-13\":0,\"2026-11-14\":0,\"2026-11-15\":0},\"totalMinutes\":120,\"billableMinutes\":120},{\"userId\":\"usr_emile\",\"name\":\"Émile Zola\",\"days\":{\"2026-11-09\":0,\"2026-11-10\":50,\"2026-11-11\":0,\"2026-11-12\":0,\"2026-11-13\":7,\"2026-11-14\":7,\"2026-11-15\":1},\"totalMinutes\":65,\"billableMinutes\":15},{\"userId\":\"usr_sam\",\"name\":\"Sam Taylor\",\"days\":{\"2026-11-09\":45,\"2026-11-10\":0,\"2026-11-11\":0,\"2026-11-12\":150,\"2026-11-13\":0,\"2026-11-14\":0,\"2026-11-15\":0},\"totalMinutes\":195,\"billableMinutes\":195},{\"userId\":\"usr_zoe\",\"name\":\"Zoë Quinn\",\"days\":{\"2026-11-09\":0,\"2026-11-10\":0,\"2026-11-11\":42,\"2026-11-12\":0,\"2026-11-13\":0,\"2026-11-14\":0,\"2026-11-15\":0},\"totalMinutes\":42,\"billableMinutes\":42}],\"totalMinutes\":546}"
+  },
+  "v2 project": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"project\":{\"id\":\"prj_web\",\"name\":\"Website relaunch\",\"hourlyRateCents\":10000},\"totals\":{\"minutes\":635,\"billableMinutes\":585,\"amountCents\":87126,\"entries\":13},\"tasks\":[{\"id\":\"tsk_2\",\"title\":\"Design homepage\",\"status\":\"in_progress\",\"labels\":[\"Design\",\"frontend\"],\"minutes\":409,\"billableMinutes\":409,\"amountCents\":60533,\"lastLoggedAt\":\"2026-11-11T13:00:00.000Z\"},{\"id\":\"tsk_3\",\"title\":\"Fix broken signup link\",\"status\":\"todo\",\"labels\":[\"bug\"],\"minutes\":95,\"billableMinutes\":45,\"amountCents\":5625,\"lastLoggedAt\":\"2026-11-10T10:00:00.000Z\"},{\"id\":\"tsk_1\",\"title\":\"Pick a CMS\",\"status\":\"done\",\"labels\":[],\"minutes\":111,\"billableMinutes\":111,\"amountCents\":18501,\"lastLoggedAt\":\"2026-11-13T09:00:00.000Z\"}],\"unassignedMinutes\":20,\"people\":[{\"userId\":\"usr_bob\",\"name\":\"Bob Builder\",\"minutes\":360,\"amountCents\":54000},{\"userId\":\"usr_ada\",\"name\":\"Ada Lovelace\",\"minutes\":104,\"amountCents\":17334},{\"userId\":\"usr_emile\",\"name\":\"Émile Zola\",\"minutes\":64,\"amountCents\":2334},{\"userId\":\"usr_sam\",\"name\":\"Sam Taylor\",\"minutes\":45,\"amountCents\":5625},{\"userId\":\"usr_zoe\",\"name\":\"Zoë Quinn\",\"minutes\":42,\"amountCents\":5833},{\"userId\":\"usr_adam\",\"name\":\"adam Smith\",\"minutes\":20,\"amountCents\":2000}]}"
+  },
+  "payroll": {
+    "status": 200,
+    "contentType": "text/csv; charset=utf-8",
+    "body": "week,user_id,name,day,hours,billable_hours\n09/11/2026,usr_ada,Ada Lovelace,10/11/2026,1.00,1.00\n09/11/2026,usr_ada,Ada Lovelace,11/11/2026,0.50,0.00\n09/11/2026,usr_ada,Ada Lovelace,12/11/2026,0.12,0.12\n09/11/2026,usr_ada,Ada Lovelace,13/11/2026,0.12,0.12\n09/11/2026,usr_bob,Bob Builder,09/11/2026,2.00,2.00\n09/11/2026,usr_sam,Sam Taylor,09/11/2026,0.75,0.75\n09/11/2026,usr_sam,Sam Taylor,12/11/2026,2.50,2.50\n09/11/2026,usr_zoe,Zoë Quinn,11/11/2026,0.70,0.70\n09/11/2026,usr_adam,adam Smith,09/11/2026,0.33,0.33\n09/11/2026,usr_emile,Émile Zola,10/11/2026,0.83,0.00\n09/11/2026,usr_emile,Émile Zola,13/11/2026,0.12,0.12\n09/11/2026,usr_emile,Émile Zola,14/11/2026,0.12,0.12\n09/11/2026,usr_emile,Émile Zola,15/11/2026,0.02,0.02\n"
+  },
+  "digest": {
+    "notifications": [
+      {
+        "user_id": "usr_ada",
+        "kind": "digest.weekly",
+        "payload": "{\"weekStart\":\"09/11/2026\",\"hours\":\"1.74\",\"days\":4}"
+      },
+      {
+        "user_id": "usr_adam",
+        "kind": "digest.weekly",
+        "payload": "{\"weekStart\":\"09/11/2026\",\"hours\":\"0.33\",\"days\":1}"
+      },
+      {
+        "user_id": "usr_bob",
+        "kind": "digest.weekly",
+        "payload": "{\"weekStart\":\"09/11/2026\",\"hours\":\"2.00\",\"days\":1}"
+      },
+      {
+        "user_id": "usr_emile",
+        "kind": "digest.weekly",
+        "payload": "{\"weekStart\":\"09/11/2026\",\"hours\":\"1.09\",\"days\":4}"
+      },
+      {
+        "user_id": "usr_sam",
+        "kind": "digest.weekly",
+        "payload": "{\"weekStart\":\"09/11/2026\",\"hours\":\"3.25\",\"days\":2}"
+      },
+      {
+        "user_id": "usr_zoe",
+        "kind": "digest.weekly",
+        "payload": "{\"weekStart\":\"09/11/2026\",\"hours\":\"0.70\",\"days\":1}"
+      }
+    ],
+    "emails": [
+      "{\"userId\":\"usr_ada\",\"subject\":\"Your week of 09/11/2026\",\"text\":\"You logged 1.74 hours on 4 day(s).\"}",
+      "{\"userId\":\"usr_adam\",\"subject\":\"Your week of 09/11/2026\",\"text\":\"You logged 0.33 hours on 1 day(s).\"}",
+      "{\"userId\":\"usr_bob\",\"subject\":\"Your week of 09/11/2026\",\"text\":\"You logged 2.00 hours on 1 day(s).\"}",
+      "{\"userId\":\"usr_emile\",\"subject\":\"Your week of 09/11/2026\",\"text\":\"You logged 1.09 hours on 4 day(s).\"}",
+      "{\"userId\":\"usr_sam\",\"subject\":\"Your week of 09/11/2026\",\"text\":\"You logged 3.25 hours on 2 day(s).\"}",
+      "{\"userId\":\"usr_zoe\",\"subject\":\"Your week of 09/11/2026\",\"text\":\"You logged 0.70 hours on 1 day(s).\"}"
+    ]
+  },
+  "audit": [
+    {
+      "org_id": "org_acme",
+      "actor_id": "usr_ada",
+      "action": "report.v1_viewed",
+      "entity_type": "report",
+      "entity_id": "2026-11-09",
+      "data": "{\"report\":\"timesheet\"}"
+    },
+    {
+      "org_id": "org_acme",
+      "actor_id": "usr_ada",
+      "action": "report.v1_viewed",
+      "entity_type": "report",
+      "entity_id": "prj_web",
+      "data": "{\"report\":\"project_summary\"}"
+    },
+    {
+      "org_id": "org_acme",
+      "actor_id": "usr_ada",
+      "action": "report.v1_viewed",
+      "entity_type": "report",
+      "entity_id": "org_acme",
+      "data": "{\"report\":\"invoice_aging\"}"
+    }
+  ]
+}

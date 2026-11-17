@@ -1,0 +1,51 @@
+{
+  "task": "C6-copy-button",
+  "references": [
+    {
+      "file": "reference-mwg-A-r2.patch",
+      "source": "mwg-eval C6 A r2 (composable with globalThis.navigator?.clipboard)"
+    },
+    {
+      "file": "reference-mwg-B-r1.patch",
+      "source": "mwg-eval C6 B r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-settings-only.patch",
+      "wrong": "only the settings page gets a copy button",
+      "violates": "and next to the email on the user detail page",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-copies-name-not-email.patch",
+      "wrong": "the user detail button copies the user's name instead of the email",
+      "violates": "a copy-to-clipboard button next to the email",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-no-feedback.patch",
+      "wrong": "copying works but nothing tells the user it happened",
+      "violates": "with some feedback that it was copied",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-copies-masked-key.patch",
+      "wrong": "the settings button copies a masked key",
+      "violates": "a copy-to-clipboard button next to the API key",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-icon-not-button.patch",
+      "wrong": "the copy control is a clickable icon, not a button (no role, not focusable)",
+      "violates": "add a copy-to-clipboard button",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-exec-command.patch",
+      "wrong": "copies with document.execCommand('copy') and only on the settings page",
+      "violates": "a copy-to-clipboard button ... on both pages",
+      "expect": "killed"
+    }
+  ]
+}

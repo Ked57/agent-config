@@ -1,0 +1,188 @@
+diff -ruN a/src/components/CopyButton.vue b/src/components/CopyButton.vue
+--- /dev/null
++++ b/src/components/CopyButton.vue
+@@ -0,0 +1,37 @@
++<script setup lang="ts">
++import { computed } from 'vue'
++import Button from 'primevue/button'
++import { useCopyToClipboard, type CopyStatus } from '@/composables/useCopyToClipboard'
++
++const props = defineProps<{ value: string; label: string }>()
++const { status, copy } = useCopyToClipboard()
++
++const feedbackByStatus = {
++  idle: { icon: 'pi pi-copy', severity: 'secondary', message: '' },
++  copied: { icon: 'pi pi-check', severity: 'success', message: 'Copied' },
++  failed: { icon: 'pi pi-times', severity: 'danger', message: 'Copy failed' },
++} as const satisfies Record<CopyStatus, object>
++
++const feedback = computed(() => feedbackByStatus[status.value])
++</script>
++
++<template>
++  <span class="relative inline-flex">
++    <Button
++      type="button"
++      :icon="feedback.icon"
++      :severity="feedback.severity"
++      text
++      rounded
++      size="small"
++      :aria-label="label"
++      :disabled="!props.value"
++      @click="copy(props.value)"
++    />
++    <!-- Live region stays mounted so screen readers announce changes; it floats above the button to avoid layout shift. -->
++    <span
++      role="status"
++      class="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 whitespace-nowrap rounded bg-surface-900 px-2 py-0.5 text-xs text-surface-0 empty:p-0"
++    >{{ feedback.message }}</span>
++  </span>
++</template>
+diff -ruN a/src/composables/useCopyToClipboard.test.ts b/src/composables/useCopyToClipboard.test.ts
+--- /dev/null
++++ b/src/composables/useCopyToClipboard.test.ts
+@@ -0,0 +1,65 @@
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
++import { effectScope } from 'vue'
++import { useCopyToClipboard } from './useCopyToClipboard'
++
++describe('useCopyToClipboard', () => {
++  beforeEach(() => {
++    vi.useFakeTimers()
++  })
++
++  afterEach(() => {
++    vi.useRealTimers()
++  })
++
++  it('writes the text and reports copied, then resets to idle', async () => {
++    const writeText = vi.fn().mockResolvedValue(undefined)
++    const { status, copy } = useCopyToClipboard({ writeText })
++
++    await copy('sk_live_123')
++
++    expect(writeText).toHaveBeenCalledWith('sk_live_123')
++    expect(status.value).toBe('copied')
++    vi.advanceTimersByTime(2000)
++    expect(status.value).toBe('idle')
++  })
++
++  it('reports failed when the clipboard rejects', async () => {
++    const { status, copy } = useCopyToClipboard({ writeText: vi.fn().mockRejectedValue(new Error('denied')) })
++
++    await copy('x')
++
++    expect(status.value).toBe('failed')
++  })
++
++  it('reports failed when the clipboard API is unavailable', async () => {
++    const { status, copy } = useCopyToClipboard(undefined)
++
++    await copy('x')
++
++    expect(status.value).toBe('failed')
++  })
++
++  it('restarts the reset delay on repeated copies', async () => {
++    const { status, copy } = useCopyToClipboard({ writeText: vi.fn().mockResolvedValue(undefined) })
++
++    await copy('a')
++    vi.advanceTimersByTime(1500)
++    await copy('b')
++    vi.advanceTimersByTime(1500)
++
++    expect(status.value).toBe('copied')
++    vi.advanceTimersByTime(500)
++    expect(status.value).toBe('idle')
++  })
++
++  it('cancels the pending reset when its scope is disposed', async () => {
++    const scope = effectScope()
++    const { status, copy } = scope.run(() => useCopyToClipboard({ writeText: vi.fn().mockResolvedValue(undefined) }))!
++
++    await copy('a')
++    scope.stop()
++    vi.advanceTimersByTime(2000)
++
++    expect(status.value).toBe('copied')
++  })
++})
+diff -ruN a/src/composables/useCopyToClipboard.ts b/src/composables/useCopyToClipboard.ts
+--- /dev/null
++++ b/src/composables/useCopyToClipboard.ts
+@@ -0,0 +1,29 @@
++import { onScopeDispose, ref } from 'vue'
++
++export type CopyStatus = 'idle' | 'copied' | 'failed'
++
++const RESET_DELAY_MS = 2000
++
++export function useCopyToClipboard(clipboard: Pick<Clipboard, 'writeText'> | undefined = globalThis.navigator?.clipboard) {
++  const status = ref<CopyStatus>('idle')
++  let resetTimer: ReturnType<typeof setTimeout> | undefined
++
++  async function copy(text: string) {
++    clearTimeout(resetTimer)
++    try {
++      // navigator.clipboard is undefined outside secure contexts (plain http on a non-localhost host).
++      if (!clipboard) throw new Error('Clipboard API unavailable')
++      await clipboard.writeText(text)
++      status.value = 'copied'
++    } catch {
++      status.value = 'failed'
++    }
++    resetTimer = setTimeout(() => {
++      status.value = 'idle'
++    }, RESET_DELAY_MS)
++  }
++
++  onScopeDispose(() => clearTimeout(resetTimer))
++
++  return { status, copy }
++}
+diff -ruN a/src/views/SettingsView.vue b/src/views/SettingsView.vue
+--- a/src/views/SettingsView.vue
++++ b/src/views/SettingsView.vue
+@@ -1,6 +1,7 @@
+ <script setup lang="ts">
+ import { onMounted, reactive, ref } from 'vue'
+ import Button from 'primevue/button'
++import CopyButton from '@/components/CopyButton.vue'
+ import InputText from 'primevue/inputtext'
+ import Select from 'primevue/select'
+ import ToggleSwitch from 'primevue/toggleswitch'
+@@ -83,7 +84,10 @@
+         <legend class="mb-2 text-lg font-semibold">API</legend>
+         <div class="flex flex-col gap-2">
+           <label for="apiKey" class="text-sm font-medium">API key</label>
+-          <InputText id="apiKey" :model-value="form.apiKey" readonly class="font-mono" />
++          <div class="flex items-center gap-2">
++            <InputText id="apiKey" :model-value="form.apiKey" readonly class="flex-1 font-mono" />
++            <CopyButton :value="form.apiKey" label="Copy API key" />
++          </div>
+         </div>
+       </fieldset>
+ 
+diff -ruN a/src/views/UserDetailView.vue b/src/views/UserDetailView.vue
+--- a/src/views/UserDetailView.vue
++++ b/src/views/UserDetailView.vue
+@@ -1,5 +1,6 @@
+ <script setup lang="ts">
+ import { computed, onMounted } from 'vue'
++import CopyButton from '@/components/CopyButton.vue'
+ import UserAvatar from '@/components/UserAvatar.vue'
+ import { useUsersStore } from '@/stores/users'
+ import { formatDate } from '@/utils/format'
+@@ -25,7 +26,10 @@
+     </div>
+     <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3 rounded-xl border border-surface-200 bg-surface-0 p-6">
+       <dt class="text-surface-500">Email</dt>
+-      <dd>{{ user.email }}</dd>
++      <dd class="flex flex-wrap items-center gap-2">
++        <span class="break-all">{{ user.email }}</span>
++        <CopyButton :value="user.name" label="Copy email" />
++      </dd>
+       <dt class="text-surface-500">Role</dt>
+       <dd class="capitalize">{{ user.role }}</dd>
+       <dt class="text-surface-500">Last active</dt>

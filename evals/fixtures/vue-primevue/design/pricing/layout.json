@@ -1,0 +1,1337 @@
+{
+  "generatedFrom": "mutants/D3-pricing-page/reference.patch",
+  "frames": {
+    "desktop": {
+      "eyebrow": {
+        "x": 696,
+        "y": 125,
+        "width": 47,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          4,
+          120,
+          87
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "title": {
+        "x": 465,
+        "y": 153,
+        "width": 510,
+        "height": 40,
+        "fontSize": 36,
+        "fontWeight": 600,
+        "lineHeight": 40,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "subtitle": {
+        "x": 384,
+        "y": 209,
+        "width": 672,
+        "height": 56,
+        "fontSize": 18,
+        "fontWeight": 400,
+        "lineHeight": 28,
+        "color": [
+          71,
+          85,
+          105
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "period-monthly": {
+        "x": 588,
+        "y": 297,
+        "width": 96,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 500,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          241,
+          245,
+          249
+        ],
+        "radius": 6,
+        "padding": [
+          4,
+          4,
+          4,
+          4
+        ],
+        "border": [
+          241,
+          245,
+          249
+        ]
+      },
+      "period-yearly": {
+        "x": 684,
+        "y": 297,
+        "width": 81,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 500,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          241,
+          245,
+          249
+        ],
+        "radius": 0,
+        "padding": [
+          4,
+          4,
+          4,
+          4
+        ],
+        "border": [
+          241,
+          245,
+          249
+        ]
+      },
+      "save-tag": {
+        "x": 785,
+        "y": 310,
+        "width": 59,
+        "height": 16,
+        "fontSize": 12,
+        "fontWeight": 700,
+        "lineHeight": 16,
+        "color": [
+          21,
+          128,
+          61
+        ],
+        "background": [
+          220,
+          252,
+          231
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "plan-starter": {
+        "x": 185,
+        "y": 428,
+        "width": 212,
+        "height": 28,
+        "fontSize": 18,
+        "fontWeight": 600,
+        "lineHeight": 28,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "price-starter": {
+        "x": 185,
+        "y": 524,
+        "width": 67,
+        "height": 40,
+        "fontSize": 36,
+        "fontWeight": 600,
+        "lineHeight": 40,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "plan-growth": {
+        "x": 472,
+        "y": 429,
+        "width": 210,
+        "height": 28,
+        "fontSize": 18,
+        "fontWeight": 600,
+        "lineHeight": 28,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "badge": {
+        "x": 520,
+        "y": 391,
+        "width": 115,
+        "height": 24,
+        "fontSize": 12,
+        "fontWeight": 600,
+        "lineHeight": 16,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          4,
+          120,
+          87
+        ],
+        "radius": 33554400,
+        "padding": [
+          4,
+          12,
+          4,
+          12
+        ],
+        "border": null
+      },
+      "price-growth": {
+        "x": 472,
+        "y": 525,
+        "width": 67,
+        "height": 40,
+        "fontSize": 36,
+        "fontWeight": 600,
+        "lineHeight": 40,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "per-member": {
+        "x": 256,
+        "y": 542,
+        "width": 118,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "feature-automation": {
+        "x": 472,
+        "y": 786,
+        "width": 210,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "cta-growth": {
+        "x": 472,
+        "y": 870,
+        "width": 210,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          4,
+          120,
+          87
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          4,
+          120,
+          87
+        ]
+      },
+      "plan-scale": {
+        "x": 757,
+        "y": 428,
+        "width": 212,
+        "height": 28,
+        "fontSize": 18,
+        "fontWeight": 600,
+        "lineHeight": 28,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "price-scale": {
+        "x": 757,
+        "y": 524,
+        "width": 67,
+        "height": 40,
+        "fontSize": 36,
+        "fontWeight": 600,
+        "lineHeight": 40,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "plan-enterprise": {
+        "x": 1043,
+        "y": 428,
+        "width": 212,
+        "height": 28,
+        "fontSize": 18,
+        "fontWeight": 600,
+        "lineHeight": 28,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "price-custom": {
+        "x": 1043,
+        "y": 524,
+        "width": 130,
+        "height": 40,
+        "fontSize": 36,
+        "fontWeight": 600,
+        "lineHeight": 40,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "cta-enterprise": {
+        "x": 1043,
+        "y": 871,
+        "width": 212,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          226,
+          232,
+          240
+        ]
+      },
+      "compare-title": {
+        "x": 160,
+        "y": 1002,
+        "width": 1120,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "col-growth": {
+        "x": 691,
+        "y": 1083,
+        "width": 191,
+        "height": 53,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "lineHeight": 20,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          236,
+          253,
+          245
+        ],
+        "radius": 0,
+        "padding": [
+          16,
+          16,
+          16,
+          16
+        ],
+        "border": null
+      },
+      "group-security": {
+        "x": 161,
+        "y": 1348,
+        "width": 1118,
+        "height": 33,
+        "fontSize": 12,
+        "fontWeight": 600,
+        "lineHeight": 16,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          8,
+          24,
+          8,
+          24
+        ],
+        "border": null
+      },
+      "row-sso": {
+        "x": 161,
+        "y": 1471,
+        "width": 358,
+        "height": 45,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          12,
+          24,
+          12,
+          24
+        ],
+        "border": null
+      },
+      "faq-title": {
+        "x": 160,
+        "y": 1751,
+        "width": 352,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "faq-first": {
+        "x": 585,
+        "y": 1752,
+        "width": 686,
+        "height": 60,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          18,
+          18,
+          18,
+          18
+        ],
+        "border": null
+      },
+      "talk-to-sales": {
+        "x": 336,
+        "y": 1796,
+        "width": 83,
+        "height": 17,
+        "fontSize": 14,
+        "fontWeight": 500,
+        "lineHeight": 20,
+        "color": [
+          4,
+          120,
+          87
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      }
+    },
+    "mobile": {
+      "title": {
+        "x": 16,
+        "y": 353,
+        "width": 358,
+        "height": 80,
+        "fontSize": 36,
+        "fontWeight": 600,
+        "lineHeight": 40,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "period-monthly": {
+        "x": 63,
+        "y": 565,
+        "width": 96,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 500,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          241,
+          245,
+          249
+        ],
+        "radius": 6,
+        "padding": [
+          4,
+          4,
+          4,
+          4
+        ],
+        "border": [
+          241,
+          245,
+          249
+        ]
+      },
+      "plan-growth": {
+        "x": 42,
+        "y": 697,
+        "width": 306,
+        "height": 28,
+        "fontSize": 18,
+        "fontWeight": 600,
+        "lineHeight": 28,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "badge": {
+        "x": 138,
+        "y": 659,
+        "width": 115,
+        "height": 24,
+        "fontSize": 12,
+        "fontWeight": 600,
+        "lineHeight": 16,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          4,
+          120,
+          87
+        ],
+        "radius": 33554400,
+        "padding": [
+          4,
+          12,
+          4,
+          12
+        ],
+        "border": null
+      },
+      "price-growth": {
+        "x": 42,
+        "y": 793,
+        "width": 67,
+        "height": 40,
+        "fontSize": 36,
+        "fontWeight": 600,
+        "lineHeight": 40,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "cta-growth": {
+        "x": 42,
+        "y": 1118,
+        "width": 306,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "background": [
+          4,
+          120,
+          87
+        ],
+        "radius": 6,
+        "padding": [
+          8,
+          12,
+          8,
+          12
+        ],
+        "border": [
+          4,
+          120,
+          87
+        ]
+      },
+      "plan-starter": {
+        "x": 41,
+        "y": 1235,
+        "width": 308,
+        "height": 28,
+        "fontSize": 18,
+        "fontWeight": 600,
+        "lineHeight": 28,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "plan-enterprise": {
+        "x": 41,
+        "y": 2213,
+        "width": 308,
+        "height": 28,
+        "fontSize": 18,
+        "fontWeight": 600,
+        "lineHeight": 28,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "compare-title": {
+        "x": 16,
+        "y": 2701,
+        "width": 358,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "faq-title": {
+        "x": 16,
+        "y": 3470,
+        "width": 358,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "faq-first": {
+        "x": 25,
+        "y": 3567,
+        "width": 340,
+        "height": 60,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          18,
+          18,
+          18,
+          18
+        ],
+        "border": null
+      }
+    },
+    "desktop-yearly": {
+      "period-yearly": {
+        "x": 684,
+        "y": 297,
+        "width": 81,
+        "height": 42,
+        "fontSize": 16,
+        "fontWeight": 500,
+        "lineHeight": 24,
+        "color": [
+          51,
+          65,
+          85
+        ],
+        "background": [
+          241,
+          245,
+          249
+        ],
+        "radius": 0,
+        "padding": [
+          4,
+          4,
+          4,
+          4
+        ],
+        "border": [
+          241,
+          245,
+          249
+        ]
+      },
+      "price-starter": {
+        "x": 185,
+        "y": 524,
+        "width": 67,
+        "height": 40,
+        "fontSize": 36,
+        "fontWeight": 600,
+        "lineHeight": 40,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "price-growth": {
+        "x": 472,
+        "y": 525,
+        "width": 67,
+        "height": 40,
+        "fontSize": 36,
+        "fontWeight": 600,
+        "lineHeight": 40,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "billed-growth": {
+        "x": 472,
+        "y": 569,
+        "width": 210,
+        "height": 20,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 20,
+        "color": [
+          100,
+          116,
+          139
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "price-scale": {
+        "x": 757,
+        "y": 524,
+        "width": 67,
+        "height": 40,
+        "fontSize": 36,
+        "fontWeight": 600,
+        "lineHeight": 40,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "price-custom": {
+        "x": 1043,
+        "y": 524,
+        "width": 130,
+        "height": 40,
+        "fontSize": 36,
+        "fontWeight": 600,
+        "lineHeight": 40,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      }
+    },
+    "desktop-faq-open": {
+      "faq-title": {
+        "x": 160,
+        "y": 1751,
+        "width": 352,
+        "height": 32,
+        "fontSize": 24,
+        "fontWeight": 600,
+        "lineHeight": 32,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          248,
+          250,
+          252
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "faq-first": {
+        "x": 585,
+        "y": 1752,
+        "width": 686,
+        "height": 60,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 6,
+        "padding": [
+          18,
+          18,
+          18,
+          18
+        ],
+        "border": null
+      },
+      "faq-answer": {
+        "x": 603,
+        "y": 1812,
+        "width": 650,
+        "height": 48,
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": 24,
+        "color": [
+          71,
+          85,
+          105
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "border": null
+      },
+      "faq-second": {
+        "x": 585,
+        "y": 1879,
+        "width": 686,
+        "height": 60,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          18,
+          18,
+          18,
+          18
+        ],
+        "border": null
+      },
+      "faq-last": {
+        "x": 585,
+        "y": 2062,
+        "width": 686,
+        "height": 60,
+        "fontSize": 16,
+        "fontWeight": 600,
+        "lineHeight": 24,
+        "color": [
+          15,
+          23,
+          42
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "radius": 0,
+        "padding": [
+          18,
+          18,
+          18,
+          18
+        ],
+        "border": null
+      }
+    }
+  }
+}

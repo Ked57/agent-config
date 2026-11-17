@@ -1,0 +1,17 @@
+{
+  "task": "D1-analytics-dashboard",
+  "scoreGate": { "referenceMin": 0.95, "untouchedMax": 0.1, "mutantMaxDrop": 0.05 },
+  "references": [
+    { "file": "reference.patch", "source": "hand-built reference design (R3a); the mockups, layout.json and baselines are exported from it" }
+  ],
+  "mutants": [
+    { "file": "m1-card-spacing.patch", "wrong": "cards are padded 8 px more and the grids have 8 px wider gaps", "violates": "the spacing drawn in the desktop and mobile frames", "expect": "killed" },
+    { "file": "m2-colour-tokens.patch", "wrong": "KPI deltas, trend lines, the chart and avatars use sky/orange/indigo instead of the emerald/red/primary tokens", "violates": "the colours drawn in every frame (variables in the Figma file)", "expect": "killed" },
+    { "file": "m3-row-menu-never-opens.patch", "wrong": "the row actions button hides the menu instead of toggling it, so it never opens", "violates": "the 'row menu open' state frame", "expect": "killed" },
+    { "file": "m4-no-mobile-layout.patch", "wrong": "fixed four- and three-column grids and a fixed header row: cards do not stack at 390 px and the page overflows", "violates": "the mobile frame", "expect": "killed" },
+    { "file": "m5-plain-html-controls.patch", "wrong": "native select and button, and an unstyled HTML table with plain-text statuses and a bare list for the row menu instead of the drawn components", "violates": "the table, tags, dropdown and buttons drawn in the frames", "expect": "killed" },
+    { "file": "m6-font-weights.patch", "wrong": "page title, KPI values, card titles and revenue figures are regular instead of semi-bold/medium", "violates": "the text styles in the frames", "expect": "killed" },
+    { "file": "m7-a11y-regressions.patch", "wrong": "secondary text in light grey (low contrast), avatars exposed as images without names, chart image without a name", "violates": "accessible implementation of the drawn screen (contrast of the drawn greys, names for graphics)", "expect": "killed" },
+    { "file": "m8-lazy-but-plausible.patch", "wrong": "right structure but sloppy: no subtitle, no sparklines or delta badges, no avatars or emails, plain activity list, tighter gaps, different title type, no chart fill", "violates": "the design's detail (what a mediocre implementation ships); should land mid-scale", "expect": "killed" }
+  ]
+}

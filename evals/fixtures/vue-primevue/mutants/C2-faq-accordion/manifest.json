@@ -1,0 +1,55 @@
+{
+  "task": "C2-faq-accordion",
+  "references": [
+    {
+      "file": "reference-mwg-A-r1.patch",
+      "source": "mwg-eval C2 A r1 (PrimeVue Accordion)"
+    },
+    {
+      "file": "reference-mwg-A-r3.patch",
+      "source": "mwg-eval C2 A r3 (Accordion with h2-wrapped headers)"
+    },
+    {
+      "file": "reference-native-details-name.patch",
+      "source": "hand-built: exclusive native <details name=\"faq\">, to show the tests accept the platform answer"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-accordion-multiple.patch",
+      "wrong": "<Accordion multiple>: several answers can be open",
+      "violates": "only one answer can be open at a time",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-details-without-name.patch",
+      "wrong": "native <details> without a shared name, so several stay open",
+      "violates": "only one answer can be open at a time",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-single-open-div.patch",
+      "wrong": "one answer at a time, but the headers are still clickable divs with no keyboard or screen reader support",
+      "violates": "it should work with the keyboard and screen readers",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-buttons-without-expanded-state.patch",
+      "wrong": "real buttons and one answer at a time, but no aria-expanded or aria-controls",
+      "violates": "it should work with ... screen readers",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-comment-only.patch",
+      "wrong": "a comment promising an accordion, no change in behaviour",
+      "violates": "only one answer can be open at a time",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-shared-answer-region.patch",
+      "wrong": "buttons expose aria-expanded but the open answer is rendered in one shared box under the list, not tied to its question",
+      "violates": "it should work with ... screen readers",
+      "expect": "killed"
+    }
+  ]
+}

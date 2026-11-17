@@ -1,0 +1,121 @@
+{
+  "screen": "invoices",
+  "task": "D5-invoices-table",
+  "title": "Invoices",
+  "route": "/invoices",
+  "figma": { "fileKey": "In5vR8cWq2TxK9mLp3ZbD7", "fileName": "Acme-Console-Invoices", "pageName": "Invoices" },
+  "frames": [
+    { "id": "desktop", "nodeId": "52-2", "name": "Invoices / Desktop", "label": "desktop", "viewport": { "width": 1440, "height": 900 } },
+    { "id": "mobile", "nodeId": "52-3", "name": "Invoices / Mobile", "label": "mobile", "viewport": { "width": 390, "height": 844 } },
+    {
+      "id": "desktop-filtered", "nodeId": "52-4", "name": "Invoices / Desktop / Filtered by status", "label": "state: \"Overdue\" status filter on",
+      "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "button", "name": "Overdue" } }]
+    },
+    {
+      "id": "desktop-bulk", "nodeId": "52-5", "name": "Invoices / Desktop / Bulk selection", "label": "state: three invoices selected",
+      "viewport": { "width": 1440, "height": 900 },
+      "steps": [
+        { "click": { "role": "checkbox", "name": "Select INV-2047" } },
+        { "click": { "role": "checkbox", "name": "Select INV-2046" } },
+        { "click": { "role": "checkbox", "name": "Select INV-2044" } }
+      ]
+    },
+    {
+      "id": "desktop-empty", "nodeId": "52-6", "name": "Invoices / Desktop / Empty", "label": "state: no invoices yet (?seed=empty)",
+      "viewport": { "width": 1440, "height": 900 },
+      "query": "seed=empty"
+    }
+  ],
+  "layout": {
+    "desktop": [
+      { "id": "title", "role": "heading", "name": "Invoices", "level": 1 },
+      { "id": "subtitle", "text": "outstanding across", "contains": true },
+      { "id": "export", "role": "button", "name": "Export" },
+      { "id": "new-invoice", "role": "button", "name": "New invoice" },
+      { "id": "search", "role": "textbox", "name": "Search invoices" },
+      { "id": "chip-paid", "role": "button", "name": "Paid" },
+      { "id": "chip-overdue", "role": "button", "name": "Overdue" },
+      { "id": "chip-draft", "role": "button", "name": "Draft" },
+      { "id": "col-invoice", "role": "columnheader", "name": "Invoice" },
+      { "id": "col-customer", "role": "columnheader", "name": "Customer" },
+      { "id": "col-issued", "role": "columnheader", "name": "Issued" },
+      { "id": "col-due", "role": "columnheader", "name": "Due" },
+      { "id": "col-status", "role": "columnheader", "name": "Status" },
+      { "id": "col-amount", "role": "columnheader", "name": "Amount" },
+      { "id": "row-first-number", "text": "INV-2048" },
+      { "id": "row-first-customer", "text": "Hooli" },
+      { "id": "row-first-email", "text": "payables@hooli.test" },
+      { "id": "row-first-tag", "text": "Draft" },
+      { "id": "row-first-amount", "text": "$3,200.00" },
+      { "id": "row-long-email", "text": "accounts.payable@northwind-traders.test" },
+      { "id": "due-note", "text": "Due in 3 days" },
+      { "id": "row-open-tag", "text": "Open" },
+      { "id": "range", "text": "Showing 1–8 of 24" },
+      { "id": "next-page", "role": "button", "name": "Next page" }
+    ],
+    "mobile": [
+      { "id": "title", "role": "heading", "name": "Invoices", "level": 1 },
+      { "id": "new-invoice", "role": "button", "name": "New invoice" },
+      { "id": "search", "role": "textbox", "name": "Search invoices" },
+      { "id": "chip-overdue", "role": "button", "name": "Overdue" },
+      { "id": "card-first-number", "text": "INV-2048" },
+      { "id": "card-first-customer", "text": "Hooli" },
+      { "id": "card-first-amount", "text": "$3,200.00" },
+      { "id": "card-second-number", "text": "INV-2047" },
+      { "id": "range", "text": "Showing 1–8 of 24" }
+    ],
+    "desktop-filtered": [
+      { "id": "chip-overdue", "role": "button", "name": "Overdue" },
+      { "id": "row-first-number", "text": "INV-2040" },
+      { "id": "row-second-number", "text": "INV-2038" },
+      { "id": "row-third-number", "text": "INV-2032" },
+      { "id": "overdue-note", "text": "4 days overdue" },
+      { "id": "row-third-amount", "text": "$420.00" },
+      { "id": "range", "text": "Showing 1–3 of 3" }
+    ],
+    "desktop-bulk": [
+      { "id": "selected-count", "text": "3 selected" },
+      { "id": "selected-total", "text": "$28,640.00 total" },
+      { "id": "send-reminder", "role": "button", "name": "Send reminder" },
+      { "id": "mark-paid", "role": "button", "name": "Mark as paid" },
+      { "id": "clear-selection", "role": "button", "name": "Clear selection" },
+      { "id": "checkbox-2047", "role": "checkbox", "name": "Select INV-2047" },
+      { "id": "row-first-number", "text": "INV-2048" }
+    ],
+    "desktop-empty": [
+      { "id": "title", "role": "heading", "name": "Invoices", "level": 1 },
+      { "id": "new-invoice", "role": "button", "name": "New invoice" },
+      { "id": "empty-title", "text": "No invoices yet" },
+      { "id": "empty-text", "text": "Create your first invoice", "contains": true }
+    ]
+  },
+  "behaviour": [
+    { "id": "first-page", "frame": "desktop", "expect": [{ "visibleText": "INV-2048" }, { "visibleText": "INV-2041" }, { "hiddenText": "INV-2040" }, { "visibleText": "Showing 1–8 of 24" }] },
+    { "id": "status-filter", "frame": "desktop-filtered", "expect": [{ "visibleText": "INV-2040" }, { "visibleText": "INV-2032" }, { "hiddenText": "INV-2048" }, { "visibleText": "Showing 1–3 of 3" }] },
+    {
+      "id": "search", "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "fill": { "role": "textbox", "name": "Search invoices", "value": "Hooli" } }],
+      "expect": [{ "visibleText": "INV-2048" }, { "visibleText": "INV-2030" }, { "hiddenText": "INV-2047" }, { "visibleText": "Showing 1–3 of 3" }]
+    },
+    { "id": "bulk-bar", "frame": "desktop-bulk", "expect": [{ "visibleText": "3 selected" }, { "visibleText": "Mark as paid" }] },
+    {
+      "id": "clear-selection", "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "checkbox", "name": "Select INV-2047" } }, { "click": { "role": "button", "name": "Clear selection" } }],
+      "expect": [{ "hiddenText": "1 selected" }, { "hiddenText": "Mark as paid" }]
+    },
+    {
+      "id": "sort-by-amount", "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "columnheader", "name": "Amount" } }],
+      "expect": [{ "stacked": ["$420.00", "$640.00", "$980.00"] }]
+    },
+    {
+      "id": "next-page", "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "button", "name": "Next page" } }],
+      "expect": [{ "visibleText": "INV-2040" }, { "hiddenText": "INV-2048" }, { "visibleText": "Showing 9–16 of 24" }]
+    },
+    { "id": "empty-state", "frame": "desktop-empty", "expect": [{ "visibleText": "No invoices yet" }, { "hiddenText": "Showing", "contains": true }] },
+    { "id": "desktop-table-row", "frame": "desktop", "expect": [{ "sameRow": ["INV-2048", "Hooli", "$3,200.00"] }] },
+    { "id": "mobile-cards", "frame": "mobile", "expect": [{ "noHorizontalOverflow": true }, { "stacked": ["INV-2048", "INV-2047", "INV-2046"] }] }
+  ]
+}

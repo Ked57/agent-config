@@ -1,0 +1,51 @@
+{
+  "task": "F2-gallery-performance",
+  "references": [
+    {
+      "file": "reference-aa-B-r2.patch",
+      "source": "validation-aa-smoke F2 B r2"
+    },
+    {
+      "file": "reference-repro-A-r1.patch",
+      "source": "validation-mwg-repro F2 A r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-hero-still-lazy.patch",
+      "wrong": "the hero gets fetchpriority=\"high\" but keeps loading=\"lazy\", so the LCP image is still deferred",
+      "violates": "fix the loading performance",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-grid-not-lazy.patch",
+      "wrong": "all twelve gallery photos load eagerly",
+      "violates": "fix the loading performance",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-everything-high-priority.patch",
+      "wrong": "fetchpriority=\"high\" on every photo too, which cancels the hero's priority",
+      "violates": "fix the loading performance",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-grid-without-dimensions.patch",
+      "wrong": "the gallery photos have no width, height or aspect ratio, so the grid still jumps",
+      "violates": "fix ... the layout shift",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-hero-no-priority.patch",
+      "wrong": "the hero is no longer lazy but is not prioritised either",
+      "violates": "fix the loading performance",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-comment-only.patch",
+      "wrong": "a comment listing the fixes, no change",
+      "violates": "fix the loading performance and the layout shift",
+      "expect": "killed"
+    }
+  ]
+}

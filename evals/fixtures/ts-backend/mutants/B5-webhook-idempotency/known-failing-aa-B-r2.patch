@@ -1,0 +1,162 @@
+diff -ruN a/drizzle/0001_webhook_event_idempotency.sql b/drizzle/0001_webhook_event_idempotency.sql
+--- /dev/null
++++ b/drizzle/0001_webhook_event_idempotency.sql
+@@ -0,0 +1,5 @@
++CREATE TABLE `processed_webhook_events` (
++	`id` text PRIMARY KEY NOT NULL,
++	`type` text NOT NULL,
++	`created_at` integer NOT NULL
++);
+diff -ruN a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794774883005,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794775662426,
++      "tag": "0001_webhook_event_idempotency",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff -ruN a/src/db/schema.ts b/src/db/schema.ts
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -93,3 +93,10 @@
+ 
+ export type Task = typeof tasks.$inferSelect;
+ export type User = typeof users.$inferSelect;
++
++/** Billing webhook event ids already applied; the primary key makes delivery idempotent. */
++export const processedWebhookEvents = sqliteTable("processed_webhook_events", {
++  id: text("id").primaryKey(),
++  type: text("type").notNull(),
++  createdAt: createdAt(),
++});
+diff -ruN a/src/routes/webhooks.test.ts b/src/routes/webhooks.test.ts
+--- a/src/routes/webhooks.test.ts
++++ b/src/routes/webhooks.test.ts
+@@ -34,4 +34,59 @@
+       .get();
+     expect(org?.credits).toBe(50);
+   });
++
++  it("does not apply a retried event twice but still acknowledges it", async () => {
++    const { request, db } = await createTestContext();
++    const send = () =>
++      request("POST", "/api/webhooks/billing", {
++        body: event,
++        headers: { "x-webhook-secret": "test-webhook-secret" },
++      });
++    expect((await send()).status).toBe(200);
++    const retry = await send();
++    expect(retry.status).toBe(200);
++    expect(await retry.json()).toEqual({ received: true });
++    const org = await db
++      .select()
++      .from(organizations)
++      .where(eq(organizations.id, "org_globex"))
++      .get();
++    expect(org?.credits).toBe(50);
++  });
++
++  it("applies distinct events for the same organization", async () => {
++    const { request, db } = await createTestContext();
++    for (const id of ["evt_1", "evt_2"]) {
++      const response = await request("POST", "/api/webhooks/billing", {
++        body: { ...event, id },
++        headers: { "x-webhook-secret": "test-webhook-secret" },
++      });
++      expect(response.status).toBe(200);
++    }
++    const org = await db
++      .select()
++      .from(organizations)
++      .where(eq(organizations.id, "org_globex"))
++      .get();
++    expect(org?.credits).toBe(100);
++  });
++
++  it("does not record an event rejected by the secret check", async () => {
++    const { request, db } = await createTestContext();
++    await request("POST", "/api/webhooks/billing", {
++      body: event,
++      headers: { "x-webhook-secret": "wrong" },
++    });
++    const response = await request("POST", "/api/webhooks/billing", {
++      body: event,
++      headers: { "x-webhook-secret": "test-webhook-secret" },
++    });
++    expect(response.status).toBe(200);
++    const org = await db
++      .select()
++      .from(organizations)
++      .where(eq(organizations.id, "org_globex"))
++      .get();
++    expect(org?.credits).toBe(50);
++  });
+ });
+diff -ruN a/src/routes/webhooks.ts b/src/routes/webhooks.ts
+--- a/src/routes/webhooks.ts
++++ b/src/routes/webhooks.ts
+@@ -2,7 +2,7 @@
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { organizations } from "../db/schema";
++import { organizations, processedWebhookEvents } from "../db/schema";
+ import { logger } from "../lib/logger";
+ 
+ /** Billing provider webhooks, authenticated with a shared secret header. */
+@@ -14,18 +14,33 @@
+       if (!secret || headers["x-webhook-secret"] !== secret) {
+         return status(401, "invalid webhook secret");
+       }
+-      if (body.type === "payment.succeeded") {
+-        const credits = body.data.credits ?? 0;
+-        await db
+-          .update(organizations)
+-          .set({ credits: sql`${organizations.credits} + ${credits}` })
+-          .where(eq(organizations.id, body.data.orgId));
+-        logger.info("billing.credits_added", {
+-          eventId: body.id,
+-          orgId: body.data.orgId,
+-          credits,
+-        });
+-      }
++      // Recording the event id and applying it share one transaction: a retry of an
++      // applied event hits the primary key and is skipped, while a failed apply rolls
++      // back the record so the provider's retry can still succeed.
++      const applied = await db.transaction(async (tx) => {
++        const recorded = await tx
++          .insert(processedWebhookEvents)
++          .values({ id: body.id, type: body.type })
++          .onConflictDoNothing()
++          .returning({ id: processedWebhookEvents.id });
++        if (recorded.length === 0) return false;
++        if (body.type === "payment.succeeded") {
++          const credits = body.data.credits ?? 0;
++          await tx
++            .update(organizations)
++            .set({ credits: sql`${organizations.credits} + ${credits}` })
++            .where(eq(organizations.id, body.data.orgId));
++          logger.info("billing.credits_added", {
++            eventId: body.id,
++            orgId: body.data.orgId,
++            credits,
++          });
++        }
++        return true;
++      });
++      // Still 2xx for a duplicate so the provider stops retrying.
++      if (!applied)
++        logger.info("billing.duplicate_event", { eventId: body.id });
+       return { received: true };
+     },
+     {

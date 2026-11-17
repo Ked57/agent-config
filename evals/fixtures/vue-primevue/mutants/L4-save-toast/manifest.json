@@ -1,0 +1,51 @@
+{
+  "task": "L4-save-toast",
+  "references": [
+    {
+      "file": "reference-mwg-A-r1.patch",
+      "source": "mwg-eval L4 A r1"
+    },
+    {
+      "file": "reference-mwg-B-r1.patch",
+      "source": "mwg-eval L4 B r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-success-only.patch",
+      "wrong": "success toast only; a failed save is swallowed without feedback",
+      "violates": "an error one if it fails",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-error-says-saved.patch",
+      "wrong": "the failure toast has error severity but says the settings were saved",
+      "violates": "an error one if it fails",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-no-toast-service.patch",
+      "wrong": "ToastService is never installed, so useToast() throws and the settings page breaks",
+      "violates": "show a short confirmation toast",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-toast-not-mounted.patch",
+      "wrong": "toast.add() is called but no <Toast> is rendered, so nothing appears",
+      "violates": "show a short confirmation toast",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-sticky-success.patch",
+      "wrong": "the success toast never goes away on its own",
+      "violates": "a short confirmation toast",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-optimistic-success.patch",
+      "wrong": "the success toast is shown before the save finishes, so a failed save also claims success",
+      "violates": "a confirmation toast when the save succeeds",
+      "expect": "killed"
+    }
+  ]
+}

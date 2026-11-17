@@ -1,0 +1,307 @@
+diff --git a/src/components/customer/ActivityTimeline.vue b/src/components/customer/ActivityTimeline.vue
+new file mode 100644
+index 0000000..d3ae2e4
+--- /dev/null
++++ b/src/components/customer/ActivityTimeline.vue
+@@ -0,0 +1,32 @@
++<script setup lang="ts">
++import Timeline from 'primevue/timeline'
++import type { AccountEvent } from '@/services/accounts'
++
++defineProps<{ events: AccountEvent[] }>()
++
++const icons: Record<AccountEvent['kind'], { icon: string; tone: string }> = {
++  call: { icon: 'pi pi-phone', tone: 'bg-primary-100 text-primary-700' },
++  email: { icon: 'pi pi-envelope', tone: 'bg-sky-100 text-sky-700' },
++  invoice: { icon: 'pi pi-file', tone: 'bg-surface-100 text-surface-700' },
++  plan: { icon: 'pi pi-users', tone: 'bg-amber-100 text-amber-800' },
++  note: { icon: 'pi pi-chart-line', tone: 'bg-red-100 text-red-700' },
++}
++const when = (iso: string) => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(iso))
++</script>
++
++<template>
++  <Timeline :value="events" class="[&_.p-timeline-event-opposite]:hidden [&_.p-timeline-event-connector]:!bg-surface-200">
++    <template #marker="{ item }">
++      <span class="flex size-8 items-center justify-center rounded-full text-sm" :class="icons[(item as AccountEvent).kind].tone" aria-hidden="true">
++        <i :class="icons[(item as AccountEvent).kind].icon"></i>
++      </span>
++    </template>
++    <template #content="{ item }">
++      <div class="pb-6 pl-1">
++        <p class="text-sm font-medium text-surface-900">{{ item.title }}</p>
++        <p class="mt-0.5 text-sm text-surface-600">{{ item.detail }}</p>
++        <p class="mt-1 text-xs text-surface-500">{{ item.actor }} · <time :datetime="item.at" class="tabular-nums">{{ when(item.at) }}</time></p>
++      </div>
++    </template>
++  </Timeline>
++</template>
+diff --git a/src/components/customer/ContactsList.vue b/src/components/customer/ContactsList.vue
+new file mode 100644
+index 0000000..6b10e89
+--- /dev/null
++++ b/src/components/customer/ContactsList.vue
+@@ -0,0 +1,26 @@
++<script setup lang="ts">
++import Avatar from 'primevue/avatar'
++import Tag from 'primevue/tag'
++import type { AccountContact } from '@/services/accounts'
++import { initials } from '@/utils/format'
++
++defineProps<{ contacts: AccountContact[] }>()
++</script>
++
++<template>
++  <ul class="divide-y divide-surface-200 rounded-xl border border-surface-200 bg-surface-0 shadow-sm">
++    <li v-for="contact in contacts" :key="contact.id" class="grid gap-3 p-4 sm:grid-cols-[1fr_auto] sm:items-center sm:px-6">
++      <div class="flex min-w-0 items-center gap-3">
++        <Avatar :label="initials(contact.name)" shape="circle" class="shrink-0 !bg-surface-100 !text-surface-700 text-sm font-semibold" aria-hidden="true" />
++        <div class="min-w-0">
++          <p class="flex items-center gap-2 text-sm font-medium text-surface-900">
++            {{ contact.name }}
++            <Tag v-if="contact.primary" value="Primary" severity="success" class="!py-0 !text-xs" />
++          </p>
++          <p class="truncate text-sm text-surface-500">{{ contact.title }} · {{ contact.email }}</p>
++        </div>
++      </div>
++      <a :href="`tel:${contact.phone.replaceAll(' ', '')}`" class="pl-[3.25rem] text-sm text-surface-700 tabular-nums underline-offset-2 hover:underline sm:pl-0">{{ contact.phone }}</a>
++    </li>
++  </ul>
++</template>
+diff --git a/src/components/customer/EditAccountDrawer.vue b/src/components/customer/EditAccountDrawer.vue
+new file mode 100644
+index 0000000..f25a9a5
+--- /dev/null
++++ b/src/components/customer/EditAccountDrawer.vue
+@@ -0,0 +1,59 @@
++<script setup lang="ts">
++import { ref, watch } from 'vue'
++import Button from 'primevue/button'
++import Drawer from 'primevue/drawer'
++import InputText from 'primevue/inputtext'
++import Select from 'primevue/select'
++import Textarea from 'primevue/textarea'
++import { accountOwners, accountPlans, type CustomerAccount } from '@/services/accounts'
++
++const props = defineProps<{ account: CustomerAccount }>()
++const visible = defineModel<boolean>('visible', { required: true })
++const emit = defineEmits<{ save: [changes: Pick<CustomerAccount, 'name' | 'owner' | 'plan' | 'notes'>] }>()
++
++const form = ref({ name: '', owner: '', plan: 'Enterprise' as CustomerAccount['plan'], notes: '' })
++const nameError = ref('')
++
++watch(visible, (open) => {
++  if (!open) return
++  form.value = { name: props.account.name, owner: props.account.owner, plan: props.account.plan, notes: props.account.notes }
++  nameError.value = ''
++}, { immediate: true })
++
++function save() {
++  nameError.value = form.value.name.trim() ? '' : 'Account name is required.'
++  if (nameError.value) return
++  emit('save', { ...form.value, name: form.value.name.trim() })
++}
++</script>
++
++<template>
++  <Drawer v-model:visible="visible" position="right" header="Edit account" class="!w-full sm:!w-[28rem]" :pt="{ title: { class: '!text-lg !font-semibold' } }">
++    <form class="flex flex-col gap-5" novalidate @submit.prevent="save">
++      <div class="flex flex-col gap-1.5">
++        <label for="account-name" class="text-sm font-medium text-surface-700">Account name</label>
++        <InputText id="account-name" v-model="form.name" :invalid="!!nameError" />
++        <small v-if="nameError" class="text-sm text-red-600">{{ nameError }}</small>
++      </div>
++      <div class="flex flex-col gap-1.5">
++        <span id="account-owner-label" class="text-sm font-medium text-surface-700">Account owner</span>
++        <Select v-model="form.owner" :options="accountOwners" aria-labelledby="account-owner-label" />
++      </div>
++      <div class="flex flex-col gap-1.5">
++        <span id="account-plan-label" class="text-sm font-medium text-surface-700">Plan</span>
++        <Select v-model="form.plan" :options="accountPlans" aria-labelledby="account-plan-label" />
++        <small class="text-sm text-surface-500">Plan changes apply from the next invoice.</small>
++      </div>
++      <div class="flex flex-col gap-1.5">
++        <label for="account-notes" class="text-sm font-medium text-surface-700">Internal notes</label>
++        <Textarea id="account-notes" v-model="form.notes" rows="4" auto-resize />
++      </div>
++    </form>
++    <template #footer>
++      <div class="flex justify-end gap-2 border-t border-surface-200 pt-4">
++        <Button label="Cancel" severity="secondary" text @click="visible = false" />
++        <Button label="Save changes" class="!border-primary-700 !bg-primary-700" @click="save" />
++      </div>
++    </template>
++  </Drawer>
++</template>
+diff --git a/src/router/index.ts b/src/router/index.ts
+index 507c8a9..af31981 100644
+--- a/src/router/index.ts
++++ b/src/router/index.ts
+@@ -5,6 +5,7 @@ export const router = createRouter({
+   history: createWebHistory(),
+   routes: [
+     { path: '/', name: 'dashboard', component: DashboardView, meta: { title: 'Dashboard' } },
++    { path: '/customers/northwind', name: 'customer', component: () => import('@/views/CustomerView.vue'), meta: { title: 'Northwind Traders' } },
+     { path: '/projects', name: 'projects', component: () => import('@/views/ProjectsView.vue'), meta: { title: 'Projects' } },
+     { path: '/users', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { title: 'Users' } },
+     { path: '/users/:id', name: 'user', component: () => import('@/views/UserDetailView.vue'), props: true, meta: { title: 'User' } },
+diff --git a/src/views/CustomerView.vue b/src/views/CustomerView.vue
+new file mode 100644
+index 0000000..068f837
+--- /dev/null
++++ b/src/views/CustomerView.vue
+@@ -0,0 +1,154 @@
++<script setup lang="ts">
++import { computed, ref } from 'vue'
++import Button from 'primevue/button'
++import Tab from 'primevue/tab'
++import TabList from 'primevue/tablist'
++import TabPanel from 'primevue/tabpanel'
++import TabPanels from 'primevue/tabpanels'
++import Tabs from 'primevue/tabs'
++import Tag from 'primevue/tag'
++import ActivityTimeline from '@/components/customer/ActivityTimeline.vue'
++import ContactsList from '@/components/customer/ContactsList.vue'
++import EditAccountDrawer from '@/components/customer/EditAccountDrawer.vue'
++import { fetchAccount, updateAccount, type CustomerAccount } from '@/services/accounts'
++import { initials } from '@/utils/format'
++
++const account = ref<CustomerAccount | null>(null)
++const editing = ref(false)
++
++void fetchAccount().then((result) => {
++  account.value = result
++})
++
++const date = (iso: string, month: 'short' | 'long' = 'short') => new Intl.DateTimeFormat('en-US', { month, day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(iso))
++const since = (iso: string) => new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(iso))
++const money = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
++
++const stats = computed(() => (account.value
++  ? [
++      { label: 'Monthly revenue', value: money(account.value.monthlyRevenue), note: 'Enterprise, 85 seats' },
++      { label: 'Open invoices', value: String(account.value.openInvoices), note: '$16,700.00 outstanding' },
++      { label: 'Health score', value: `${account.value.healthScore}/100`, note: 'Down 14 since September', down: true },
++      { label: 'Renews', value: date(account.value.renewsAt), note: 'in 76 days' },
++    ]
++  : []))
++
++const details = computed(() => (account.value
++  ? [
++      ['Industry', account.value.details.industry],
++      ['Employees', account.value.details.employees],
++      ['Headquarters', account.value.details.headquarters],
++      ['Time zone', account.value.details.timeZone],
++      ['Account owner', account.value.owner],
++      ['Customer since', date(account.value.customerSince, 'long')],
++    ]
++  : []))
++
++const billing = computed(() => (account.value
++  ? [
++      ['Plan', account.value.plan],
++      ['Payment method', account.value.billing.paymentMethod],
++      ['Billing email', account.value.billing.billingEmail],
++      ['Tax ID', account.value.billing.taxId],
++      ['Next invoice', date(account.value.billing.nextInvoice, 'long')],
++    ]
++  : []))
++
++async function save(changes: Pick<CustomerAccount, 'name' | 'owner' | 'plan' | 'notes'>) {
++  if (!account.value) return
++  account.value = await updateAccount(account.value, changes)
++  editing.value = false
++}
++</script>
++
++<template>
++  <div v-if="account" class="flex flex-col gap-6">
++    <nav aria-label="Breadcrumb">
++      <ol class="flex items-center gap-2 text-sm text-surface-500">
++        <li><RouterLink to="/users" class="hover:text-surface-900">Customers</RouterLink></li>
++        <li aria-hidden="true"><i class="pi pi-angle-right text-xs"></i></li>
++        <li><span class="font-medium text-surface-900" aria-current="page">{{ account.name }}</span></li>
++      </ol>
++    </nav>
++
++    <header class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
++      <div class="flex min-w-0 items-center gap-4">
++        <span class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary-700 text-lg font-semibold text-white" aria-hidden="true">{{ initials(account.name) }}</span>
++        <div class="min-w-0">
++          <div class="flex flex-wrap items-center gap-2">
++            <h1 class="truncate text-2xl font-semibold tracking-tight text-surface-900">{{ account.name }}</h1>
++            <Tag :value="account.health" severity="warn" icon="pi pi-exclamation-triangle" class="!text-xs" />
++          </div>
++          <p class="mt-1 truncate text-sm text-surface-500">{{ account.domain }} · {{ account.plan }} · Customer since {{ since(account.customerSince) }}</p>
++        </div>
++      </div>
++      <div class="flex gap-3">
++        <Button label="Log activity" icon="pi pi-plus" severity="secondary" outlined class="max-lg:flex-1" />
++        <Button label="Edit account" icon="pi pi-pencil" class="max-lg:flex-1 !border-primary-700 !bg-primary-700" @click="editing = false" />
++      </div>
++    </header>
++
++    <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-surface-200 bg-surface-200 shadow-sm lg:grid-cols-4">
++      <div v-for="stat in stats" :key="stat.label" class="bg-surface-0 px-5 py-4">
++        <dt class="text-sm text-surface-500">{{ stat.label }}</dt>
++        <dd class="mt-1 text-2xl font-semibold tracking-tight text-surface-900 tabular-nums">{{ stat.value }}</dd>
++        <dd class="mt-0.5 text-xs" :class="stat.down ? 'font-medium text-red-700' : 'text-surface-500'">{{ stat.note }}</dd>
++      </div>
++    </dl>
++
++    <Tabs value="overview" class="[&_.p-tab-active]:!text-primary-700 max-sm:[&_.p-tab]:!px-3">
++      <TabList :pt="{ tabList: { class: '!bg-transparent' } }">
++        <Tab value="overview">Overview</Tab>
++        <Tab value="contacts">Contacts <span class="ml-1 rounded-full bg-surface-100 px-1.5 text-xs text-surface-600 tabular-nums">{{ account.contacts.length }}</span></Tab>
++        <Tab value="invoices">Invoices <span class="ml-1 rounded-full bg-surface-100 px-1.5 text-xs text-surface-600 tabular-nums">{{ account.invoiceCount }}</span></Tab>
++      </TabList>
++      <TabPanels class="!bg-transparent !px-0 !pb-0 !pt-6">
++        <TabPanel value="overview">
++          <div class="grid gap-6 lg:grid-cols-3">
++            <div class="flex min-w-0 flex-col gap-6 lg:col-span-2">
++              <section class="rounded-xl border border-surface-200 bg-surface-0 px-6 shadow-sm" aria-labelledby="details-title">
++                <h2 id="details-title" class="pt-5 text-base font-semibold text-surface-900">Account details</h2>
++                <dl class="grid gap-x-8 pb-2 pt-3 sm:grid-cols-2">
++                  <div v-for="[label, value] in details" :key="label" class="flex flex-col gap-0.5 border-b border-surface-100 py-3">
++                    <dt class="text-sm text-surface-500">{{ label }}</dt>
++                    <dd class="truncate text-sm font-medium text-surface-900">{{ value }}</dd>
++                  </div>
++                </dl>
++              </section>
++              <section class="rounded-xl border border-surface-200 bg-surface-0 px-6 shadow-sm" aria-labelledby="billing-title">
++                <h2 id="billing-title" class="pt-5 text-base font-semibold text-surface-900">Billing</h2>
++                <dl class="pb-3 pt-2">
++                  <div v-for="[label, value] in billing" :key="label" class="flex items-baseline justify-between gap-6 border-b border-surface-100 py-3 last:border-b-0">
++                    <dt class="shrink-0 text-sm text-surface-500">{{ label }}</dt>
++                    <dd class="min-w-0 truncate text-right text-sm font-medium text-surface-900">{{ value }}</dd>
++                  </div>
++                </dl>
++              </section>
++              <section class="rounded-xl border border-amber-200 bg-amber-50 px-6 py-4" aria-labelledby="notes-title">
++                <h2 id="notes-title" class="flex items-center gap-2 text-sm font-semibold text-amber-900"><i class="pi pi-bookmark" aria-hidden="true"></i>Internal notes</h2>
++                <p class="mt-1 text-sm text-amber-900">{{ account.notes }}</p>
++              </section>
++            </div>
++            <section class="rounded-xl border border-surface-200 bg-surface-0 px-6 pt-5 shadow-sm" aria-labelledby="activity-title">
++              <div class="mb-4 flex items-center justify-between">
++                <h2 id="activity-title" class="text-base font-semibold text-surface-900">Activity</h2>
++                <span class="text-sm text-surface-500">Last 30 days</span>
++              </div>
++              <ActivityTimeline :events="account.activity" />
++            </section>
++          </div>
++        </TabPanel>
++        <TabPanel value="contacts">
++          <ContactsList :contacts="account.contacts" />
++        </TabPanel>
++        <TabPanel value="invoices">
++          <p class="rounded-xl border border-dashed border-surface-300 bg-surface-0 px-6 py-10 text-center text-sm text-surface-500">
++            {{ account.invoiceCount }} invoices. Open them from the Invoices page.
++          </p>
++        </TabPanel>
++      </TabPanels>
++    </Tabs>
++
++    <EditAccountDrawer v-model:visible="editing" :account="account" @save="save" />
++  </div>
++</template>

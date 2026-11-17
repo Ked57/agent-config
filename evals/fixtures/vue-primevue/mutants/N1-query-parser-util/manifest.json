@@ -1,0 +1,57 @@
+{
+  "task": "N1-query-parser-util",
+  "references": [
+    {
+      "file": "reference-aa-A-r1.patch",
+      "source": "validation-aa-smoke N1 A r1"
+    },
+    {
+      "file": "reference-repro-B-r2.patch",
+      "source": "validation-mwg-repro N1 B r2"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-greater-than-inclusive.patch",
+      "wrong": "total>100 and total>=100 both give an inclusive bound",
+      "violates": "so total>100 and total>=100 differ",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-less-than-sets-min.patch",
+      "wrong": "total<50 sets minTotal instead of maxTotal",
+      "violates": "total<50 sets maxTotal",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-any-status.patch",
+      "wrong": "any word after status: becomes the status, including unknown ones",
+      "violates": "status (an order status)",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-integer-totals.patch",
+      "wrong": "amounts are truncated to whole numbers (12.5 becomes 12)",
+      "violates": "minTotal and maxTotal (each { value, inclusive })",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-terms-reversed.patch",
+      "wrong": "free-text terms come back in reverse order",
+      "violates": "terms (the remaining free-text words)",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-constant-parser.patch",
+      "wrong": "the parser returns the whole query as one term; the test only checks toBeDefined (the audit's surviving mutant)",
+      "violates": "parses search strings ... into a typed filter object",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-wrong-module-path.patch",
+      "wrong": "the utility lives in src/utils/parseOrderQuery.ts instead of src/utils/orderQuery.ts",
+      "violates": "a parseOrderQuery(query: string) utility in src/utils/orderQuery.ts",
+      "expect": "killed"
+    }
+  ]
+}

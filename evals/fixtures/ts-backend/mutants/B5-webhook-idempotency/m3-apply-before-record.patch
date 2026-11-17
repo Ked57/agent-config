@@ -1,0 +1,139 @@
+diff -ruN a/drizzle/0001_webhook_event_idempotency.sql b/drizzle/0001_webhook_event_idempotency.sql
+--- /dev/null
++++ b/drizzle/0001_webhook_event_idempotency.sql
+@@ -0,0 +1,5 @@
++CREATE TABLE `processed_webhook_events` (
++	`id` text PRIMARY KEY NOT NULL,
++	`type` text NOT NULL,
++	`created_at` integer NOT NULL
++);
+diff -ruN a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794774883005,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794775462912,
++      "tag": "0001_webhook_event_idempotency",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff -ruN a/src/db/schema.ts b/src/db/schema.ts
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -91,5 +91,12 @@
+   ],
+ );
+ 
++/** Billing webhook event ids already applied; a retried event is acknowledged but skipped. */
++export const processedWebhookEvents = sqliteTable("processed_webhook_events", {
++  id: text("id").primaryKey(),
++  type: text("type").notNull(),
++  createdAt: createdAt(),
++});
++
+ export type Task = typeof tasks.$inferSelect;
+ export type User = typeof users.$inferSelect;
+diff -ruN a/src/routes/webhooks.test.ts b/src/routes/webhooks.test.ts
+--- a/src/routes/webhooks.test.ts
++++ b/src/routes/webhooks.test.ts
+@@ -34,4 +34,58 @@
+       .get();
+     expect(org?.credits).toBe(50);
+   });
++
++  it("acknowledges a retried event without applying it again", async () => {
++    const { request, db } = await createTestContext();
++    for (let attempt = 0; attempt < 2; attempt++) {
++      const response = await request("POST", "/api/webhooks/billing", {
++        body: event,
++        headers: { "x-webhook-secret": "test-webhook-secret" },
++      });
++      expect(response.status).toBe(200);
++      expect(await response.json()).toEqual({ received: true });
++    }
++    const org = await db
++      .select()
++      .from(organizations)
++      .where(eq(organizations.id, "org_globex"))
++      .get();
++    expect(org?.credits).toBe(50);
++  });
++
++  it("applies distinct events for the same organization", async () => {
++    const { request, db } = await createTestContext();
++    for (const id of ["evt_1", "evt_2"]) {
++      const response = await request("POST", "/api/webhooks/billing", {
++        body: { ...event, id },
++        headers: { "x-webhook-secret": "test-webhook-secret" },
++      });
++      expect(response.status).toBe(200);
++    }
++    const org = await db
++      .select()
++      .from(organizations)
++      .where(eq(organizations.id, "org_globex"))
++      .get();
++    expect(org?.credits).toBe(100);
++  });
++
++  it("does not record an event rejected for a bad secret", async () => {
++    const { request, db } = await createTestContext();
++    await request("POST", "/api/webhooks/billing", {
++      body: event,
++      headers: { "x-webhook-secret": "wrong" },
++    });
++    const response = await request("POST", "/api/webhooks/billing", {
++      body: event,
++      headers: { "x-webhook-secret": "test-webhook-secret" },
++    });
++    expect(response.status).toBe(200);
++    const org = await db
++      .select()
++      .from(organizations)
++      .where(eq(organizations.id, "org_globex"))
++      .get();
++    expect(org?.credits).toBe(50);
++  });
+ });
+diff -ruN a/src/routes/webhooks.ts b/src/routes/webhooks.ts
+--- a/src/routes/webhooks.ts
++++ b/src/routes/webhooks.ts
+@@ -2,12 +2,12 @@
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { organizations } from "../db/schema";
++import { organizations, processedWebhookEvents } from "../db/schema";
+ import { logger } from "../lib/logger";
+ 
+ /** Billing provider webhooks, authenticated with a shared secret header. */
+-export const webhookRoutes = (db: Db) =>
+-  new Elysia({ prefix: "/api/webhooks" }).post(
++export const webhookRoutes = (db: Db) => {
++  return new Elysia({ prefix: "/api/webhooks" }).post(
+     "/billing",
+     async ({ body, headers, status }) => {
+       const secret = process.env.WEBHOOK_SECRET;
+@@ -26,6 +26,9 @@
+           credits,
+         });
+       }
++      await db
++        .insert(processedWebhookEvents)
++        .values({ id: body.id, type: body.type }).onConflictDoNothing();
+       return { received: true };
+     },
+     {
+@@ -39,3 +42,4 @@
+       }),
+     },
+   );
++};

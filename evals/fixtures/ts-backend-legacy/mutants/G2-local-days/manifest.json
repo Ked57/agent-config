@@ -1,0 +1,13 @@
+{
+  "task": "G2-local-days",
+  "references": [{ "file": "reference.patch", "source": "hand-written: dayKey takes the logger's IANA zone; reports, v1 timesheet, payroll, list filter and CSV export fetch a wide UTC window and filter by local day" }],
+  "mutants": [
+    { "file": "m1-current-offset.patch", "wrong": "Converts with each zone's offset today (cached), ignoring daylight saving changes", "violates": "time counts on the calendar day it was logged on, for the person who logged it", "expect": "killed" },
+    { "file": "m2-weekly-report-only.patch", "wrong": "Fixes only the v2 weekly timesheet", "violates": "Payroll uses the same numbers; every piece of time counts on its local day", "expect": "killed" },
+    { "file": "m3-utc-week-window.patch", "wrong": "Buckets by local day but still selects the week by UTC midnights, so Sam's Monday entry is never fetched", "violates": "the weekly timesheet shows them on Sunday, in the previous week", "expect": "killed" },
+    { "file": "m4-list-date-filter-in-sql.patch", "wrong": "Everything except the time-entry list's ?date filter, which still compares UTC dates in SQL", "violates": "every piece of time should count on the calendar day it was logged on", "expect": "killed" },
+    { "file": "m5-exports-untouched.patch", "wrong": "The time-entry CSV export keeps UTC days and UTC range limits", "violates": "every piece of time should count on the calendar day it was logged on", "expect": "killed" },
+    { "file": "m6-time-entry-list-untouched.patch", "wrong": "The time-entry list keeps UTC days in its day field and date filter", "violates": "every piece of time should count on the calendar day it was logged on", "expect": "killed" },
+    { "file": "m7-org-time-zone.patch", "wrong": "Uses the organization's time zone instead of the person's", "violates": "for the person who logged it, wherever they are", "expect": "killed" }
+  ]
+}

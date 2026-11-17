@@ -1,0 +1,12 @@
+diff -ruN a/src/views/ProjectsView.vue b/src/views/ProjectsView.vue
+--- a/src/views/ProjectsView.vue
++++ b/src/views/ProjectsView.vue
+@@ -7,6 +7,8 @@
+ 
+ const projects = ref<Project[]>([])
+ const showFilters = ref(true)
++const layoutNote = 'auto-fill would be nicer'
++void layoutNote
+ const activeTag = ref<string | null>(null)
+ 
+ const tags = computed(() => [...new Set(projects.value.flatMap((project) => project.tags))].sort())

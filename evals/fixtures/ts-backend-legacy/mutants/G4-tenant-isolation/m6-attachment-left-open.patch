@@ -1,0 +1,284 @@
+diff -ruN a/src/controllers/comments.controller.ts b/src/controllers/comments.controller.ts
+--- a/src/controllers/comments.controller.ts
++++ b/src/controllers/comments.controller.ts
+@@ -29,8 +29,10 @@
+     .use(authGuard(db))
+     .get(
+       "/tasks/:id/comments",
+-      async ({ params }) => {
+-        const rows = await listCommentsForTask(db, params.id);
++      async ({ params, user, status }) => {
++        const task = await findTaskInOrg(db, user.orgId, params.id);
++        if (!task) return status(404, { error: "task not found" });
++        const rows = await listCommentsForTask(db, task.id);
+         return { items: rows.map(present) };
+       },
+       { requireAuth: true },
+diff -ruN a/src/controllers/reports-v1.controller.ts b/src/controllers/reports-v1.controller.ts
+--- a/src/controllers/reports-v1.controller.ts
++++ b/src/controllers/reports-v1.controller.ts
+@@ -111,7 +111,7 @@
+     .get(
+       "/projects/:id/summary",
+       async ({ params, user, status }) => {
+-        const row = await projectSummary(db, params.id);
++        const row = await projectSummary(db, user.orgId, params.id);
+         if (!row) return status(404, { error: "project not found" });
+         await auditView(db, user, "project_summary", row.id);
+         return {
+diff -ruN a/src/controllers/users.controller.test.ts b/src/controllers/users.controller.test.ts
+--- a/src/controllers/users.controller.test.ts
++++ b/src/controllers/users.controller.test.ts
+@@ -31,6 +31,14 @@
+     });
+   });
+ 
++  it("hides people of other organizations", async () => {
++    const { request } = await createTestContext();
++    const response = await request("GET", "/api/users/usr_gina", {
++      token: SEED_TOKENS.acmeMember,
++    });
++    expect(response.status).toBe(404);
++  });
++
+   it("updates the caller's own time zone", async () => {
+     const { json } = await createTestContext();
+     const ok = await json("PATCH", "/api/users/me", {
+diff -ruN a/src/controllers/users.controller.ts b/src/controllers/users.controller.ts
+--- a/src/controllers/users.controller.ts
++++ b/src/controllers/users.controller.ts
+@@ -52,15 +52,15 @@
+           name: name?.trim(),
+           timezone,
+         });
+-        const row = await findUserById(db, user.id);
++        const row = await findUserById(db, user.orgId, user.id);
+         return row ? present(row) : status(404, { error: "user not found" });
+       },
+       { requireAuth: true },
+     )
+     .get(
+       "/:id",
+-      async ({ params, status }) => {
+-        const row = await findUserById(db, params.id);
++      async ({ params, user, status }) => {
++        const row = await findUserById(db, user.orgId, params.id);
+         if (!row) return status(404, { error: "user not found" });
+         return present(row);
+       },
+diff -ruN a/src/routes/exports.ts b/src/routes/exports.ts
+--- a/src/routes/exports.ts
++++ b/src/routes/exports.ts
+@@ -72,9 +72,9 @@
+     .get(
+       "/time-entries.csv",
+       async ({ query, user }) => {
+-        const conditions: SQL[] = query.projectId
+-          ? [eq(timeEntries.projectId, query.projectId)]
+-          : [eq(timeEntries.orgId, user.orgId)];
++        const conditions: SQL[] = [eq(timeEntries.orgId, user.orgId)];
++        if (query.projectId)
++          conditions.push(eq(timeEntries.projectId, query.projectId));
+         if (query.from)
+           conditions.push(
+             gte(timeEntries.startedAt, new Date(dayStart(query.from))),
+diff -ruN a/src/routes/tasks.ts b/src/routes/tasks.ts
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -5,7 +5,7 @@
+ import { authGuard } from "../plugins/auth";
+ import {
+   deleteTask,
+-  getTask,
++  getOrgTask,
+   labelNamesFor,
+   setTaskLabels,
+   toTaskResponse,
+@@ -19,8 +19,8 @@
+     .use(authGuard(db))
+     .get(
+       "/:id",
+-      async ({ params, status }) => {
+-        const task = await getTask(db, params.id);
++      async ({ params, user, status }) => {
++        const task = await getOrgTask(db, user.orgId, params.id);
+         if (!task) return status(404, apiError("not_found", "task not found"));
+         const labels = await labelNamesFor(db, [task.id]);
+         return toTaskResponse(task, labels.get(task.id));
+diff -ruN a/src/routes/webhook-subscriptions.ts b/src/routes/webhook-subscriptions.ts
+--- a/src/routes/webhook-subscriptions.ts
++++ b/src/routes/webhook-subscriptions.ts
+@@ -89,7 +89,12 @@
+         const [row] = await db
+           .update(webhookSubscriptions)
+           .set(changes)
+-          .where(eq(webhookSubscriptions.id, params.id))
++          .where(
++            and(
++              eq(webhookSubscriptions.id, params.id),
++              eq(webhookSubscriptions.orgId, user.orgId),
++            ),
++          )
+           .returning();
+         if (!row)
+           return status(404, apiError("not_found", "subscription not found"));
+diff -ruN a/src/services/tasks.ts b/src/services/tasks.ts
+--- a/src/services/tasks.ts
++++ b/src/services/tasks.ts
+@@ -48,10 +48,6 @@
+   return byTask;
+ }
+ 
+-export async function getTask(db: Db, id: string) {
+-  return db.select().from(tasks).where(eq(tasks.id, id)).get();
+-}
+-
+ export async function getOrgTask(db: Db, orgId: string, id: string) {
+   return db
+     .select()
+diff -ruN a/src/sql/comments.sql.ts b/src/sql/comments.sql.ts
+--- a/src/sql/comments.sql.ts
++++ b/src/sql/comments.sql.ts
+@@ -1,6 +1,7 @@
+ import { sql } from "drizzle-orm";
+ 
+ import type { Db } from "../db/client";
++import { first } from "./first";
+ 
+ export interface CommentRow {
+   id: string;
+@@ -21,8 +22,10 @@
+ }
+ 
+ export async function findTaskInOrg(db: Db, orgId: string, taskId: string) {
+-  return db.get<{ id: string } | undefined>(
+-    sql`SELECT id FROM tasks WHERE id = ${taskId} AND org_id = ${orgId}`,
++  return first(
++    db.all<{ id: string }>(
++      sql`SELECT id FROM tasks WHERE id = ${taskId} AND org_id = ${orgId}`,
++    ),
+   );
+ }
+ 
+@@ -42,9 +45,11 @@
+ }
+ 
+ export async function findComment(db: Db, orgId: string, id: string) {
+-  return db.get<CommentRow | undefined>(sql`
++  return first(
++    db.all<CommentRow>(sql`
+     SELECT c.id, c.org_id, c.task_id, c.author_id, NULL AS author_name, c.body, c.created_at
+-    FROM comments c WHERE c.id = ${id} AND c.org_id = ${orgId}`);
++    FROM comments c WHERE c.id = ${id} AND c.org_id = ${orgId}`),
++  );
+ }
+ 
+ export async function deleteComment(db: Db, id: string) {
+diff -ruN a/src/sql/first.ts b/src/sql/first.ts
+--- /dev/null
++++ b/src/sql/first.ts
+@@ -0,0 +1,7 @@
++/**
++ * First row of a raw query, or undefined. Drizzle's `db.get` throws on libSQL
++ * when no row matches, which turned "not found" into a 500.
++ */
++export async function first<T>(rows: Promise<T[]>): Promise<T | undefined> {
++  return (await rows)[0];
++}
+diff -ruN a/src/sql/reports.sql.ts b/src/sql/reports.sql.ts
+--- a/src/sql/reports.sql.ts
++++ b/src/sql/reports.sql.ts
+@@ -1,6 +1,7 @@
+ import { sql } from "drizzle-orm";
+ 
+ import type { Db } from "../db/client";
++import { first } from "./first";
+ 
+ // Queries behind the v1 reports. Do not add new callers: use src/services/reports.ts.
+ 
+@@ -34,8 +35,9 @@
+   entries: number;
+ }
+ 
+-export async function projectSummary(db: Db, projectId: string) {
+-  return db.get<ProjectSummaryRow | undefined>(sql`
++export async function projectSummary(db: Db, orgId: string, projectId: string) {
++  return first(
++    db.all<ProjectSummaryRow>(sql`
+     SELECT p.id, p.name,
+       SUM(te.minutes) AS total_minutes,
+       SUM(CASE WHEN te.billable = 1 THEN te.minutes ELSE 0 END) AS billable_minutes,
+@@ -46,8 +48,9 @@
+     FROM projects p
+     LEFT JOIN time_entries te ON te.project_id = p.id
+     LEFT JOIN users u ON u.id = te.user_id
+-    WHERE p.id = ${projectId}
+-    GROUP BY p.id`);
++    WHERE p.id = ${projectId} AND p.org_id = ${orgId}
++    GROUP BY p.id`),
++  );
+ }
+ 
+ export interface InvoiceAgingRow {
+diff -ruN a/src/sql/time-entries.sql.ts b/src/sql/time-entries.sql.ts
+--- a/src/sql/time-entries.sql.ts
++++ b/src/sql/time-entries.sql.ts
+@@ -1,6 +1,7 @@
+ import { sql, type SQL } from "drizzle-orm";
+ 
+ import type { Db } from "../db/client";
++import { first } from "./first";
+ 
+ export interface TimeEntryRow {
+   id: string;
+@@ -29,10 +30,8 @@
+ }
+ 
+ export async function findEntries(db: Db, filter: EntryFilter) {
+-  const conditions: SQL[] = [];
+-  // Filtering by a user narrows the org filter down to that user.
++  const conditions: SQL[] = [sql`org_id = ${filter.orgId}`];
+   if (filter.userId) conditions.push(sql`user_id = ${filter.userId}`);
+-  else conditions.push(sql`org_id = ${filter.orgId}`);
+   if (filter.projectId) conditions.push(sql`project_id = ${filter.projectId}`);
+   if (filter.date)
+     conditions.push(sql`date(started_at / 1000, 'unixepoch') = ${filter.date}`);
+@@ -43,8 +42,10 @@
+ }
+ 
+ export async function findEntry(db: Db, orgId: string, id: string) {
+-  return db.get<TimeEntryRow | undefined>(
+-    sql`SELECT ${columns} FROM time_entries WHERE id = ${id} AND org_id = ${orgId}`,
++  return first(
++    db.all<TimeEntryRow>(
++      sql`SELECT ${columns} FROM time_entries WHERE id = ${id} AND org_id = ${orgId}`,
++    ),
+   );
+ }
+ 
+diff -ruN a/src/sql/users.sql.ts b/src/sql/users.sql.ts
+--- a/src/sql/users.sql.ts
++++ b/src/sql/users.sql.ts
+@@ -1,6 +1,7 @@
+ import { sql } from "drizzle-orm";
+ 
+ import type { Db } from "../db/client";
++import { first } from "./first";
+ 
+ /** Row shape of the raw user queries (snake_case, straight from SQLite). */
+ export interface UserRow {
+@@ -24,9 +25,11 @@
+   );
+ }
+ 
+-export async function findUserById(db: Db, id: string) {
+-  return db.get<UserRow | undefined>(
+-    sql`SELECT ${columns} FROM users WHERE id = ${id}`,
++export async function findUserById(db: Db, orgId: string, id: string) {
++  return first(
++    db.all<UserRow>(
++      sql`SELECT ${columns} FROM users WHERE id = ${id} AND org_id = ${orgId}`,
++    ),
+   );
+ }
+ 

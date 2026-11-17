@@ -1,0 +1,17 @@
+{
+  "task": "D4-onboarding-wizard",
+  "scoreGate": { "referenceMin": 0.95, "untouchedMax": 0.1, "mutantMaxDrop": 0.05 },
+  "references": [
+    { "file": "reference.patch", "source": "hand-built reference design (R3b); the mockups, layout.json and baselines are exported from it" }
+  ],
+  "mutants": [
+    { "file": "m1-spacing.patch", "wrong": "card, form, option cards, footer and stepper connectors padded and spaced 8 px more", "violates": "the spacing drawn in every frame", "expect": "killed" },
+    { "file": "m2-colour-tokens.patch", "wrong": "stepper, selected option card, step count, hint and buttons use sky/indigo instead of the primary tokens", "violates": "the colours drawn in every frame", "expect": "killed" },
+    { "file": "m3-no-invite-step.patch", "wrong": "Continue skips the invite step and goes straight to the trial step", "violates": "the step-3 frame and the flow it implies", "expect": "killed" },
+    { "file": "m4-no-mobile-layout.patch", "wrong": "two-column option cards, every stepper label and a two-column invite row kept at 390 px, footer hint not hidden", "violates": "the mobile frame", "expect": "killed" },
+    { "file": "m5-plain-html-controls.patch", "wrong": "native radios, inputs, select, buttons and a button row instead of the drawn radio, input, select, segmented control and buttons", "violates": "the components drawn in the frames", "expect": "killed" },
+    { "file": "m6-font-weights.patch", "wrong": "title, step titles, option titles, labels and stepper labels are regular instead of semi-bold/medium", "violates": "the text styles in the frames", "expect": "killed" },
+    { "file": "m7-a11y-regressions.patch", "wrong": "option cards are not labels, so the radios have no names (and cannot be picked by name); low-contrast descriptions", "violates": "accessible implementation of the drawn radio-card group", "expect": "killed" },
+    { "file": "m8-lazy-but-plausible.patch", "wrong": "right steps but sloppy: no stepper, no option icons or selected-card styling, no helper texts, no sticky footer, plain info line, different title type, tighter padding", "violates": "the design's detail (what a mediocre implementation ships); should land mid-scale", "expect": "killed" }
+  ]
+}

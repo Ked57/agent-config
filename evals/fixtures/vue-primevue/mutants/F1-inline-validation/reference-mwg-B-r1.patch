@@ -1,0 +1,263 @@
+diff -ruN a/src/utils/settingsValidation.test.ts b/src/utils/settingsValidation.test.ts
+--- /dev/null
++++ b/src/utils/settingsValidation.test.ts
+@@ -0,0 +1,58 @@
++import { describe, expect, it } from 'vitest'
++import { validateDisplayName, validateEmail, validateSettings } from './settingsValidation'
++
++describe('validateDisplayName', () => {
++  it('requires a value', () => {
++    expect(validateDisplayName('')).toBe('Enter a display name.')
++    expect(validateDisplayName('   ')).toBe('Enter a display name.')
++  })
++
++  it('rejects fewer than 2 characters, ignoring surrounding whitespace', () => {
++    expect(validateDisplayName('A')).toBe('Display name must be at least 2 characters.')
++    expect(validateDisplayName(' A ')).toBe('Display name must be at least 2 characters.')
++  })
++
++  it('accepts 2 to 50 characters', () => {
++    expect(validateDisplayName('Al')).toBeUndefined()
++    expect(validateDisplayName('a'.repeat(50))).toBeUndefined()
++  })
++
++  it('rejects more than 50 characters', () => {
++    expect(validateDisplayName('a'.repeat(51))).toBe('Display name must be 50 characters or fewer.')
++  })
++
++  it('counts an emoji as one character', () => {
++    expect(validateDisplayName('😀'.repeat(50))).toBeUndefined()
++    expect(validateDisplayName('😀')).toBe('Display name must be at least 2 characters.')
++  })
++})
++
++describe('validateEmail', () => {
++  it('requires a value', () => {
++    expect(validateEmail('')).toBe('Enter an email address.')
++  })
++
++  it.each(['ada', 'ada@', '@acme.test', 'ada@acme', 'ada lovelace@acme.test', 'ada@@acme.test'])(
++    'rejects %s',
++    (value) => {
++      expect(validateEmail(value)).toBe('Enter an email address in the format you@example.com.')
++    },
++  )
++
++  it.each(['ada@acme.test', 'ada.lovelace+news@mail.acme.co.uk'])('accepts %s', (value) => {
++    expect(validateEmail(value)).toBeUndefined()
++  })
++})
++
++describe('validateSettings', () => {
++  it('returns no errors for valid settings', () => {
++    expect(validateSettings({ displayName: 'Ada Lovelace', email: 'ada@acme.test' })).toEqual({})
++  })
++
++  it('reports each invalid field', () => {
++    expect(validateSettings({ displayName: '', email: 'nope' })).toEqual({
++      displayName: 'Enter a display name.',
++      email: 'Enter an email address in the format you@example.com.',
++    })
++  })
++})
+diff -ruN a/src/utils/settingsValidation.ts b/src/utils/settingsValidation.ts
+--- /dev/null
++++ b/src/utils/settingsValidation.ts
+@@ -0,0 +1,36 @@
++import type { Settings } from '@/types'
++
++export type SettingsField = 'displayName' | 'email'
++export type SettingsErrors = Partial<Record<SettingsField, string>>
++
++export const DISPLAY_NAME_MIN = 2
++export const DISPLAY_NAME_MAX = 50
++
++// Deliberately permissive: one "@", no whitespace, and a dot in the domain.
++// The server remains the authority on deliverability.
++const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
++
++export function validateDisplayName(value: string): string | undefined {
++  // Count code points so an emoji is one character, and ignore surrounding whitespace.
++  const length = Array.from(value.trim()).length
++  if (length === 0) return 'Enter a display name.'
++  if (length < DISPLAY_NAME_MIN) return `Display name must be at least ${DISPLAY_NAME_MIN} characters.`
++  if (length > DISPLAY_NAME_MAX) return `Display name must be ${DISPLAY_NAME_MAX} characters or fewer.`
++  return undefined
++}
++
++export function validateEmail(value: string): string | undefined {
++  const email = value.trim()
++  if (email === '') return 'Enter an email address.'
++  if (!EMAIL_PATTERN.test(email)) return 'Enter an email address in the format you@example.com.'
++  return undefined
++}
++
++export function validateSettings(settings: Pick<Settings, SettingsField>): SettingsErrors {
++  const errors: SettingsErrors = {}
++  const displayName = validateDisplayName(settings.displayName)
++  const email = validateEmail(settings.email)
++  if (displayName) errors.displayName = displayName
++  if (email) errors.email = email
++  return errors
++}
+diff -ruN a/src/views/SettingsView.vue b/src/views/SettingsView.vue
+--- a/src/views/SettingsView.vue
++++ b/src/views/SettingsView.vue
+@@ -1,11 +1,12 @@
+ <script setup lang="ts">
+-import { onMounted, reactive, ref } from 'vue'
++import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+ import Button from 'primevue/button'
+ import InputText from 'primevue/inputtext'
+ import Select from 'primevue/select'
+ import ToggleSwitch from 'primevue/toggleswitch'
+ import { fetchSettings, saveSettings } from '@/services/api'
+ import type { Settings } from '@/types'
++import { validateSettings, type SettingsField } from '@/utils/settingsValidation'
+ 
+ const form = reactive<Settings>({
+   displayName: '',
+@@ -25,7 +26,78 @@
+ ]
+ const timezones = ['Europe/London', 'Europe/Paris', 'America/New_York', 'America/Los_Angeles', 'Asia/Tokyo']
+ 
++const validatedFields: SettingsField[] = ['displayName', 'email']
++const errors = computed(() => validateSettings(form))
++// Errors are shown only after the user edits and leaves a field, or tries to submit,
++// so nobody is told off while still typing.
++const edited = reactive<Record<SettingsField, boolean>>({ displayName: false, email: false })
++const errorVisible = reactive<Record<SettingsField, boolean>>({ displayName: false, email: false })
++const announcement = ref('')
++let announceTimer: ReturnType<typeof setTimeout> | undefined
++let announcedField: SettingsField | undefined
++
++function shownError(field: SettingsField): string | undefined {
++  return errorVisible[field] ? errors.value[field] : undefined
++}
++
++function fieldA11y(field: SettingsField) {
++  const error = shownError(field)
++  return {
++    // Reference the error only while it is shown; hidden describedby text is still read.
++    'aria-invalid': error ? 'true' : 'false',
++    'aria-describedby': error ? `${field}-error` : undefined,
++  } as const
++}
++
++function clearAnnouncement() {
++  clearTimeout(announceTimer)
++  announcement.value = ''
++  announcedField = undefined
++}
++
++// One polite live region announces an error that appears on blur; each message names its
++// field. The delay lets the screen reader finish announcing the next focused field first.
++function announce(field: SettingsField, message: string) {
++  clearAnnouncement()
++  announcedField = field
++  announceTimer = setTimeout(() => {
++    announcement.value = message
++  }, 500)
++}
++
++function onFieldBlur(field: SettingsField) {
++  if (!edited[field]) return
++  const error = errors.value[field]
++  if (error && !errorVisible[field]) announce(field, error)
++  errorVisible[field] = Boolean(error)
++}
++
++// Clear an error as soon as it is fixed; a new error waits for the next blur or submit.
++for (const field of validatedFields) {
++  watch(
++    () => errors.value[field],
++    (error) => {
++      if (error || !errorVisible[field]) return
++      errorVisible[field] = false
++      if (announcedField === field) clearAnnouncement()
++    },
++  )
++}
++
++onUnmounted(() => clearTimeout(announceTimer))
++
+ async function onSubmit() {
++  if (saving.value) return
++  const firstInvalid = validatedFields.find((field) => errors.value[field])
++  if (firstInvalid) {
++    for (const field of validatedFields) errorVisible[field] = Boolean(errors.value[field])
++    // Focusing the field reads its now-linked error, so drop any announcement queued by
++    // the blur that clicking submit caused.
++    clearAnnouncement()
++    await nextTick()
++    document.getElementById(firstInvalid)?.focus()
++    return
++  }
+   saving.value = true
+   try {
+     Object.assign(form, await saveSettings({ ...form }))
+@@ -42,16 +114,52 @@
+ <template>
+   <section class="flex max-w-2xl flex-col gap-6">
+     <h1 class="text-2xl font-semibold">Settings</h1>
+-    <form class="flex flex-col gap-8 rounded-xl border border-surface-200 bg-surface-0 p-6" @submit.prevent="onSubmit">
++    <form
++      class="flex flex-col gap-8 rounded-xl border border-surface-200 bg-surface-0 p-6"
++      novalidate
++      @submit.prevent="onSubmit"
++    >
+       <fieldset class="flex flex-col gap-4">
+         <legend class="mb-2 text-lg font-semibold">Profile</legend>
++        <p class="text-sm text-surface-600">Fields marked <span aria-hidden="true">*</span> are required.</p>
+         <div class="flex flex-col gap-2">
+-          <label for="displayName" class="text-sm font-medium">Display name</label>
+-          <InputText id="displayName" v-model="form.displayName" />
++          <label for="displayName" class="text-sm font-medium">Display name <span aria-hidden="true">*</span></label>
++          <InputText
++            id="displayName"
++            v-model="form.displayName"
++            name="displayName"
++            autocomplete="nickname"
++            required
++            :invalid="Boolean(shownError('displayName'))"
++            v-bind="fieldA11y('displayName')"
++            @input="edited.displayName = true"
++            @blur="onFieldBlur('displayName')"
++          />
++          <p v-if="shownError('displayName')" id="displayName-error" class="flex items-start gap-1.5 text-sm text-red-700">
++            <span class="pi pi-exclamation-circle mt-0.5" role="img" aria-label="Error" />
++            {{ shownError('displayName') }}
++          </p>
+         </div>
+         <div class="flex flex-col gap-2">
+-          <label for="email" class="text-sm font-medium">Email</label>
+-          <InputText id="email" v-model="form.email" type="email" />
++          <label for="email" class="text-sm font-medium">Email <span aria-hidden="true">*</span></label>
++          <InputText
++            id="email"
++            v-model="form.email"
++            name="email"
++            type="email"
++            autocomplete="email"
++            autocapitalize="none"
++            spellcheck="false"
++            required
++            :invalid="Boolean(shownError('email'))"
++            v-bind="fieldA11y('email')"
++            @input="edited.email = true"
++            @blur="onFieldBlur('email')"
++          />
++          <p v-if="shownError('email')" id="email-error" class="flex items-start gap-1.5 text-sm text-red-700">
++            <span class="pi pi-exclamation-circle mt-0.5" role="img" aria-label="Error" />
++            {{ shownError('email') }}
++          </p>
+         </div>
+       </fieldset>
+ 
+@@ -91,5 +199,6 @@
+         <Button type="submit" label="Save changes" :loading="saving" />
+       </div>
+     </form>
++    <div class="sr-only" aria-live="polite">{{ announcement }}</div>
+   </section>
+ </template>

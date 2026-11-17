@@ -1,0 +1,45 @@
+{
+  "task": "C3-page-transition",
+  "references": [
+    {
+      "file": "reference-mwg-A-r1.patch",
+      "source": "mwg-eval C3 A r1 (Vue <Transition> around the route)"
+    },
+    {
+      "file": "reference-mwg-B-r2.patch",
+      "source": "mwg-eval C3 B r2"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-comment-only.patch",
+      "wrong": "a comment about wrapping the route in <Transition>, nothing animates",
+      "violates": "add a subtle animated transition when moving between pages",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-transition-without-css.patch",
+      "wrong": "<Transition name=\"page\"> wraps the route but no CSS defines the animation, so nothing moves",
+      "violates": "an animated transition",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-css-only.patch",
+      "wrong": "the .page-enter CSS is added but the route is never wrapped in a <Transition>",
+      "violates": "an animated transition when moving between pages",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-header-appear-only.patch",
+      "wrong": "the header fades in once on load; page changes are not animated",
+      "violates": "when moving between pages",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-css-disabled.patch",
+      "wrong": "<Transition :css=\"false\"> with no JavaScript hooks: the CSS never applies",
+      "violates": "an animated transition",
+      "expect": "killed"
+    }
+  ]
+}

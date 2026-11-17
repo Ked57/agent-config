@@ -1,0 +1,229 @@
+diff -ruN a/drizzle/0001_ledger_idempotency.sql b/drizzle/0001_ledger_idempotency.sql
+--- /dev/null
++++ b/drizzle/0001_ledger_idempotency.sql
+@@ -0,0 +1,2 @@
++ALTER TABLE `ledger_entries` ADD `idempotency_key` text;--> statement-breakpoint
++CREATE UNIQUE INDEX `ledger_org_key_unique` ON `ledger_entries` (`org_id`,`idempotency_key`);
+\ No newline at end of file
+diff -ruN a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794870096994,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794870991059,
++      "tag": "0001_ledger_idempotency",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff -ruN a/src/db/schema.ts b/src/db/schema.ts
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -286,9 +286,14 @@
+     /** Signed: money in is positive, money out negative. */
+     amountCents: integer("amount_cents").notNull(),
+     memo: text("memo"),
++    /** Idempotency-Key of the request that created the entry (refunds). */
++    idempotencyKey: text("idempotency_key"),
+     createdAt: createdAt(),
+   },
+-  (table) => [index("ledger_org_idx").on(table.orgId)],
++  (table) => [
++    index("ledger_org_idx").on(table.orgId),
++    uniqueIndex("ledger_org_key_unique").on(table.orgId, table.idempotencyKey),
++  ],
+ );
+ 
+ export const idempotencyKeys = sqliteTable(
+diff -ruN a/src/lib/legacy/money.test.ts b/src/lib/legacy/money.test.ts
+--- a/src/lib/legacy/money.test.ts
++++ b/src/lib/legacy/money.test.ts
+@@ -12,6 +12,8 @@
+   it("converts between decimals and cents", () => {
+     expect(toCents(12.5)).toBe(1250);
+     expect(toCents(200)).toBe(20000);
++    expect(toCents(19.99)).toBe(1999);
++    expect(toCents(0.29)).toBe(29);
+     expect(fromCents(1250)).toBe(12.5);
+   });
+ 
+diff -ruN a/src/lib/legacy/money.ts b/src/lib/legacy/money.ts
+--- a/src/lib/legacy/money.ts
++++ b/src/lib/legacy/money.ts
+@@ -3,9 +3,12 @@
+  * The database moved to integer cents in 2022 (except the payments table).
+  */
+ 
+-/** Decimal major units (12.5) to cents (1250). */
++/**
++ * Decimal major units (12.5) to cents (1250). Rounds: 19.99 * 100 is
++ * 1998.9999999999998 in floating point.
++ */
+ export function toCents(amount: number): number {
+-  return Math.floor(amount * 100);
++  return Math.round(amount * 100);
+ }
+ 
+ export function fromCents(cents: number): number {
+diff -ruN a/src/routes/invoices.ts b/src/routes/invoices.ts
+--- a/src/routes/invoices.ts
++++ b/src/routes/invoices.ts
+@@ -3,6 +3,8 @@
+ import type { Db } from "../db/client";
+ import { apiError } from "../lib/errors";
+ import { authGuard } from "../plugins/auth";
++import { findStoredResponse, storeResponse } from "../lib/legacy/idempotency";
++import { refundInvoice } from "../services/ledger";
+ import {
+   createInvoice,
+   getOrgInvoice,
+@@ -95,6 +97,61 @@
+       { requireAuth: true },
+     )
+     .post(
++      "/:id/refunds",
++      async ({ params, body, headers, user, status }) => {
++        if (user.role !== "admin")
++          return status(403, apiError("forbidden", "admins only"));
++        const invoice = await getOrgInvoice(db, user.orgId, params.id);
++        if (!invoice)
++          return status(404, apiError("not_found", "invoice not found"));
++        const key = headers["idempotency-key"];
++        if (key) {
++          const stored = await findStoredResponse(
++            db,
++            user.orgId,
++            "refund",
++            key,
++          );
++          if (stored) return status(stored.statusCode as 201, stored.body);
++        }
++        const refund = await refundInvoice(
++          db,
++          invoice,
++          body.amountCents,
++          body.reason,
++          null,
++        );
++        if (!refund)
++          return status(
++            409,
++            apiError(
++              "refund_exceeds_paid",
++              "a refund cannot exceed what was paid on the invoice",
++            ),
++          );
++        const response = {
++          id: refund.id,
++          invoiceId: refund.invoiceId,
++          amountCents: -refund.amountCents,
++          reason: refund.memo,
++          createdAt: refund.createdAt.toISOString(),
++        };
++        if (key)
++          await storeResponse(db, user.orgId, "refund", key, {
++            statusCode: 201,
++            body: response,
++          });
++        return status(201, response);
++      },
++      {
++        requireAuth: true,
++        body: t.Object({
++          amountCents: t.Integer({ minimum: 1 }),
++          reason: t.String({ minLength: 1, maxLength: 500 }),
++        }),
++      },
++    )
++    .post(
+       "/:id/void",
+       async ({ params, user, status }) => {
+         if (user.role !== "admin")
+diff -ruN a/src/services/invoices.ts b/src/services/invoices.ts
+--- a/src/services/invoices.ts
++++ b/src/services/invoices.ts
+@@ -19,7 +19,7 @@
+ import { amountForMinutes, fromCents, toCents } from "../lib/legacy/money";
+ import type { AuthUser } from "../plugins/auth";
+ import { recordAudit } from "./audit";
+-import { paidCents } from "./ledger";
++import { paidCents, refundedCents } from "./ledger";
+ 
+ export function dueDateFor(issueDate: string, terms: PaymentTerms): string {
+   return terms === "next_month"
+@@ -249,6 +249,7 @@
+       timeEntryId: line.timeEntryId,
+     })),
+     paidCents: paid,
++    refundedCents: await refundedCents(db, invoice.id),
+     balanceCents: invoice.totalCents - paid,
+   };
+ }
+diff -ruN a/src/services/ledger.ts b/src/services/ledger.ts
+--- a/src/services/ledger.ts
++++ b/src/services/ledger.ts
+@@ -21,6 +21,57 @@
+   return Number(row?.total ?? 0);
+ }
+ 
++/** Cents refunded on an invoice so far, as a positive number. */
++export async function refundedCents(db: Db, invoiceId: string) {
++  const row = await db
++    .select({
++      total: sql<number>`coalesce(sum(${ledgerEntries.amountCents}), 0)`,
++    })
++    .from(ledgerEntries)
++    .where(
++      and(
++        eq(ledgerEntries.invoiceId, invoiceId),
++        eq(ledgerEntries.kind, "refund"),
++      ),
++    )
++    .get();
++  return -Number(row?.total ?? 0);
++}
++
++/**
++ * Refunds part of what was paid on an invoice. One conditional INSERT decides
++ * and writes, so concurrent refunds cannot together exceed what was paid, and a
++ * repeated Idempotency-Key finds the entry the first request created.
++ * Returns undefined when the refund would exceed what is left.
++ */
++export async function refundInvoice(
++  db: Db,
++  invoice: { id: string; orgId: string },
++  amountCents: number,
++  reason: string,
++  key: string | null,
++) {
++  const id = newId("rfd");
++  await db.run(sql`
++    INSERT INTO ledger_entries (id, org_id, invoice_id, kind, amount_cents, memo, idempotency_key, created_at)
++    SELECT ${id}, ${invoice.orgId}, ${invoice.id}, 'refund', ${-amountCents}, ${reason}, ${key}, ${Date.now()}
++    WHERE (SELECT coalesce(sum(amount_cents), 0) FROM ledger_entries
++           WHERE invoice_id = ${invoice.id} AND kind IN ('payment', 'refund')) >= ${amountCents}
++    ON CONFLICT (org_id, idempotency_key) DO NOTHING`);
++  return db
++    .select()
++    .from(ledgerEntries)
++    .where(
++      key === null
++        ? eq(ledgerEntries.id, id)
++        : and(
++            eq(ledgerEntries.orgId, invoice.orgId),
++            eq(ledgerEntries.idempotencyKey, key),
++          ),
++    )
++    .get();
++}
++
+ /** Records money received against an invoice and marks it paid once covered. */
+ export async function recordInvoicePayment(
+   db: Db,

@@ -1,0 +1,546 @@
+{
+  "name": "ts-backend",
+  "description": "Everyday backend work on a multi-tenant Bun + Elysia + Drizzle API, scored with hidden acceptance tests, plus two controls no backend policy should touch.",
+  "fixture": "ts-backend",
+  "categories": {
+    "api": {
+      "label": "API features"
+    },
+    "data": {
+      "label": "Data and queries"
+    },
+    "reliability": {
+      "label": "Reliability"
+    },
+    "safety": {
+      "label": "Security and error handling"
+    },
+    "architecture": {
+      "label": "Architecture and configuration"
+    },
+    "control": {
+      "label": "Controls (pure util, docs)",
+      "control": true
+    }
+  },
+  "smoke": [
+    "B7-tenant-isolation",
+    "B2-task-pagination",
+    "B5-webhook-idempotency",
+    "N2-readme"
+  ],
+  "featurePatterns": {
+    "transaction": "\\.transaction\\(",
+    "uniqueConstraint": "unique\\(|\\.unique\\(\\)|uniqueIndex\\(|UNIQUE",
+    "onConflict": "onConflictDo(Nothing|Update)|ON CONFLICT|INSERT OR IGNORE",
+    "joinOrGroupBy": "leftJoin\\(|innerJoin\\(|groupBy\\(|inArray\\(",
+    "migrationFile": "CREATE TABLE|ALTER TABLE|UPDATE `?tasks`?",
+    "typeboxValidation": "\\bt\\.(Object|String|Integer|Number|Union|Literal|Optional)\\(",
+    "zod": "from ['\"]zod['\"]",
+    "newServiceModule": "export (async )?function",
+    "retryBackoff": "backoff|retry|attempt",
+    "retryAfterHeader": "[Rr]etry-[Aa]fter",
+    "processEnv": "process\\.env\\."
+  },
+  "tasks": [
+    {
+      "id": "B1-task-comments",
+      "category": "api",
+      "prompt": "Add comments on tasks. POST /api/tasks/:id/comments with {\"body\": \"...\"} (1 to 2000 characters after trimming) should create a comment by the current user and return 201 with {id, taskId, authorId, body, createdAt}. GET /api/tasks/:id/comments should return {items: [...]} oldest first. Only members of the task's organization can see or add comments. Add tests.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests pass",
+          "type": "command",
+          "copy": {
+            "hidden/comments.test.ts": "src/__hidden__/comments.test.ts"
+          },
+          "run": "vitest run src/__hidden__/comments.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "migration-added",
+          "label": "Adds a migration",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any"
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any"
+        }
+      ]
+    },
+    {
+      "id": "B2-task-pagination",
+      "category": "api",
+      "prompt": "GET /api/projects/:id/tasks returns every task at once, which is getting slow for big projects. Add cursor pagination (?limit, default 20, max 100, and ?cursor taken from the previous page's nextCursor) and filters ?status= and ?assigneeId=. Keep ordering by creation time and respond with {items, nextCursor}, where nextCursor is null once there are no more tasks.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests pass",
+          "type": "command",
+          "copy": {
+            "hidden/pagination.test.ts": "src/__hidden__/pagination.test.ts"
+          },
+          "run": "vitest run src/__hidden__/pagination.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any"
+        }
+      ]
+    },
+    {
+      "id": "B3-project-list-n-plus-one",
+      "category": "data",
+      "prompt": "GET /api/projects runs one extra query per project to count its tasks, so it gets slower as organizations add projects. Make it use a fixed number of queries no matter how many projects there are, without changing the response.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden query-count test passes",
+          "type": "command",
+          "copy": {
+            "hidden/query-count.test.ts": "src/__hidden__/query-count.test.ts"
+          },
+          "run": "vitest run src/__hidden__/query-count.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "no-loop-query",
+          "label": "No per-project query loop left in the route",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "src/routes/projects.ts"
+          ],
+          "pattern": "for \\(const project of rows\\)",
+          "expect": "absent"
+        }
+      ]
+    },
+    {
+      "id": "B4-priority-migration",
+      "category": "data",
+      "prompt": "Replace the boolean tasks.is_urgent with a priority column ('low' | 'normal' | 'high' | 'urgent', default 'normal'). Add a migration that backfills existing rows (urgent tasks become 'urgent', all others 'normal') and drops is_urgent. The API should accept and return `priority` instead of `isUrgent`.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden migration + API tests pass",
+          "type": "command",
+          "copy": {
+            "hidden/priority-migration.test.ts": "src/__hidden__/priority-migration.test.ts"
+          },
+          "run": "vitest run src/__hidden__/priority-migration.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "new-migration",
+          "label": "Adds a new migration instead of editing the initial one",
+          "type": "changed",
+          "files": [
+            "drizzle/0000_init.sql"
+          ],
+          "expect": "none"
+        },
+        {
+          "id": "journal-updated",
+          "label": "Updates the drizzle migration journal",
+          "type": "changed",
+          "files": [
+            "drizzle/meta/_journal.json"
+          ],
+          "expect": "any"
+        }
+      ]
+    },
+    {
+      "id": "B5-webhook-idempotency",
+      "category": "reliability",
+      "prompt": "Our billing provider retries webhooks, and a retried payment.succeeded event just added credits to a customer twice. Make POST /api/webhooks/billing idempotent on the event id: a repeated event must not be applied again, but should still get a 2xx response so the provider stops retrying.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden idempotency tests pass (retry, concurrent duplicates, restart)",
+          "type": "command",
+          "copy": {
+            "hidden/webhook-idempotency.test.ts": "src/__hidden__/webhook-idempotency.test.ts"
+          },
+          "run": "vitest run src/__hidden__/webhook-idempotency.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "migration-added",
+          "label": "Persists processed events (new migration)",
+          "type": "changed",
+          "files": [
+            "drizzle/*.sql"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "B6-login-rate-limit",
+      "category": "reliability",
+      "prompt": "POST /api/auth/token can be brute-forced. After 5 failed login attempts for the same email (in any letter case) within 15 minutes, reject further attempts for that email with 429 and a Retry-After header (in seconds) until the window has passed. Other emails must not be affected.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden rate-limit tests pass",
+          "type": "command",
+          "copy": {
+            "hidden/login-rate-limit.test.ts": "src/__hidden__/login-rate-limit.test.ts"
+          },
+          "run": "vitest run src/__hidden__/login-rate-limit.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "no-new-deps",
+          "label": "No rate-limit dependency needed",
+          "type": "changed",
+          "files": [
+            "package.json"
+          ],
+          "expect": "none",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "B7-tenant-isolation",
+      "category": "safety",
+      "prompt": "A customer reported that they could open a task belonging to another company just by changing the id in the URL. Make sure users can only access tasks in their own organization (other organizations' tasks should look like they don't exist, so 404), check the other task endpoints for the same problem, and add a regression test.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden tenant-isolation tests pass",
+          "type": "command",
+          "copy": {
+            "hidden/tenant-isolation.test.ts": "src/__hidden__/tenant-isolation.test.ts"
+          },
+          "run": "vitest run src/__hidden__/tenant-isolation.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "regression-test",
+          "label": "Adds a regression test",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any"
+        }
+      ]
+    },
+    {
+      "id": "B8-structured-errors",
+      "category": "safety",
+      "prompt": "API errors come back in several different shapes: plain text, {error: ...}, {code, message}, and the framework's raw validation dump. Make every error response JSON shaped as {\"error\": {\"code\": string, \"message\": string, \"details\"?: unknown}} with the right status code: 400 for invalid input (code \"validation_error\", including malformed JSON), 401 unauthenticated, 403 forbidden, 404 not found (including unknown routes), 409 conflicts, and 500 for unexpected errors without leaking internal error messages.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden error-shape tests pass",
+          "type": "command",
+          "copy": {
+            "hidden/error-shape.test.ts": "src/__hidden__/error-shape.test.ts"
+          },
+          "run": "vitest run src/__hidden__/error-shape.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        }
+      ]
+    },
+    {
+      "id": "B9-background-notifications",
+      "category": "reliability",
+      "prompt": "Assigning a task sends the notification email inside the request, so when the mail provider is down, creating or updating a task fails with a 500. Send these notifications from a background job in the same process instead (started by createApp, so our tests that build the app with it exercise the job too), retried with exponential backoff starting at about a second (up to 5 attempts), so the API request succeeds even when the mailer is failing.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden test: requests succeed while the mailer fails",
+          "type": "command",
+          "copy": {
+            "hidden/background-notifications.test.ts": "src/__hidden__/background-notifications.test.ts"
+          },
+          "run": "vitest run src/__hidden__/background-notifications.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "delivery",
+          "label": "Hidden test: delivered once, retried with backoff, 5 attempts",
+          "type": "command",
+          "copy": {
+            "hidden/background-delivery.test.ts": "src/__hidden__/background-delivery.test.ts"
+          },
+          "run": "vitest run src/__hidden__/background-delivery.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        }
+      ]
+    },
+    {
+      "id": "B10-task-service-layer",
+      "category": "architecture",
+      "prompt": "The PATCH /api/tasks/:id handler has grown into a wall of business rules. Move the task update rules into a service module under src/services/ so the route only deals with HTTP (parsing input and mapping results to status codes). Behaviour must not change.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "behaviour",
+          "label": "Hidden behaviour tests still pass",
+          "type": "command",
+          "copy": {
+            "hidden/task-update-rules.test.ts": "src/__hidden__/task-update-rules.test.ts"
+          },
+          "run": "vitest run src/__hidden__/task-update-rules.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "service-added",
+          "label": "Adds a service module",
+          "type": "changed",
+          "files": [
+            "src/services/**"
+          ],
+          "expect": "any"
+        },
+        {
+          "id": "rules-moved",
+          "label": "Transition table no longer in the route",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "src/routes/tasks.ts"
+          ],
+          "pattern": "in_progress\"?\\s*:\\s*\\[",
+          "expect": "absent"
+        },
+        {
+          "id": "route-http-only",
+          "label": "Route no longer updates tasks or sends notifications",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "src/routes/tasks.ts"
+          ],
+          "pattern": "notifyTaskAssigned|\\.update\\(tasks\\)",
+          "expect": "absent"
+        }
+      ]
+    },
+    {
+      "id": "B11-config-validation",
+      "category": "architecture",
+      "prompt": "Configuration is read straight from process.env all over the codebase, so a missing or mistyped variable only shows up as a weird failure later. Load and validate all configuration once at startup: PORT (default 4000), DATABASE_URL (required), WEBHOOK_SECRET (required), TOKEN_TTL_HOURS (positive integer, default 24) and LOG_LEVEL (debug, info, warn, error or silent; default info). The server should refuse to start with a clear error that names every invalid or missing variable.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden startup tests pass",
+          "type": "command",
+          "copy": {
+            "hidden/config-validation.test.ts": "src/__hidden__/config-validation.test.ts"
+          },
+          "run": "vitest run src/__hidden__/config-validation.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "env-centralised",
+          "label": "Routes and plugins no longer read process.env",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "src/routes/**",
+            "src/plugins/**",
+            "src/services/**"
+          ],
+          "pattern": "process\\.env",
+          "expect": "absent"
+        }
+      ]
+    },
+    {
+      "id": "N1-parse-duration",
+      "category": "control",
+      "prompt": "Add a parseDuration(input: string): number helper in src/lib/duration.ts that converts strings like \"90s\", \"15m\", \"1h30m\" and \"2d\" into milliseconds and throws a RangeError for anything else (empty strings, unknown units, negative numbers). Add unit tests. Don't use it anywhere yet.",
+      "expectsPolicies": [
+        "typescript"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden parseDuration tests pass",
+          "type": "command",
+          "copy": {
+            "hidden/parse-duration.test.ts": "src/__hidden__/parse-duration.test.ts"
+          },
+          "run": "vitest run src/__hidden__/parse-duration.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 180
+        },
+        {
+          "id": "routes-untouched",
+          "label": "Not wired into the app",
+          "type": "changed",
+          "files": [
+            "src/routes/**",
+            "src/plugins/**",
+            "src/app.ts"
+          ],
+          "expect": "none"
+        }
+      ]
+    },
+    {
+      "id": "N2-readme",
+      "category": "control",
+      "prompt": "There's no README. Write one that explains how to run the API locally (install, migrate, seed, start the dev server), lists the environment variables, and documents the existing endpoints. Documentation only, no code changes.",
+      "expectsPolicies": [],
+      "checks": [
+        {
+          "id": "readme",
+          "label": "Adds README.md",
+          "type": "changed",
+          "files": [
+            "README.md"
+          ],
+          "expect": "any"
+        },
+        {
+          "id": "docs-only",
+          "label": "No code or config changes",
+          "type": "changed",
+          "files": [
+            "src/**",
+            "scripts/**",
+            "drizzle/**",
+            "package.json",
+            "tsconfig.json",
+            "*.config.*",
+            ".env.example",
+            ".gitignore",
+            ".prettierignore"
+          ],
+          "expect": "none"
+        },
+        {
+          "id": "readme-setup",
+          "label": "README gives the bun install, migrate, seed and dev-server commands",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "README.md"
+          ],
+          "comments": true,
+          "pattern": "^(?=[\\s\\S]*\\bbun install\\b)(?=[\\s\\S]*\\bmigrate\\b)(?=[\\s\\S]*\\bseed\\b)(?=[\\s\\S]*\\bbun (run )?(dev|start)\\b)",
+          "expect": "present"
+        },
+        {
+          "id": "readme-env",
+          "label": "README lists the five environment variables",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "README.md"
+          ],
+          "comments": true,
+          "pattern": "^(?=[\\s\\S]*\\bPORT\\b)(?=[\\s\\S]*\\bDATABASE_URL\\b)(?=[\\s\\S]*\\bWEBHOOK_SECRET\\b)(?=[\\s\\S]*\\bTOKEN_TTL_HOURS\\b)(?=[\\s\\S]*\\bLOG_LEVEL\\b)",
+          "expect": "present"
+        },
+        {
+          "id": "readme-endpoints",
+          "label": "README documents the main endpoints",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "README.md"
+          ],
+          "comments": true,
+          "pattern": "^(?=[\\s\\S]*/api/health)(?=[\\s\\S]*/api/auth/token)(?=[\\s\\S]*/api/me)(?=[\\s\\S]*/api/projects/[:{<]?\\w+[}>]?/tasks)(?=[\\s\\S]*/api/tasks/[:{<]?\\w+[}>]?)(?=[\\s\\S]*/api/webhooks/billing)",
+          "expect": "present"
+        }
+      ]
+    }
+  ]
+}

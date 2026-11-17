@@ -1,0 +1,53 @@
+{
+  "task": "B7-tenant-isolation",
+  "references": [
+    {
+      "file": "reference-aa-A-r1.patch",
+      "source": "validation-ts-backend-aa A r1"
+    },
+    {
+      "file": "reference-aa-A-r2.patch",
+      "source": "validation-ts-backend-aa A r2"
+    },
+    {
+      "file": "reference-aa-B-r1.patch",
+      "source": "validation-ts-backend-aa B r1"
+    },
+    {
+      "file": "reference-aa-B-r2.patch",
+      "source": "validation-ts-backend-aa B r2"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-get-403.patch",
+      "wrong": "other organizations' tasks get 403",
+      "violates": "other organizations' tasks should look like they don't exist, so 404",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-admins-see-all.patch",
+      "wrong": "organization scoping is skipped for admins",
+      "violates": "users can only access tasks in their own organization",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-delete-then-check.patch",
+      "wrong": "DELETE deletes by id before checking the organization",
+      "violates": "check the other task endpoints for the same problem",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-patch-unscoped-after-refactor.patch",
+      "wrong": "GET is fixed but the PATCH lookup lost its organization filter",
+      "violates": "check the other task endpoints for the same problem",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-get-200-null.patch",
+      "wrong": "answers 200 {task: null} instead of 404",
+      "violates": "so 404",
+      "expect": "killed"
+    }
+  ]
+}

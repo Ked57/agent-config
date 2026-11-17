@@ -1,0 +1,507 @@
+diff --git a/drizzle/0001_api_keys.sql b/drizzle/0001_api_keys.sql
+new file mode 100644
+index 0000000..0de01c5
+--- /dev/null
++++ b/drizzle/0001_api_keys.sql
+@@ -0,0 +1,18 @@
++CREATE TABLE `api_keys` (
++	`id` text PRIMARY KEY NOT NULL,
++	`org_id` text NOT NULL,
++	`created_by` text NOT NULL,
++	`name` text NOT NULL,
++	`prefix` text NOT NULL,
++	`key_hash` text NOT NULL,
++	`scopes` text NOT NULL,
++	`expires_at` integer,
++	`last_used_at` integer,
++	`revoked_at` integer,
++	`created_at` integer NOT NULL,
++	FOREIGN KEY (`org_id`) REFERENCES `organizations`(`id`) ON UPDATE no action ON DELETE cascade,
++	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
++);
++--> statement-breakpoint
++CREATE UNIQUE INDEX `api_keys_key_hash_unique` ON `api_keys` (`key_hash`);--> statement-breakpoint
++CREATE INDEX `api_keys_org_idx` ON `api_keys` (`org_id`);
+\ No newline at end of file
+diff --git a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+index 711e2b9..1883e8f 100644
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794774883005,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794789198170,
++      "tag": "0001_api_keys",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff --git a/src/app.ts b/src/app.ts
+index 80209e4..cacf198 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -3,6 +3,7 @@ import { Elysia } from "elysia";
+ import type { Db } from "./db/client";
+ import { logger } from "./lib/logger";
+ import { requestLogger } from "./plugins/request-logger";
++import { apiKeyRoutes } from "./routes/api-keys";
+ import { authRoutes } from "./routes/auth";
+ import { healthRoutes } from "./routes/health";
+ import { projectRoutes } from "./routes/projects";
+@@ -24,6 +25,7 @@ export function createApp({ db }: { db: Db }) {
+     })
+     .use(healthRoutes)
+     .use(authRoutes(db))
++    .use(apiKeyRoutes(db))
+     .use(projectRoutes(db))
+     .use(taskRoutes(db))
+     .use(webhookRoutes(db));
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 6a14aa4..1c0929e 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -43,6 +43,38 @@ export const apiTokens = sqliteTable("api_tokens", {
+   createdAt: createdAt(),
+ });
+ 
++export const apiKeyScopes = [
++  "projects:read",
++  "projects:write",
++  "tasks:read",
++  "tasks:write",
++] as const;
++export type ApiKeyScope = (typeof apiKeyScopes)[number];
++
++export const apiKeys = sqliteTable(
++  "api_keys",
++  {
++    id: text("id").primaryKey(),
++    orgId: text("org_id")
++      .notNull()
++      .references(() => organizations.id, { onDelete: "cascade" }),
++    createdBy: text("created_by")
++      .notNull()
++      .references(() => users.id, { onDelete: "cascade" }),
++    name: text("name").notNull(),
++    prefix: text("prefix").notNull(),
++    keyHash: text("key_hash").notNull().unique(),
++    scopes: text("scopes", { mode: "json" }).$type<ApiKeyScope[]>().notNull(),
++    expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
++    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
++    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
++    createdAt: createdAt(),
++  },
++  (table) => [index("api_keys_org_idx").on(table.orgId)],
++);
++
++export type ApiKey = typeof apiKeys.$inferSelect;
++
+ export const projects = sqliteTable(
+   "projects",
+   {
+diff --git a/src/plugins/auth.ts b/src/plugins/auth.ts
+index dc934fa..f986fad 100644
+--- a/src/plugins/auth.ts
++++ b/src/plugins/auth.ts
+@@ -2,13 +2,63 @@ import { eq } from "drizzle-orm";
+ import { Elysia } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { apiTokens, users } from "../db/schema";
++import { apiKeys, apiTokens, users, type ApiKeyScope } from "../db/schema";
+ import { hashToken } from "../lib/tokens";
+ 
++export const API_KEY_PREFIX = "tk_";
++
+ export interface AuthUser {
+   id: string;
+   orgId: string;
+   role: "admin" | "member";
++  /** Set when the request authenticated with an API key rather than a login token. */
++  apiKey: { id: string; name: string; scopes: ApiKeyScope[] } | null;
++}
++
++async function userForApiKey(db: Db, key: string): Promise<AuthUser | null> {
++  const row = await db
++    .select({
++      id: users.id,
++      orgId: users.orgId,
++      role: users.role,
++      key: apiKeys,
++    })
++    .from(apiKeys)
++    .innerJoin(users, eq(users.id, apiKeys.createdBy))
++    .where(eq(apiKeys.keyHash, hashToken(key)))
++    .get();
++  if (!row || row.key.revokedAt) return null;
++  if (row.key.expiresAt && row.key.expiresAt.getTime() <= Date.now())
++    return null;
++  await db
++    .update(apiKeys)
++    .set({ lastUsedAt: new Date() })
++    .where(eq(apiKeys.id, row.key.id));
++  return {
++    id: row.id,
++    orgId: row.orgId,
++    role: row.role,
++    apiKey: { id: row.key.id, name: row.key.name, scopes: row.key.scopes },
++  };
++}
++
++async function userForLoginToken(
++  db: Db,
++  token: string,
++): Promise<AuthUser | null> {
++  const row = await db
++    .select({
++      id: users.id,
++      orgId: users.orgId,
++      role: users.role,
++      expiresAt: apiTokens.expiresAt,
++    })
++    .from(apiTokens)
++    .innerJoin(users, eq(users.id, apiTokens.userId))
++    .where(eq(apiTokens.tokenHash, hashToken(token)))
++    .get();
++  if (!row || row.expiresAt.getTime() < Date.now()) return null;
++  return { id: row.id, orgId: row.orgId, role: row.role, apiKey: null };
+ }
+ 
+ /** Bearer-token guard. Routes opt in with `{ requireAuth: true }` and receive `user`. */
+@@ -23,24 +73,33 @@ export const authGuard = (db: Db) =>
+             message: "missing bearer token",
+           });
+         }
+-        const row = await db
+-          .select({
+-            id: users.id,
+-            orgId: users.orgId,
+-            role: users.role,
+-            expiresAt: apiTokens.expiresAt,
+-          })
+-          .from(apiTokens)
+-          .innerJoin(users, eq(users.id, apiTokens.userId))
+-          .where(
+-            eq(apiTokens.tokenHash, hashToken(header.slice("Bearer ".length))),
+-          )
+-          .get();
+-        if (!row || row.expiresAt.getTime() < Date.now()) {
+-          return status(401, "Unauthorized");
+-        }
+-        const user: AuthUser = { id: row.id, orgId: row.orgId, role: row.role };
++        const credential = header.slice("Bearer ".length);
++        const user = credential.startsWith(API_KEY_PREFIX)
++          ? await userForApiKey(db, credential)
++          : await userForLoginToken(db, credential);
++        if (!user) return status(401, "Unauthorized");
+         return { user };
+       },
+     },
+   });
++
++const scopeIncludes: Record<ApiKeyScope, ApiKeyScope[]> = {
++  "projects:read": ["projects:read", "projects:write"],
++  "projects:write": ["projects:write"],
++  "tasks:read": ["tasks:read", "tasks:write"],
++  "tasks:write": ["tasks:write"],
++};
++
++/** The 403 body when an API key lacks `required`, or null. Login tokens always pass. */
++export function missingScope(user: AuthUser, required: ApiKeyScope) {
++  if (!user.apiKey) return null;
++  if (
++    scopeIncludes[required].some((scope) => user.apiKey?.scopes.includes(scope))
++  )
++    return null;
++  return {
++    code: "insufficient_scope",
++    message: `this key needs the ${required} scope`,
++    required,
++  };
++}
+diff --git a/src/routes/api-keys.test.ts b/src/routes/api-keys.test.ts
+new file mode 100644
+index 0000000..7b700a6
+--- /dev/null
++++ b/src/routes/api-keys.test.ts
+@@ -0,0 +1,45 @@
++import { describe, expect, it } from "vitest";
++
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++
++const admin = { token: SEED_TOKENS.acmeAdmin };
++
++async function createKey(
++  request: Awaited<ReturnType<typeof createTestContext>>["request"],
++  scopes: string[],
++) {
++  const response = await request("POST", "/api/api-keys", {
++    ...admin,
++    body: { name: "Script", scopes },
++  });
++  expect(response.status).toBe(201);
++  return (await response.json()) as { id: string; key: string };
++}
++
++describe("API keys", () => {
++  it("limits a key to its scopes", async () => {
++    const { request } = await createTestContext();
++    const { key } = await createKey(request, ["tasks:read"]);
++    const token = { token: key };
++    expect((await request("GET", "/api/tasks/tsk_4", token)).status).toBe(200);
++    const write = await request("PATCH", "/api/tasks/tsk_4", {
++      ...token,
++      body: { title: "x" },
++    });
++    expect(write.status).toBe(403);
++    expect(await write.json()).toMatchObject({ required: "tasks:write" });
++  });
++
++  it("revokes keys and hides them from key management", async () => {
++    const { request } = await createTestContext();
++    const { id, key } = await createKey(request, ["tasks:write"]);
++    const manage = await request("GET", "/api/api-keys", { token: key });
++    expect(await manage.json()).toMatchObject({ code: "api_key_not_allowed" });
++    expect((await request("DELETE", `/api/api-keys/${id}`, admin)).status).toBe(
++      204,
++    );
++    expect(
++      (await request("GET", "/api/tasks/tsk_4", { token: key })).status,
++    ).toBe(401);
++  });
++});
+diff --git a/src/routes/api-keys.ts b/src/routes/api-keys.ts
+new file mode 100644
+index 0000000..66d05f6
+--- /dev/null
++++ b/src/routes/api-keys.ts
+@@ -0,0 +1,118 @@
++import { and, asc, eq } from "drizzle-orm";
++import { Elysia, t } from "elysia";
++
++import type { Db } from "../db/client";
++import { apiKeys, apiKeyScopes, type ApiKey } from "../db/schema";
++import { newId } from "../lib/ids";
++import { generateToken, hashToken } from "../lib/tokens";
++import { API_KEY_PREFIX, authGuard, type AuthUser } from "../plugins/auth";
++
++const DAY_MS = 24 * 60 * 60 * 1000;
++
++function toApiKeyResponse(key: ApiKey) {
++  return {
++    id: key.id,
++    name: key.name,
++    scopes: key.scopes,
++    prefix: key.prefix,
++    createdBy: key.createdBy,
++    createdAt: key.createdAt.toISOString(),
++    expiresAt: key.expiresAt?.toISOString() ?? null,
++    lastUsedAt: key.lastUsedAt?.toISOString() ?? null,
++    revokedAt: key.revokedAt?.toISOString() ?? null,
++  };
++}
++
++/** Why `user` may not manage API keys, or null. */
++function refusal(user: AuthUser) {
++  if (user.apiKey)
++    return {
++      code: "api_key_not_allowed",
++      message: "API keys cannot manage API keys",
++    };
++  if (user.role !== "admin")
++    return { code: "forbidden", message: "only admins can manage API keys" };
++  return null;
++}
++
++export const apiKeyRoutes = (db: Db) =>
++  new Elysia({ prefix: "/api/api-keys" })
++    .use(authGuard(db))
++    .post(
++      "/",
++      async ({ body, user, status }) => {
++        const refused = refusal(user);
++        if (refused) return status(403, refused);
++        const key = `${API_KEY_PREFIX}${generateToken()}`;
++        const [created] = await db
++          .insert(apiKeys)
++          .values({
++            id: newId("key"),
++            orgId: user.orgId,
++            createdBy: user.id,
++            name: body.name,
++            prefix: key.slice(0, 11),
++            keyHash: hashToken(key),
++            scopes: body.scopes,
++            expiresAt: body.expiresInDays
++              ? new Date(Date.now() + body.expiresInDays * DAY_MS)
++              : null,
++          })
++          .returning();
++        if (!created) throw new Error("insert returned no row");
++        return status(201, { ...toApiKeyResponse(created), key });
++      },
++      {
++        requireAuth: true,
++        body: t.Object({
++          name: t.String({ minLength: 1, maxLength: 100 }),
++          scopes: t.Array(
++            t.Union(apiKeyScopes.map((scope) => t.Literal(scope))),
++            { minItems: 1, uniqueItems: true },
++          ),
++          expiresInDays: t.Optional(t.Integer({ minimum: 1, maximum: 365 })),
++        }),
++      },
++    )
++    .get(
++      "/",
++      async ({ user, status }) => {
++        const refused = refusal(user);
++        if (refused) return status(403, refused);
++        const rows = await db
++          .select()
++          .from(apiKeys)
++          .where(eq(apiKeys.orgId, user.orgId))
++          .orderBy(asc(apiKeys.name), asc(apiKeys.createdAt));
++        return { items: rows.map(toApiKeyResponse) };
++      },
++      { requireAuth: true },
++    )
++    .delete(
++      "/:id",
++      async ({ params, user, status }) => {
++        const refused = refusal(user);
++        if (refused) return status(403, refused);
++        const key = await db
++          .select()
++          .from(apiKeys)
++          .where(and(eq(apiKeys.id, params.id), eq(apiKeys.orgId, user.orgId)))
++          .get();
++        if (!key)
++          return status(404, {
++            code: "api_key_not_found",
++            message: "API key not found",
++          });
++        if (key.revokedAt)
++          return status(409, {
++            code: "already_revoked",
++            message: "the key is already revoked",
++          });
++        await db
++          .update(apiKeys)
++          .set({ revokedAt: new Date() })
++          .where(eq(apiKeys.id, key.id));
++        return new Response(null, { status: 204 });
++      },
++      { requireAuth: true },
++    );
+diff --git a/src/routes/auth.ts b/src/routes/auth.ts
+index 2b17fec..d517f9a 100644
+--- a/src/routes/auth.ts
++++ b/src/routes/auth.ts
+@@ -54,6 +54,7 @@ export const authRoutes = (db: Db) =>
+           role: user.role,
+           email: row?.email,
+           name: row?.name,
++          apiKey: user.apiKey,
+         };
+       },
+       { requireAuth: true },
+diff --git a/src/routes/projects.ts b/src/routes/projects.ts
+index 3143433..2579aa3 100644
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -4,7 +4,7 @@ import { Elysia, t } from "elysia";
+ import type { Db } from "../db/client";
+ import { projects, tasks, users } from "../db/schema";
+ import { newId } from "../lib/ids";
+-import { authGuard } from "../plugins/auth";
++import { authGuard, missingScope } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+ 
+@@ -13,7 +13,9 @@ export const projectRoutes = (db: Db) =>
+     .use(authGuard(db))
+     .get(
+       "/",
+-      async ({ user }) => {
++      async ({ user, status }) => {
++        const denied = missingScope(user, "projects:read");
++        if (denied) return status(403, denied);
+         const rows = await db
+           .select()
+           .from(projects)
+@@ -43,6 +45,8 @@ export const projectRoutes = (db: Db) =>
+     .post(
+       "/",
+       async ({ body, user, status }) => {
++        const denied = missingScope(user, "projects:write");
++        if (denied) return status(403, denied);
+         const [project] = await db
+           .insert(projects)
+           .values({
+@@ -80,6 +84,8 @@ export const projectRoutes = (db: Db) =>
+     .get(
+       "/:id/tasks",
+       async ({ params, user, status }) => {
++        const denied = missingScope(user, "tasks:read");
++        if (denied) return status(403, denied);
+         const project = await db
+           .select()
+           .from(projects)
+@@ -100,6 +106,8 @@ export const projectRoutes = (db: Db) =>
+     .post(
+       "/:id/tasks",
+       async ({ params, body, user, status }) => {
++        const denied = missingScope(user, "tasks:write");
++        if (denied) return status(403, denied);
+         const project = await db
+           .select()
+           .from(projects)
+diff --git a/src/routes/tasks.ts b/src/routes/tasks.ts
+index c62bf5d..666b2ef 100644
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -3,7 +3,7 @@ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+ import { tasks, users, type TaskStatus } from "../db/schema";
+-import { authGuard } from "../plugins/auth";
++import { authGuard, missingScope } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+ 
+@@ -12,7 +12,9 @@ export const taskRoutes = (db: Db) =>
+     .use(authGuard(db))
+     .get(
+       "/:id",
+-      async ({ params, status }) => {
++      async ({ params, user, status }) => {
++        const denied = missingScope(user, "tasks:read");
++        if (denied) return status(403, denied);
+         const task = await db
+           .select()
+           .from(tasks)
+@@ -26,6 +28,8 @@ export const taskRoutes = (db: Db) =>
+     .patch(
+       "/:id",
+       async ({ params, body, user, status }) => {
++        const denied = missingScope(user, "tasks:write");
++        if (denied) return status(403, denied);
+         const task = await db
+           .select()
+           .from(tasks)
+@@ -137,6 +141,8 @@ export const taskRoutes = (db: Db) =>
+     .delete(
+       "/:id",
+       async ({ params, user, status }) => {
++        const denied = missingScope(user, "tasks:write");
++        if (denied) return status(403, denied);
+         if (user.role !== "admin") return status(403, "Forbidden");
+         const deleted = await db
+           .delete(tasks)

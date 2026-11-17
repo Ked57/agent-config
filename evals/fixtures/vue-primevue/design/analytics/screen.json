@@ -1,0 +1,117 @@
+{
+  "screen": "analytics",
+  "task": "D1-analytics-dashboard",
+  "title": "Analytics dashboard",
+  "route": "/analytics",
+  "figma": { "fileKey": "Xk3dQ9vLm2PaRt7YwZb4Nc", "fileName": "Acme-Console-Analytics", "pageName": "Analytics" },
+  "frames": [
+    { "id": "desktop", "nodeId": "12-2", "name": "Analytics / Desktop", "label": "desktop", "viewport": { "width": 1440, "height": 900 } },
+    { "id": "mobile", "nodeId": "12-3", "name": "Analytics / Mobile", "label": "mobile", "viewport": { "width": 390, "height": 844 } },
+    {
+      "id": "desktop-row-menu-open", "nodeId": "12-4", "name": "Analytics / Desktop / Row menu open", "label": "state: row menu open",
+      "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "button", "name": "Row actions", "nth": 0 } }]
+    },
+    {
+      "id": "desktop-range-7d", "nodeId": "12-5", "name": "Analytics / Desktop / Last 7 days", "label": "state: last 7 days selected",
+      "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "choose": { "control": "Date range", "option": "Last 7 days" } }]
+    },
+    {
+      "id": "desktop-empty", "nodeId": "12-6", "name": "Analytics / Desktop / Empty", "label": "state: no customers or activity yet (?seed=empty)",
+      "viewport": { "width": 1440, "height": 900 },
+      "query": "seed=empty"
+    }
+  ],
+  "layout": {
+    "desktop": [
+      { "id": "title", "role": "heading", "name": "Analytics", "level": 1 },
+      { "id": "date-range", "role": "combobox", "name": "Date range" },
+      { "id": "export", "role": "button", "name": "Export report" },
+      { "id": "kpi-revenue-label", "text": "Revenue" },
+      { "id": "kpi-revenue", "text": "$124,580" },
+      { "id": "kpi-revenue-delta", "text": "12.4%", "contains": true },
+      { "id": "kpi-customers-label", "text": "Active customers" },
+      { "id": "kpi-customers", "text": "1,284" },
+      { "id": "kpi-customers-delta", "text": "5.8%", "contains": true },
+      { "id": "kpi-orders-label", "text": "Orders" },
+      { "id": "kpi-orders", "text": "1,462" },
+      { "id": "kpi-orders-delta", "text": "8.1%", "contains": true },
+      { "id": "kpi-conversion-label", "text": "Conversion rate" },
+      { "id": "kpi-conversion", "text": "2.9%" },
+      { "id": "kpi-conversion-delta", "text": "1.7%", "contains": true },
+      { "id": "chart-title", "text": "Revenue over time" },
+      { "id": "activity-title", "text": "Recent activity" },
+      { "id": "activity-first", "text": "upgraded to Enterprise", "contains": true },
+      { "id": "table-title", "text": "Top customers" },
+      { "id": "col-customer", "role": "columnheader", "name": "Customer" },
+      { "id": "col-status", "role": "columnheader", "name": "Status" },
+      { "id": "col-revenue", "role": "columnheader", "name": "Revenue" },
+      { "id": "row-first", "role": "cell", "name": "Northwind Traders", "contains": true },
+      { "id": "avatar-first", "text": "NT" },
+      { "id": "tag-past-due", "text": "Past due" },
+      { "id": "row-first-revenue", "text": "$18,420" },
+      { "id": "row-actions", "role": "button", "name": "Row actions" }
+    ],
+    "mobile": [
+      { "id": "title", "role": "heading", "name": "Analytics", "level": 1 },
+      { "id": "date-range", "role": "combobox", "name": "Date range" },
+      { "id": "export", "role": "button", "name": "Export report" },
+      { "id": "kpi-revenue", "text": "$124,580" },
+      { "id": "kpi-revenue-delta", "text": "12.4%", "contains": true },
+      { "id": "kpi-customers", "text": "1,284" },
+      { "id": "kpi-orders", "text": "1,462" },
+      { "id": "kpi-conversion", "text": "2.9%" },
+      { "id": "chart-title", "text": "Revenue over time" },
+      { "id": "activity-title", "text": "Recent activity" },
+      { "id": "table-title", "text": "Top customers" }
+    ],
+    "desktop-row-menu-open": [
+      { "id": "row-actions", "role": "button", "name": "Row actions" },
+      { "id": "menu-view", "text": "View customer" },
+      { "id": "menu-invoice", "text": "Send invoice" },
+      { "id": "menu-remove", "text": "Remove" }
+    ],
+    "desktop-range-7d": [
+      { "id": "date-range", "role": "combobox", "name": "Date range" },
+      { "id": "kpi-revenue", "text": "$28,450" },
+      { "id": "kpi-orders", "text": "342" },
+      { "id": "kpi-conversion", "text": "3.1%" },
+      { "id": "row-first-revenue", "text": "$4,605" }
+    ],
+    "desktop-empty": [
+      { "id": "title", "role": "heading", "name": "Analytics", "level": 1 },
+      { "id": "kpi-revenue", "text": "$124,580" },
+      { "id": "table-title", "text": "Top customers" },
+      { "id": "empty-customers", "text": "No customers yet" },
+      { "id": "empty-activity", "text": "No activity yet" }
+    ]
+  },
+  "behaviour": [
+    {
+      "id": "row-menu-opens", "frame": "desktop-row-menu-open",
+      "expect": [{ "visibleText": "View customer" }, { "visibleText": "Send invoice" }, { "visibleText": "Remove" }]
+    },
+    {
+      "id": "range-7d-updates-kpis", "frame": "desktop-range-7d",
+      "expect": [{ "visibleText": "$28,450" }, { "visibleText": "342" }, { "hiddenText": "$124,580" }]
+    },
+    {
+      "id": "range-90d-updates-kpis", "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "choose": { "control": "Date range", "option": "Last 90 days" } }],
+      "expect": [{ "visibleText": "$351,920" }, { "visibleText": "4,210" }]
+    },
+    {
+      "id": "kpis-one-row-on-desktop", "frame": "desktop",
+      "expect": [{ "sameRow": ["$124,580", "1,284", "1,462", "2.9%"] }]
+    },
+    {
+      "id": "mobile-stacks-without-overflow", "frame": "mobile",
+      "expect": [{ "noHorizontalOverflow": true }, { "stacked": ["$124,580", "1,284", "1,462", "2.9%"] }]
+    },
+    {
+      "id": "empty-state", "frame": "desktop-empty",
+      "expect": [{ "visibleText": "No customers yet", "contains": true }, { "hiddenText": "Northwind Traders" }]
+    }
+  ]
+}

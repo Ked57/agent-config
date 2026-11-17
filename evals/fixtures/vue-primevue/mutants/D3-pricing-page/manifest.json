@@ -1,0 +1,17 @@
+{
+  "task": "D3-pricing-page",
+  "scoreGate": { "referenceMin": 0.95, "untouchedMax": 0.1, "mutantMaxDrop": 0.05 },
+  "references": [
+    { "file": "reference.patch", "source": "hand-built reference design (R3b); the mockups, layout.json and baselines are exported from it" }
+  ],
+  "mutants": [
+    { "file": "m1-spacing.patch", "wrong": "plan cards, feature lists, table cells and sections padded and spaced 8 px more", "violates": "the spacing drawn in every frame", "expect": "killed" },
+    { "file": "m2-colour-tokens.patch", "wrong": "highlighted plan, badge, checks, comparison column, eyebrow, link and save tag use indigo/sky/blue instead of the primary/green tokens", "violates": "the colours drawn in every frame", "expect": "killed" },
+    { "file": "m3-period-ignored.patch", "wrong": "the billing-period toggle changes nothing: prices and billing notes stay monthly", "violates": "the yearly-billing state frame", "expect": "killed" },
+    { "file": "m4-no-mobile-layout.patch", "wrong": "fixed four-column plan grid without the highlighted plan first, two-column FAQ and an unscrolled comparison table at 390 px", "violates": "the mobile frame", "expect": "killed" },
+    { "file": "m5-plain-html-controls.patch", "wrong": "native buttons for the period toggle and CTAs, plain-text tag, details/summary instead of the drawn accordion", "violates": "the segmented control, buttons, tag and accordion drawn in the frames", "expect": "killed" },
+    { "file": "m6-font-weights.patch", "wrong": "title, section titles, plan names, prices and table header are regular instead of semi-bold", "violates": "the text styles in the frames", "expect": "killed" },
+    { "file": "m7-a11y-regressions.patch", "wrong": "low-contrast plan descriptions and billing notes, light link, unlabelled unfocusable scroll region, low-contrast toggle labels", "violates": "accessible implementation of the drawn screen", "expect": "killed" },
+    { "file": "m8-lazy-but-plausible.patch", "wrong": "right content but sloppy: CTAs not aligned (uneven card heights), badge inline instead of overlapping the card edge, no ring, no billing notes, no eyebrow or save tag, table without groups or highlighted column, single-column FAQ", "violates": "the design's detail (what a mediocre implementation ships); should land mid-scale", "expect": "killed" }
+  ]
+}

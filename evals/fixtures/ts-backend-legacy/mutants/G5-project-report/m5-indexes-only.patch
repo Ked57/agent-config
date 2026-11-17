@@ -1,0 +1,41 @@
+diff -ruN a/drizzle/0001_time_entry_indexes.sql b/drizzle/0001_time_entry_indexes.sql
+--- /dev/null
++++ b/drizzle/0001_time_entry_indexes.sql
+@@ -0,0 +1,2 @@
++CREATE INDEX `time_entries_task_idx` ON `time_entries` (`task_id`);--> statement-breakpoint
++CREATE INDEX `time_entries_project_idx` ON `time_entries` (`project_id`);
+\ No newline at end of file
+diff -ruN a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794870096994,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794871837645,
++      "tag": "0001_time_entry_indexes",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff -ruN a/src/db/schema.ts b/src/db/schema.ts
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -209,7 +209,11 @@
+     invoiceId: text("invoice_id"),
+     createdAt: createdAt(),
+   },
+-  (table) => [index("time_entries_org_idx").on(table.orgId)],
++  (table) => [
++    index("time_entries_org_idx").on(table.orgId),
++    index("time_entries_task_idx").on(table.taskId),
++    index("time_entries_project_idx").on(table.projectId),
++  ],
+ );
+ 
+ export const invoiceStatuses = ["draft", "issued", "paid", "void"] as const;

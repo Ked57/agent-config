@@ -1,0 +1,318 @@
+{
+  "name": "backend-legacy",
+  "description": "Hard backend tasks on the ts-backend-legacy fixture, where the difficulty is finding the cause in a big, messy codebase rather than following a long requirement list: symptom-only bug reports, invariants that imply concurrency and integer money, a tenant-isolation sweep, a measured performance budget, spec conformance and spec-sized changes across old and new code. Scored per hidden test case.",
+  "fixture": "ts-backend-legacy",
+  "categories": {
+    "symptom": {
+      "label": "Symptom-only bug reports"
+    },
+    "invariant": {
+      "label": "Implied invariants"
+    },
+    "sweep": {
+      "label": "Find every instance"
+    },
+    "budget": {
+      "label": "Measured budgets"
+    },
+    "conformance": {
+      "label": "Spec conformance"
+    },
+    "spec": {
+      "label": "Spec issues (multi-file)"
+    }
+  },
+  "smoke": [
+    "G1-month-end-export"
+  ],
+  "featurePatterns": {
+    "transaction": "\\.transaction\\(|\\.batch\\(",
+    "onConflict": "onConflictDo(Nothing|Update)|ON CONFLICT|INSERT OR IGNORE",
+    "migrationFile": "CREATE TABLE|ALTER TABLE|CREATE (UNIQUE )?INDEX",
+    "intl": "Intl\\.DateTimeFormat|timeZone",
+    "legacyHelperTouched": "lib/legacy/"
+  },
+  "tasks": [
+    {
+      "id": "G1-month-end-export",
+      "category": "symptom",
+      "prompt": "Since the start of the month some customers can't download their invoice export any more, it fails with a 500 every time. This is from the production logs:\n\n```\n{\"time\":\"2026-11-03T08:14:22.613Z\",\"level\":\"error\",\"msg\":\"unhandled error\",\"path\":\"/api/exports/invoices.csv\",\"error\":\"RangeError: invalid calendar day \\\"2026-11-31\\\"\",\"stack\":\"RangeError: invalid calendar day \\\"2026-11-31\\\"\\n    at formatDay (src/lib/legacy/dates.ts:66:31)\\n    at <anonymous> (src/routes/exports.ts:61:15)\\n    at map (native)\\n    at <anonymous> (src/routes/exports.ts:56:16)\"}\n{\"time\":\"2026-11-03T08:14:22.614Z\",\"level\":\"info\",\"msg\":\"request\",\"method\":\"GET\",\"path\":\"/api/exports/invoices.csv\",\"status\":500,\"durationMs\":41}\n```\n\nPlease fix it, and anything else with the same cause.",
+      "expectsComponents": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/G1-month-end.test.ts": "src/__hidden__/G1-month-end.test.ts"
+          },
+          "run": "vitest run src/__hidden__/G1-month-end.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "G2-local-days",
+      "category": "symptom",
+      "prompt": "Support ticket from Acme, can you take this one?\n\n> Our developer Sam works from Sydney. On Monday morning (his time) he logged 2 hours, and the weekly timesheet shows them on Sunday, in the week before. Payroll goes off the same numbers, so this matters to us.\n\nTime should always count on the calendar day it was logged on, for the person who logged it, wherever they are. Please fix this properly.",
+      "expectsComponents": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/G2-local-days.test.ts": "src/__hidden__/G2-local-days.test.ts"
+          },
+          "run": "vitest run src/__hidden__/G2-local-days.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "G3-refunds",
+      "category": "invariant",
+      "prompt": "Finance wants to give customers part of their money back on invoices they've paid. Please add POST /api/invoices/:id/refunds for admins, taking {\"amountCents\": <whole number>, \"reason\": \"<text>\"} and answering 201 with the refund (id, invoiceId, amountCents, reason, createdAt). GET /api/invoices/:id should show refundedCents as well.\n\nThe money rules: a refund can never take back more than was actually paid on that invoice (all its refunds together), and the ledger must always balance: every refund shows up in GET /api/ledger as a negative \"refund\" entry, and the org's ledger balance never goes below zero. Refuse a refund that would break this with 409; invalid amounts are a 422.\n\nOur finance tool will call this the same way it calls the payments endpoint, retries included.",
+      "expectsComponents": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/G3-refunds.test.ts": "src/__hidden__/G3-refunds.test.ts"
+          },
+          "run": "vitest run src/__hidden__/G3-refunds.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "G4-tenant-isolation",
+      "category": "sweep",
+      "prompt": "A pen-test report came in: a user in one organization can read another organization's data through at least one endpoint of our API. They didn't say which ones. Find and fix every place where one org can read or change another org's data.\n\nAnother org's data has to behave as if it doesn't exist: 404 for anything addressed by id (directly or nested under something else), and nothing of it in lists, filters or exports. Normal access within an org must keep working.",
+      "expectsComponents": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/G4-tenant-isolation.test.ts": "src/__hidden__/G4-tenant-isolation.test.ts"
+          },
+          "run": "vitest run src/__hidden__/G4-tenant-isolation.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "G5-project-report",
+      "category": "budget",
+      "prompt": "The project report (GET /api/reports/projects/:id) times out for our big customers, some of them have around 50k tasks. Please make it fast: for a project with a few thousand tasks and tens of thousands of time entries it should run a small, fixed number of database queries (no more than 10, whatever the size of the project) and answer well under a second, without changing its output in any way.",
+      "expectsComponents": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/G5-project-report.test.ts": "src/__hidden__/G5-project-report.test.ts"
+          },
+          "run": "vitest run src/__hidden__/G5-project-report.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 600
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "G6-clients-contract",
+      "category": "conformance",
+      "prompt": "Make /api/clients conform to docs/openapi.yaml. The spec is the source of truth: wherever the code and the spec disagree, the code is wrong (the web app will be updated to match the spec).",
+      "expectsComponents": [
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/G6-clients-contract.test.ts": "src/__hidden__/G6-clients-contract.test.ts"
+          },
+          "run": "vitest run src/__hidden__/G6-clients-contract.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "G7-time-approvals",
+      "category": "spec",
+      "prompt": "Implement spec issue #312 (Approve time before it is invoiced). The spec is in docs/issues/312-time-approvals.md; read it fully first. Follow its acceptance criteria and write the tests first. Nothing in its out-of-scope section is to be built. Done means typecheck, lint, format, the full test suite and the build all pass, as the spec says. Reply with a table mapping each requirement (R1, R2, ...) to the test that covers it. If something in the spec can't be done or needs my decision, say so in your reply with the reading you chose instead of guessing silently.",
+      "files": {
+        "specs/G7-time-approvals.md": "docs/issues/312-time-approvals.md"
+      },
+      "expectsComponents": [
+        "plugin:pstack",
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/G7-time-approvals.test.ts": "src/__hidden__/G7-time-approvals.test.ts"
+          },
+          "run": "vitest run src/__hidden__/G7-time-approvals.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "G8-retire-v1-reports",
+      "category": "spec",
+      "prompt": "Implement spec issue #340 (Retire the v1 reports module). The spec is in docs/issues/340-retire-v1-reports.md; read it fully first. Follow its acceptance criteria and write the tests first. Nothing in its out-of-scope section is to be built. Done means typecheck, lint, format, the full test suite and the build all pass, as the spec says. Reply with a table mapping each requirement (R1, R2, ...) to the test that covers it. If something in the spec can't be done or needs my decision, say so in your reply with the reading you chose instead of guessing silently.",
+      "files": {
+        "specs/G8-retire-v1-reports.md": "docs/issues/340-retire-v1-reports.md"
+      },
+      "expectsComponents": [
+        "plugin:pstack",
+        "typescript",
+        "manual-qa"
+      ],
+      "checks": [
+        {
+          "id": "acceptance",
+          "label": "Hidden acceptance tests (scored per case)",
+          "type": "command",
+          "copy": {
+            "hidden/G8-retire-v1.test.ts": "src/__hidden__/G8-retire-v1.test.ts",
+            "hidden/G8-golden.json": "src/__hidden__/G8-golden.json"
+          },
+          "run": "vitest run src/__hidden__/G8-retire-v1.test.ts --testTimeout=30000",
+          "reporter": "vitest-json",
+          "expect": "pass",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "tests-added",
+          "label": "Adds or updates tests",
+          "type": "changed",
+          "files": [
+            "src/**/*.test.ts"
+          ],
+          "expect": "any",
+          "level": "info"
+        }
+      ]
+    }
+  ]
+}

@@ -5,7 +5,10 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "check": "node --check bin/agent-config.mjs && node --check bin/native-agents.mjs",
+    "check": "node --check bin/agent-config.mjs && node --check bin/native-agents.mjs && node --check evals/run.mjs",
+    "eval": "node evals/run.mjs",
+    "eval:mutants": "node evals/mutants.mjs",
+    "eval:design-assets": "node evals/design-assets.mjs",
     "test": "node --test tests/*.test.mjs",
     "verify": "npm run check && npm test"
   }

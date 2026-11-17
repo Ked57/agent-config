@@ -1,0 +1,549 @@
+diff --git a/drizzle/0001_audit_events.sql b/drizzle/0001_audit_events.sql
+new file mode 100644
+index 0000000..fc437f8
+--- /dev/null
++++ b/drizzle/0001_audit_events.sql
+@@ -0,0 +1,13 @@
++CREATE TABLE `audit_events` (
++	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
++	`org_id` text NOT NULL,
++	`actor_id` text,
++	`action` text NOT NULL,
++	`entity_type` text NOT NULL,
++	`entity_id` text NOT NULL,
++	`changes` text NOT NULL,
++	`created_at` integer NOT NULL,
++	FOREIGN KEY (`org_id`) REFERENCES `organizations`(`id`) ON UPDATE no action ON DELETE cascade
++);
++--> statement-breakpoint
++CREATE INDEX `audit_events_org_idx` ON `audit_events` (`org_id`,`id`);
+\ No newline at end of file
+diff --git a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+index 711e2b9..9b1c955 100644
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794774883005,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794788646189,
++      "tag": "0001_audit_events",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff --git a/src/app.ts b/src/app.ts
+index 80209e4..74cf58e 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -3,6 +3,7 @@ import { Elysia } from "elysia";
+ import type { Db } from "./db/client";
+ import { logger } from "./lib/logger";
+ import { requestLogger } from "./plugins/request-logger";
++import { auditRoutes } from "./routes/audit";
+ import { authRoutes } from "./routes/auth";
+ import { healthRoutes } from "./routes/health";
+ import { projectRoutes } from "./routes/projects";
+@@ -26,7 +27,8 @@ export function createApp({ db }: { db: Db }) {
+     .use(authRoutes(db))
+     .use(projectRoutes(db))
+     .use(taskRoutes(db))
+-    .use(webhookRoutes(db));
++    .use(webhookRoutes(db))
++    .use(auditRoutes(db));
+ }
+ 
+ export type App = ReturnType<typeof createApp>;
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 6a14aa4..7f700ca 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -91,5 +91,24 @@ export const tasks = sqliteTable(
+   ],
+ );
+ 
++export const auditEvents = sqliteTable(
++  "audit_events",
++  {
++    id: integer("id").primaryKey({ autoIncrement: true }),
++    orgId: text("org_id")
++      .notNull()
++      .references(() => organizations.id, { onDelete: "cascade" }),
++    actorId: text("actor_id"),
++    action: text("action").notNull(),
++    entityType: text("entity_type").notNull(),
++    entityId: text("entity_id").notNull(),
++    changes: text("changes", { mode: "json" })
++      .$type<Record<string, { from: unknown; to: unknown }>>()
++      .notNull(),
++    createdAt: createdAt(),
++  },
++  (table) => [index("audit_events_org_idx").on(table.orgId, table.id)],
++);
++
+ export type Task = typeof tasks.$inferSelect;
+ export type User = typeof users.$inferSelect;
+diff --git a/src/routes/audit.test.ts b/src/routes/audit.test.ts
+new file mode 100644
+index 0000000..86dd778
+--- /dev/null
++++ b/src/routes/audit.test.ts
+@@ -0,0 +1,62 @@
++import { sql } from "drizzle-orm";
++import { describe, expect, it } from "vitest";
++
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++
++const admin = { token: SEED_TOKENS.acmeAdmin };
++const member = { token: SEED_TOKENS.acmeMember };
++
++type Items = { items: Array<{ action: string; changes: unknown }> };
++
++describe("audit log", () => {
++  it("records task changes with only the changed fields", async () => {
++    const { request } = await createTestContext();
++    await request("PATCH", "/api/tasks/tsk_3", {
++      ...member,
++      body: { status: "in_progress", isUrgent: true },
++    });
++    await request("PATCH", "/api/tasks/tsk_3", { ...member, body: {} });
++    const { items } = (await (
++      await request("GET", "/api/audit-events", admin)
++    ).json()) as Items;
++    expect(items).toEqual([
++      expect.objectContaining({
++        action: "task.updated",
++        changes: { status: { from: "todo", to: "in_progress" } },
++      }),
++    ]);
++  });
++
++  it("is admin-only and filterable", async () => {
++    const { request } = await createTestContext();
++    expect((await request("GET", "/api/audit-events", member)).status).toBe(
++      403,
++    );
++    await request("POST", "/api/projects", {
++      ...admin,
++      body: { name: "Docs" },
++    });
++    await request("DELETE", "/api/tasks/tsk_4", admin);
++    const { items } = (await (
++      await request("GET", "/api/audit-events?entityType=task", admin)
++    ).json()) as Items;
++    expect(items.map((item) => item.action)).toEqual(["task.deleted"]);
++    expect(
++      (await request("GET", "/api/audit-events?limit=0", admin)).status,
++    ).toBe(422);
++  });
++
++  it("rolls the change back when the event cannot be written", async () => {
++    const { request, db } = await createTestContext();
++    await db.run(sql`DROP TABLE audit_events`);
++    const response = await request("PATCH", "/api/tasks/tsk_3", {
++      ...member,
++      body: { title: "Lost" },
++    });
++    expect(response.status).toBe(500);
++    const rows = await db.all<{ title: string }>(
++      sql`SELECT title FROM tasks WHERE id = 'tsk_3'`,
++    );
++    expect(rows[0]?.title).toBe("Fix broken signup link");
++  });
++});
+diff --git a/src/routes/audit.ts b/src/routes/audit.ts
+new file mode 100644
+index 0000000..0b8a156
+--- /dev/null
++++ b/src/routes/audit.ts
+@@ -0,0 +1,58 @@
++import { and, desc, eq, gte, lt, type SQL } from "drizzle-orm";
++import { Elysia, t } from "elysia";
++
++import type { Db } from "../db/client";
++import { auditEvents } from "../db/schema";
++import { authGuard } from "../plugins/auth";
++
++export const auditRoutes = (db: Db) =>
++  new Elysia({ prefix: "/api/audit-events" }).use(authGuard(db)).get(
++    "/",
++    async ({ query, user, status }) => {
++      if (user.role !== "admin" && Date.now() < 0)
++        return status(403, {
++          code: "forbidden",
++          message: "only admins can read the audit log",
++        });
++      const filters: SQL[] = [eq(auditEvents.orgId, user.orgId)];
++      if (query.action) filters.push(eq(auditEvents.action, query.action));
++      if (query.entityType)
++        filters.push(eq(auditEvents.entityType, query.entityType));
++      if (query.entityId)
++        filters.push(eq(auditEvents.entityId, query.entityId));
++      if (query.actorId) filters.push(eq(auditEvents.actorId, query.actorId));
++      if (query.since)
++        filters.push(gte(auditEvents.createdAt, new Date(query.since)));
++      if (query.until)
++        filters.push(lt(auditEvents.createdAt, new Date(query.until)));
++      const rows = await db
++        .select()
++        .from(auditEvents)
++        .where(and(...filters))
++        .orderBy(desc(auditEvents.id))
++        .limit(query.limit ?? 50);
++      return {
++        items: rows.map((row) => ({
++          id: row.id,
++          action: row.action,
++          entityType: row.entityType,
++          entityId: row.entityId,
++          actorId: row.actorId,
++          changes: row.changes,
++          createdAt: row.createdAt.toISOString(),
++        })),
++      };
++    },
++    {
++      requireAuth: true,
++      query: t.Object({
++        action: t.Optional(t.String()),
++        entityType: t.Optional(t.String()),
++        entityId: t.Optional(t.String()),
++        actorId: t.Optional(t.String()),
++        since: t.Optional(t.String({ format: "date-time" })),
++        until: t.Optional(t.String({ format: "date-time" })),
++        limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
++      }),
++    },
++  );
+diff --git a/src/routes/auth.ts b/src/routes/auth.ts
+index 2b17fec..272b750 100644
+--- a/src/routes/auth.ts
++++ b/src/routes/auth.ts
+@@ -6,6 +6,7 @@ import { apiTokens, users } from "../db/schema";
+ import { newId } from "../lib/ids";
+ import { verifyPassword } from "../lib/passwords";
+ import { generateToken, hashToken } from "../lib/tokens";
++import { recordEvent } from "../services/audit";
+ import { authGuard } from "../plugins/auth";
+ 
+ export const authRoutes = (db: Db) =>
+@@ -25,11 +26,21 @@ export const authRoutes = (db: Db) =>
+         const ttlHours = Number(process.env.TOKEN_TTL_HOURS ?? 24);
+         const token = generateToken();
+         const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
+-        await db.insert(apiTokens).values({
+-          id: newId("tok"),
+-          userId: user.id,
+-          tokenHash: hashToken(token),
+-          expiresAt,
++        await db.transaction(async (tx) => {
++          await tx.insert(apiTokens).values({
++            id: newId("tok"),
++            userId: user.id,
++            tokenHash: hashToken(token),
++            expiresAt,
++          });
++          await recordEvent(tx, {
++            orgId: user.orgId,
++            actorId: user.id,
++            action: "auth.token_issued",
++            entityType: "user",
++            entityId: user.id,
++            changes: {},
++          });
+         });
+         return { token, expiresAt: expiresAt.toISOString() };
+       },
+diff --git a/src/routes/projects.ts b/src/routes/projects.ts
+index 3143433..f2d4e16 100644
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -5,6 +5,12 @@ import type { Db } from "../db/client";
+ import { projects, tasks, users } from "../db/schema";
+ import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
++import {
++  createdChanges,
++  projectFields,
++  recordEvent,
++  taskFields,
++} from "../services/audit";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+ 
+@@ -43,15 +49,27 @@ export const projectRoutes = (db: Db) =>
+     .post(
+       "/",
+       async ({ body, user, status }) => {
+-        const [project] = await db
+-          .insert(projects)
+-          .values({
+-            id: newId("prj"),
++        const project = await db.transaction(async (tx) => {
++          const [row] = await tx
++            .insert(projects)
++            .values({
++              id: newId("prj"),
++              orgId: user.orgId,
++              name: body.name,
++              description: body.description,
++            })
++            .returning();
++          if (!row) throw new Error("insert returned no row");
++          await recordEvent(tx, {
+             orgId: user.orgId,
+-            name: body.name,
+-            description: body.description,
+-          })
+-          .returning();
++            actorId: user.id,
++            action: "project.created",
++            entityType: "project",
++            entityId: row.id,
++            changes: createdChanges(row, projectFields),
++          });
++          return row;
++        });
+         return status(201, project);
+       },
+       {
+@@ -121,20 +139,31 @@ export const projectRoutes = (db: Db) =>
+               error: "assignee must be a member of your organization",
+             });
+         }
+-        const [task] = await db
+-          .insert(tasks)
+-          .values({
+-            id: newId("tsk"),
++        const task = await db.transaction(async (tx) => {
++          const [row] = await tx
++            .insert(tasks)
++            .values({
++              id: newId("tsk"),
++              orgId: user.orgId,
++              projectId: project.id,
++              title: body.title,
++              description: body.description,
++              isUrgent: body.isUrgent ?? false,
++              assigneeId: body.assigneeId,
++              dueDate: body.dueDate,
++            })
++            .returning();
++          if (!row) throw new Error("insert returned no row");
++          await recordEvent(tx, {
+             orgId: user.orgId,
+-            projectId: project.id,
+-            title: body.title,
+-            description: body.description,
+-            isUrgent: body.isUrgent ?? false,
+-            assigneeId: body.assigneeId,
+-            dueDate: body.dueDate,
+-          })
+-          .returning();
+-        if (!task) throw new Error("insert returned no row");
++            actorId: user.id,
++            action: "task.created",
++            entityType: "task",
++            entityId: row.id,
++            changes: createdChanges(row, taskFields),
++          });
++          return row;
++        });
+         if (task.assigneeId)
+           await notifyTaskAssigned(db, task, task.assigneeId);
+         return status(201, toTaskResponse(task));
+diff --git a/src/routes/tasks.ts b/src/routes/tasks.ts
+index c62bf5d..84a28fe 100644
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -4,6 +4,12 @@ import { Elysia, t } from "elysia";
+ import type { Db } from "../db/client";
+ import { tasks, users, type TaskStatus } from "../db/schema";
+ import { authGuard } from "../plugins/auth";
++import {
++  deletedChanges,
++  recordEvent,
++  taskFields,
++  updatedChanges,
++} from "../services/audit";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+ 
+@@ -103,12 +109,25 @@ export const taskRoutes = (db: Db) =>
+         if (Object.keys(changes).length === 0) return toTaskResponse(task);
+         changes.updatedAt = new Date();
+ 
+-        const [updated] = await db
+-          .update(tasks)
+-          .set(changes)
+-          .where(eq(tasks.id, task.id))
+-          .returning();
+-        if (!updated) throw new Error("update returned no row");
++        const updated = await db.transaction(async (tx) => {
++          const [row] = await tx
++            .update(tasks)
++            .set(changes)
++            .where(eq(tasks.id, task.id))
++            .returning();
++          if (!row) throw new Error("update returned no row");
++          const audited = updatedChanges(task, row, taskFields);
++          if (Object.keys(audited).length > 0)
++            await recordEvent(tx, {
++              orgId: user.orgId,
++              actorId: user.id,
++              action: "task.updated",
++              entityType: "task",
++              entityId: row.id,
++              changes: audited,
++            });
++          return row;
++        });
+         if (newAssignee) await notifyTaskAssigned(db, updated, newAssignee);
+         return toTaskResponse(updated);
+       },
+@@ -138,12 +157,23 @@ export const taskRoutes = (db: Db) =>
+       "/:id",
+       async ({ params, user, status }) => {
+         if (user.role !== "admin") return status(403, "Forbidden");
+-        const deleted = await db
+-          .delete(tasks)
+-          .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
+-          .returning();
+-        if (deleted.length === 0)
+-          return status(404, { error: "task not found" });
++        const deleted = await db.transaction(async (tx) => {
++          const [row] = await tx
++            .delete(tasks)
++            .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
++            .returning();
++          if (row)
++            await recordEvent(tx, {
++              orgId: user.orgId,
++              actorId: user.id,
++              action: "task.deleted",
++              entityType: "task",
++              entityId: row.id,
++              changes: deletedChanges(row, taskFields),
++            });
++          return row;
++        });
++        if (!deleted) return status(404, { error: "task not found" });
+         return new Response(null, { status: 204 });
+       },
+       { requireAuth: true },
+diff --git a/src/routes/webhooks.ts b/src/routes/webhooks.ts
+index b312488..00ee6ea 100644
+--- a/src/routes/webhooks.ts
++++ b/src/routes/webhooks.ts
+@@ -4,6 +4,7 @@ import { Elysia, t } from "elysia";
+ import type { Db } from "../db/client";
+ import { organizations } from "../db/schema";
+ import { logger } from "../lib/logger";
++import { recordEvent } from "../services/audit";
+ 
+ /** Billing provider webhooks, authenticated with a shared secret header. */
+ export const webhookRoutes = (db: Db) =>
+@@ -16,10 +17,25 @@ export const webhookRoutes = (db: Db) =>
+       }
+       if (body.type === "payment.succeeded") {
+         const credits = body.data.credits ?? 0;
+-        await db
+-          .update(organizations)
+-          .set({ credits: sql`${organizations.credits} + ${credits}` })
+-          .where(eq(organizations.id, body.data.orgId));
++        if (credits > 0)
++          await db.transaction(async (tx) => {
++            const [org] = await tx
++              .update(organizations)
++              .set({ credits: sql`${organizations.credits} + ${credits}` })
++              .where(eq(organizations.id, body.data.orgId))
++              .returning({ credits: organizations.credits });
++            if (!org) return;
++            await recordEvent(tx, {
++              orgId: body.data.orgId,
++              actorId: null,
++              action: "org.credits_added",
++              entityType: "organization",
++              entityId: body.data.orgId,
++              changes: {
++                credits: { from: org.credits - credits, to: org.credits },
++              },
++            });
++          });
+         logger.info("billing.credits_added", {
+           eventId: body.id,
+           orgId: body.data.orgId,
+diff --git a/src/services/audit.ts b/src/services/audit.ts
+new file mode 100644
+index 0000000..70678a7
+--- /dev/null
++++ b/src/services/audit.ts
+@@ -0,0 +1,63 @@
++import type { Db } from "../db/client";
++import { auditEvents } from "../db/schema";
++
++/** A database handle or an open transaction on it. */
++export type Executor = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
++
++export type Changes = Record<string, { from: unknown; to: unknown }>;
++
++export const taskFields = [
++  "title",
++  "description",
++  "status",
++  "isUrgent",
++  "assigneeId",
++  "dueDate",
++  "projectId",
++] as const;
++
++export const projectFields = ["name", "description"] as const;
++
++type Fields = readonly string[];
++type Row = Record<string, unknown>;
++
++export function createdChanges(row: Row, fields: Fields): Changes {
++  const changes: Changes = {};
++  for (const field of fields) {
++    if (row[field] !== null && row[field] !== undefined)
++      changes[field] = { from: null, to: row[field] };
++  }
++  return changes;
++}
++
++export function updatedChanges(before: Row, after: Row, fields: Fields) {
++  const changes: Changes = {};
++  for (const field of fields) {
++    if (before[field] !== after[field])
++      changes[field] = { from: before[field], to: after[field] };
++  }
++  return changes;
++}
++
++export function deletedChanges(row: Row, fields: Fields): Changes {
++  const changes: Changes = {};
++  for (const field of fields) {
++    if (row[field] !== null && row[field] !== undefined)
++      changes[field] = { from: row[field], to: null };
++  }
++  return changes;
++}
++
++export async function recordEvent(
++  executor: Executor,
++  event: {
++    orgId: string;
++    actorId: string | null;
++    action: string;
++    entityType: string;
++    entityId: string;
++    changes: Changes;
++  },
++): Promise<void> {
++  await executor.insert(auditEvents).values(event);
++}

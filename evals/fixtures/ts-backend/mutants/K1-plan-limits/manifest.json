@@ -1,0 +1,53 @@
+{
+  "task": "K1-plan-limits",
+  "references": [
+    {
+      "file": "reference.patch",
+      "source": "hand-written by agent-f: limits in a `satisfies Record<Plan, number>` table keyed by the schema's plan enum"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-ternary-limit.patch",
+      "wrong": "plan === \"free\" ? 2 : 50",
+      "violates": "a new plan must not silently get a limit (typescript.md: a new variant fails to compile until handled)",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-switch-with-default.patch",
+      "wrong": "switch with case \"free\" and a default of 50",
+      "violates": "a new plan must not silently get a limit; switch over a union without every case",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-string-record-fallback.patch",
+      "wrong": "Record<string, number> table with `?? 50` fallback",
+      "violates": "a new plan must not silently get a limit",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-cast-hides-new-plan.patch",
+      "wrong": "plain table indexed with `plan as keyof typeof projectLimits`",
+      "violates": "a new plan must not silently get a limit; no broad type assertions",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-off-by-one.patch",
+      "wrong": "refuses only when the count is above the limit, so a free org gets 3 projects",
+      "violates": "free plan allows 2 projects",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-counts-every-org.patch",
+      "wrong": "projectCount counts every organization's projects",
+      "violates": "the limit and projectCount are per organization",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-400-not-403.patch",
+      "wrong": "refuses with 400 instead of 403",
+      "violates": "POST /api/projects at the limit returns 403 { code: \"plan_limit\" }",
+      "expect": "killed"
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "screen": "onboarding",
+  "task": "D4-onboarding-wizard",
+  "title": "Workspace setup wizard",
+  "route": "/onboarding",
+  "figma": { "fileKey": "On8bQ3dKw5ZrT2xYp7LmC4", "fileName": "Acme-Console-Onboarding", "pageName": "Onboarding" },
+  "frames": [
+    { "id": "desktop", "nodeId": "42-2", "name": "Onboarding / Step 2 / Desktop", "label": "desktop", "viewport": { "width": 1440, "height": 900 } },
+    { "id": "mobile", "nodeId": "42-3", "name": "Onboarding / Step 2 / Mobile", "label": "mobile", "viewport": { "width": 390, "height": 844 } },
+    {
+      "id": "desktop-selected", "nodeId": "42-4", "name": "Onboarding / Step 2 / Option selected", "label": "state: step 2 with \"Product development\" chosen",
+      "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "radio", "name": "Product development" } }]
+    },
+    {
+      "id": "desktop-step3-error", "nodeId": "42-5", "name": "Onboarding / Step 3 / Invalid email", "label": "state: step 3, invites sent with an invalid email",
+      "viewport": { "width": 1440, "height": 900 },
+      "steps": [
+        { "click": { "role": "radio", "name": "Product development" } },
+        { "click": { "role": "button", "name": "Continue" } },
+        { "fill": { "role": "textbox", "name": "Email address", "value": "jordan@acme" } },
+        { "click": { "role": "button", "name": "Send invites" } }
+      ]
+    }
+  ],
+  "layout": {
+    "desktop": [
+      { "id": "step-count", "text": "Step 2 of 4" },
+      { "id": "title", "role": "heading", "name": "Set up your workspace", "level": 1 },
+      { "id": "subtitle", "text": "It takes about two minutes", "contains": true },
+      { "id": "stepper-account", "text": "Account", "contains": true },
+      { "id": "stepper-workspace", "text": "Workspace" },
+      { "id": "stepper-team", "text": "Team" },
+      { "id": "stepper-billing", "text": "Billing" },
+      { "id": "stepper-current-number", "text": "2" },
+      { "id": "step-title", "role": "heading", "name": "Tell us about your workspace", "level": 2 },
+      { "id": "workspace-name", "role": "textbox", "name": "Workspace name" },
+      { "id": "workspace-hint", "text": "Shown in the sidebar and on invoices." },
+      { "id": "question", "text": "What will you use Acme Console for?" },
+      { "id": "option-clients", "text": "Client projects" },
+      { "id": "option-clients-desc", "text": "Track work, hours and invoices", "contains": true },
+      { "id": "option-operations", "text": "Internal operations" },
+      { "id": "option-product", "text": "Product development" },
+      { "id": "option-other", "text": "Something else" },
+      { "id": "radio-product", "role": "radio", "name": "Product development" },
+      { "id": "question-hint", "text": "Pick the closest one", "contains": true },
+      { "id": "team-size-label", "text": "Team size" },
+      { "id": "team-size-option", "role": "button", "name": "2–10" },
+      { "id": "next-hint", "text": "Next: invite your team" },
+      { "id": "continue", "role": "button", "name": "Continue" }
+    ],
+    "mobile": [
+      { "id": "step-count", "text": "Step 2 of 4" },
+      { "id": "title", "role": "heading", "name": "Set up your workspace", "level": 1 },
+      { "id": "stepper-workspace", "text": "Workspace" },
+      { "id": "step-title", "role": "heading", "name": "Tell us about your workspace", "level": 2 },
+      { "id": "workspace-name", "role": "textbox", "name": "Workspace name" },
+      { "id": "option-clients", "text": "Client projects" },
+      { "id": "option-operations", "text": "Internal operations" },
+      { "id": "option-product", "text": "Product development" },
+      { "id": "option-other", "text": "Something else" },
+      { "id": "team-size-option", "role": "button", "name": "2–10" },
+      { "id": "continue", "role": "button", "name": "Continue" }
+    ],
+    "desktop-selected": [
+      { "id": "option-product", "text": "Product development" },
+      { "id": "option-product-desc", "text": "Plan releases, triage bugs", "contains": true },
+      { "id": "option-clients", "text": "Client projects" },
+      { "id": "radio-product", "role": "radio", "name": "Product development" },
+      { "id": "chosen-hint", "text": "starter templates for product development", "contains": true },
+      { "id": "continue", "role": "button", "name": "Continue" }
+    ],
+    "desktop-step3-error": [
+      { "id": "step-count", "text": "Step 3 of 4" },
+      { "id": "stepper-team", "text": "Team" },
+      { "id": "step-title", "role": "heading", "name": "Invite your team", "level": 2 },
+      { "id": "invite-email", "role": "textbox", "name": "Email address" },
+      { "id": "email-error", "text": "Enter a valid email address", "contains": true },
+      { "id": "role-label", "text": "Role" },
+      { "id": "info", "text": "You can invite more people", "contains": true },
+      { "id": "back", "role": "button", "name": "Back" },
+      { "id": "skip", "role": "button", "name": "Skip for now" },
+      { "id": "send", "role": "button", "name": "Send invites" }
+    ]
+  },
+  "behaviour": [
+    { "id": "opens-on-step-2", "frame": "desktop", "expect": [{ "visibleText": "Step 2 of 4" }, { "visibleText": "Tell us about your workspace" }, { "hiddenText": "Invite your team" }] },
+    {
+      "id": "continue-needs-a-choice", "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "button", "name": "Continue" } }],
+      "expect": [{ "visibleText": "Choose what you’ll use Acme Console for.", "contains": true }, { "visibleText": "Step 2 of 4" }]
+    },
+    { "id": "choice-confirmed", "frame": "desktop-selected", "expect": [{ "visibleText": "starter templates for product development", "contains": true }] },
+    {
+      "id": "invalid-invite-email", "frame": "desktop-step3-error",
+      "expect": [{ "visibleText": "Step 3 of 4" }, { "visibleText": "Invite your team" }, { "visibleText": "Enter a valid email address", "contains": true }]
+    },
+    {
+      "id": "back-to-step-2", "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "radio", "name": "Product development" } }, { "click": { "role": "button", "name": "Continue" } }, { "click": { "role": "button", "name": "Back" } }],
+      "expect": [{ "visibleText": "Tell us about your workspace" }, { "visibleText": "Step 2 of 4" }]
+    },
+    {
+      "id": "valid-invite-moves-on", "viewport": { "width": 1440, "height": 900 },
+      "steps": [
+        { "click": { "role": "radio", "name": "Product development" } },
+        { "click": { "role": "button", "name": "Continue" } },
+        { "fill": { "role": "textbox", "name": "Email address", "value": "jordan@acme.test" } },
+        { "click": { "role": "button", "name": "Send invites" } }
+      ],
+      "expect": [{ "visibleText": "Step 4 of 4" }, { "hiddenText": "Enter a valid email address", "contains": true }]
+    },
+    {
+      "id": "skip-invites", "viewport": { "width": 1440, "height": 900 },
+      "steps": [{ "click": { "role": "radio", "name": "Client projects" } }, { "click": { "role": "button", "name": "Continue" } }, { "click": { "role": "button", "name": "Skip for now" } }],
+      "expect": [{ "visibleText": "Step 4 of 4" }]
+    },
+    { "id": "desktop-options-two-per-row", "frame": "desktop", "expect": [{ "sameRow": ["Client projects", "Internal operations"] }, { "sameRow": ["Workspace", "Team", "Billing"] }] },
+    { "id": "mobile-options-stack", "frame": "mobile", "expect": [{ "noHorizontalOverflow": true }, { "stacked": ["Client projects", "Internal operations", "Product development"] }] }
+  ]
+}

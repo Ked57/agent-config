@@ -1,0 +1,40 @@
+diff -ruN a/src/routes/tasks.ts b/src/routes/tasks.ts
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -2,9 +2,10 @@
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { tasks, users, type TaskStatus } from "../db/schema";
++import { tasks, users } from "../db/schema";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
++import { allowedTransitions } from "../services/task-rules";
+ import { toTaskResponse } from "./serializers";
+ 
+ export const taskRoutes = (db: Db) =>
+@@ -46,12 +47,7 @@
+         if (body.isUrgent !== undefined) changes.isUrgent = body.isUrgent;
+ 
+         if (body.status !== undefined && body.status !== task.status) {
+-          const allowed: Record<TaskStatus, TaskStatus[]> = {
+-            todo: ["in_progress"],
+-            in_progress: ["todo", "done"],
+-            done: ["todo"],
+-          };
+-          if (!allowed[task.status].includes(body.status)) {
++          if (!allowedTransitions[task.status].includes(body.status)) {
+             return status(409, {
+               error: `cannot move a task from ${task.status} to ${body.status}`,
+             });
+diff -ruN a/src/services/task-rules.ts b/src/services/task-rules.ts
+--- /dev/null
++++ b/src/services/task-rules.ts
+@@ -0,0 +1,7 @@
++import type { TaskStatus } from "../db/schema";
++
++export const allowedTransitions: Record<TaskStatus, TaskStatus[]> = {
++  todo: ["in_progress"],
++  in_progress: ["todo", "done"],
++  done: ["todo"],
++};

@@ -1,0 +1,191 @@
+diff -ruN a/drizzle/0001_time_entries_project_idx.sql b/drizzle/0001_time_entries_project_idx.sql
+--- /dev/null
++++ b/drizzle/0001_time_entries_project_idx.sql
+@@ -0,0 +1 @@
++CREATE INDEX `time_entries_project_idx` ON `time_entries` (`project_id`);
+\ No newline at end of file
+diff -ruN a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794870096994,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794871732551,
++      "tag": "0001_time_entries_project_idx",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff -ruN a/src/db/schema.ts b/src/db/schema.ts
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -209,7 +209,10 @@
+     invoiceId: text("invoice_id"),
+     createdAt: createdAt(),
+   },
+-  (table) => [index("time_entries_org_idx").on(table.orgId)],
++  (table) => [
++    index("time_entries_org_idx").on(table.orgId),
++    index("time_entries_project_idx").on(table.projectId),
++  ],
+ );
+ 
+ export const invoiceStatuses = ["draft", "issued", "paid", "void"] as const;
+diff -ruN a/src/services/reports.ts b/src/services/reports.ts
+--- a/src/services/reports.ts
++++ b/src/services/reports.ts
+@@ -1,4 +1,4 @@
+-import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
++import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
+ 
+ import type { Db } from "../db/client";
+ import {
+@@ -10,7 +10,6 @@
+   users,
+ } from "../db/schema";
+ import { addDays, dayKey, dayStart, weekStart } from "../lib/legacy/dates";
+-import { amountForMinutes } from "../lib/legacy/money";
+ 
+ const byName = (a: string, b: string) => a.localeCompare(b);
+ 
+@@ -84,30 +83,66 @@
+     .get();
+   if (!project) return null;
+ 
++  // Four queries whatever the size of the project: tasks, their labels, and
++  // every entry of the project with its person. Entries are grouped in memory in
++  // the same order the per-task queries used to return them (rowid order).
++  const taskRows = await db
++    .select()
++    .from(tasks)
++    .where(eq(tasks.projectId, project.id))
++    .orderBy(sql`${tasks}.rowid`);
++  const labelRows = await db
++    .select({ taskId: taskLabels.taskId, name: labels.name })
++    .from(taskLabels)
++    .innerJoin(labels, eq(labels.id, taskLabels.labelId))
++    .innerJoin(tasks, eq(tasks.id, taskLabels.taskId))
++    .where(eq(tasks.projectId, project.id));
++  const entryRows = await db
++    .select({
++      entry: timeEntries,
++      name: users.name,
++      hourlyRateCents: users.hourlyRateCents,
++    })
++    .from(timeEntries)
++    .innerJoin(users, eq(users.id, timeEntries.userId))
++    .where(eq(timeEntries.projectId, project.id))
++    .orderBy(sql`${timeEntries}.rowid`);
++
++  type EntryRow = (typeof entryRows)[number];
++  const entriesByTask = new Map<string | null, EntryRow[]>();
++  for (const row of entryRows) {
++    const list = entriesByTask.get(row.entry.taskId) ?? [];
++    list.push(row);
++    entriesByTask.set(row.entry.taskId, list);
++  }
++  const labelsByTask = new Map<string, string[]>();
++  for (const row of labelRows) {
++    labelsByTask.set(row.taskId, [
++      ...(labelsByTask.get(row.taskId) ?? []),
++      row.name,
++    ]);
++  }
++
+   const people = new Map<
+     string,
+     { userId: string; name: string } & Omit<ReportLine, "billableMinutes">
+   >();
+   const totals = { minutes: 0, billableMinutes: 0, amountCents: 0, entries: 0 };
+ 
+-  const tally = async (entries: (typeof timeEntries.$inferSelect)[]) => {
++  const tally = (entries: EntryRow[]) => {
+     const line: ReportLine = { minutes: 0, billableMinutes: 0, amountCents: 0 };
+     let last: Date | null = null;
+-    for (const entry of entries) {
+-      const user = await db
+-        .select()
+-        .from(users)
+-        .where(eq(users.id, entry.userId))
+-        .get();
+-      const rate = user?.hourlyRateCents ?? project.hourlyRateCents;
+-      const amount = entry.billable ? amountForMinutes(entry.minutes, rate) : 0;
++    for (const { entry, name, hourlyRateCents } of entries) {
++      const rate = hourlyRateCents ?? project.hourlyRateCents;
++      // Round once per line, not per entry.
++      const amount = entry.billable ? (entry.minutes * rate) / 60 : 0;
+       line.minutes += entry.minutes;
+       if (entry.billable) line.billableMinutes += entry.minutes;
+       line.amountCents += amount;
+       if (!last || entry.startedAt > last) last = entry.startedAt;
+       const person = people.get(entry.userId) ?? {
+         userId: entry.userId,
+-        name: user?.name ?? "Unknown",
++        name,
+         minutes: 0,
+         amountCents: 0,
+       };
+@@ -117,46 +152,25 @@
+     }
+     totals.minutes += line.minutes;
+     totals.billableMinutes += line.billableMinutes;
++    line.amountCents = Math.round(line.amountCents);
++    for (const person of people.values())
++      person.amountCents = Math.round(person.amountCents);
+     totals.amountCents += line.amountCents;
+     totals.entries += entries.length;
+     return { ...line, lastLoggedAt: last ? last.toISOString() : null };
+   };
+ 
+-  const taskRows = await db
+-    .select()
+-    .from(tasks)
+-    .where(eq(tasks.projectId, project.id));
+-  const taskReports = [];
+-  for (const task of taskRows) {
+-    const entries = await db
+-      .select()
+-      .from(timeEntries)
+-      .where(eq(timeEntries.taskId, task.id));
+-    const labelRows = await db
+-      .select({ name: labels.name })
+-      .from(taskLabels)
+-      .innerJoin(labels, eq(labels.id, taskLabels.labelId))
+-      .where(eq(taskLabels.taskId, task.id));
+-    taskReports.push({
+-      id: task.id,
+-      title: task.title,
+-      status: task.status,
+-      labels: labelRows.map((row) => row.name).sort(byName),
+-      ...(await tally(entries)),
+-    });
+-  }
++  const taskReports = taskRows.map((task) => ({
++    id: task.id,
++    title: task.title,
++    status: task.status,
++    labels: (labelsByTask.get(task.id) ?? []).sort(byName),
++    ...tally(entriesByTask.get(task.id) ?? []),
++  }));
+   taskReports.sort(
+     (a, b) => byName(a.title, b.title) || (a.id < b.id ? -1 : 1),
+   );
+-
+-  const unassigned = await tally(
+-    await db
+-      .select()
+-      .from(timeEntries)
+-      .where(
+-        and(eq(timeEntries.projectId, project.id), isNull(timeEntries.taskId)),
+-      ),
+-  );
++  const unassigned = tally(entriesByTask.get(null) ?? []);
+ 
+   return {
+     project: {

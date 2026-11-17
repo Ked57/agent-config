@@ -1,0 +1,119 @@
+diff --git a/src/routes/projects.test.ts b/src/routes/projects.test.ts
+index 32bea48..4abfd3a 100644
+--- a/src/routes/projects.test.ts
++++ b/src/routes/projects.test.ts
+@@ -51,14 +51,20 @@ describe("projects", () => {
+     expect(response.status).toBe(404);
+   });
+ 
+-  it("lists a project's tasks in creation order", async () => {
++  it("lists a project's tasks newest first, one page at a time", async () => {
+     const { request } = await createTestContext();
+-    const response = await request("GET", "/api/projects/prj_web/tasks", {
+-      token: SEED_TOKENS.acmeMember,
+-    });
+-    const { items } = (await response.json()) as {
++    const response = await request(
++      "GET",
++      "/api/projects/prj_web/tasks?limit=2",
++      {
++        token: SEED_TOKENS.acmeMember,
++      },
++    );
++    const { items, nextCursor } = (await response.json()) as {
+       items: Array<{ id: string }>;
++      nextCursor: string | null;
+     };
+-    expect(items.map((item) => item.id)).toEqual(["tsk_1", "tsk_2", "tsk_3"]);
++    expect(items.map((item) => item.id)).toEqual(["tsk_3", "tsk_2"]);
++    expect(nextCursor).toEqual(expect.any(String));
+   });
+ });
+diff --git a/src/routes/projects.ts b/src/routes/projects.ts
+index 3143433..b6338f8 100644
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -1,4 +1,4 @@
+-import { and, asc, count, eq } from "drizzle-orm";
++import { and, asc, count, desc, eq, lt } from "drizzle-orm";
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+@@ -8,6 +8,26 @@ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+ 
++function encodeCursor(task: { createdAt: Date; id: string }): string {
++  return Buffer.from(
++    JSON.stringify([task.createdAt.getTime(), task.id]),
++  ).toString("base64url");
++}
++
++function decodeCursor(cursor: string): { createdAt: Date; id: string } | null {
++  try {
++    const value: unknown = JSON.parse(
++      Buffer.from(cursor, "base64url").toString("utf8"),
++    );
++    if (!Array.isArray(value)) return null;
++    const [time, id] = value as unknown[];
++    if (typeof time !== "number" || typeof id !== "string") return null;
++    return { createdAt: new Date(time), id };
++  } catch {
++    return null;
++  }
++}
++
+ export const projectRoutes = (db: Db) =>
+   new Elysia({ prefix: "/api/projects" })
+     .use(authGuard(db))
+@@ -79,7 +99,7 @@ export const projectRoutes = (db: Db) =>
+     )
+     .get(
+       "/:id/tasks",
+-      async ({ params, user, status }) => {
++      async ({ params, query, user, status }) => {
+         const project = await db
+           .select()
+           .from(projects)
+@@ -88,14 +108,37 @@ export const projectRoutes = (db: Db) =>
+           )
+           .get();
+         if (!project) return status(404, "Project not found");
++        const limit = query.limit ?? 20;
++        const after = query.cursor ? decodeCursor(query.cursor) : null;
++        if (query.cursor && !after)
++          return status(400, { error: "invalid cursor" });
++        // Keyset on (createdAt, id): the id breaks ties between tasks created in the same
++        // millisecond, and the position survives inserts and deletes between pages.
+         const rows = await db
+           .select()
+           .from(tasks)
+-          .where(eq(tasks.projectId, project.id))
+-          .orderBy(asc(tasks.createdAt));
+-        return { items: rows.map(toTaskResponse) };
++          .where(
++            and(
++              eq(tasks.projectId, project.id),
++              after ? lt(tasks.createdAt, after.createdAt) : undefined,
++            ),
++          )
++          .orderBy(desc(tasks.createdAt), desc(tasks.id))
++          .limit(limit + 1);
++        const items = rows.slice(0, limit);
++        const last = items.at(-1);
++        return {
++          items: items.map(toTaskResponse),
++          nextCursor: rows.length > limit && last ? encodeCursor(last) : null,
++        };
++      },
++      {
++        requireAuth: true,
++        query: t.Object({
++          limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
++          cursor: t.Optional(t.String()),
++        }),
+       },
+-      { requireAuth: true },
+     )
+     .post(
+       "/:id/tasks",

@@ -1,0 +1,56 @@
+diff -ruN a/src/components/AppHeader.vue b/src/components/AppHeader.vue
+--- a/src/components/AppHeader.vue
++++ b/src/components/AppHeader.vue
+@@ -1,4 +1,6 @@
+ <script setup lang="ts">
++import { onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
++
+ const links = [
+   { to: '/', label: 'Dashboard', icon: 'pi pi-chart-bar' },
+   { to: '/projects', label: 'Projects', icon: 'pi pi-briefcase' },
+@@ -7,12 +9,42 @@
+   { to: '/settings', label: 'Settings', icon: 'pi pi-cog' },
+   { to: '/help', label: 'Help', icon: 'pi pi-question-circle' },
+ ]
++
++// The header is compact whenever the page is scrolled away from the top, detected by
++// a sentinel pinned to the document's top edge leaving the viewport.
++const sentinel = useTemplateRef('sentinel')
++const isCompact = ref(false)
++let observer: IntersectionObserver | undefined
++
++onMounted(() => {
++  if (!sentinel.value) return
++  observer = new IntersectionObserver((entries) => {
++    for (const entry of entries) isCompact.value = !entry.isIntersecting
++  })
++  observer.observe(sentinel.value)
++})
++
++onBeforeUnmount(() => observer?.disconnect())
+ </script>
+ 
+ <template>
+-  <header class="sticky top-0 z-10 border-b border-surface-200 bg-surface-0">
+-    <div class="mx-auto flex max-w-6xl items-center gap-6 px-4 py-5">
+-      <RouterLink to="/" class="flex items-center gap-2 text-xl font-semibold text-surface-900">
++  <div ref="sentinel" aria-hidden="true" class="pointer-events-none absolute top-0 left-0 size-px"></div>
++  <!--
++    The compact state trades 24px of vertical padding for 24px of bottom margin so the
++    header's in-flow height never changes. Otherwise the page reflows, scroll anchoring
++    pulls small scrolls back to the top, and the header immediately expands again.
++  -->
++  <header
++    class="sticky top-0 z-10 border-b border-surface-200 bg-surface-0 transition-[padding,margin] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none"
++    :class="isCompact ? 'mb-6 py-2' : 'py-5'"
++  >
++    <div class="mx-auto flex max-w-6xl items-center gap-6 px-4">
++      <!-- Scaled with transform rather than font-size/size so the logo and title don't relayout per frame. -->
++      <RouterLink
++        to="/"
++        class="flex origin-left items-center gap-2 text-xl font-semibold text-surface-900 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none"
++        :class="{ 'scale-80': isCompact }"
++      >
+         <span class="inline-block size-8 rounded-md bg-primary"></span>
+         Acme Console
+       </RouterLink>

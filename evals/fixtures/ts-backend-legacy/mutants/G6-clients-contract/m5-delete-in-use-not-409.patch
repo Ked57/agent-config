@@ -1,0 +1,400 @@
+diff -ruN a/src/routes/clients.test.ts b/src/routes/clients.test.ts
+--- a/src/routes/clients.test.ts
++++ b/src/routes/clients.test.ts
+@@ -2,32 +2,58 @@
+ 
+ import { createTestContext, SEED_TOKENS } from "../test/helpers";
+ 
+-describe("clients", () => {
+-  it("lists clients by name", async () => {
++describe("clients (docs/openapi.yaml)", () => {
++  it("lists clients by name in a page", async () => {
+     const { json } = await createTestContext();
+-    const { body } = await json<{ items: { name: string; terms: string }[] }>(
+-      "GET",
+-      "/api/clients",
+-      {
+-        token: SEED_TOKENS.acmeMember,
+-      },
+-    );
+-    expect(body.items.map((c) => [c.name, c.terms])).toEqual([
+-      ["Initech", "NEXTMONTH"],
+-      ["Northwind Traders", "NET30"],
++    const { body } = await json<{
++      data: { name: string; paymentTerms: string }[];
++      page: unknown;
++    }>("GET", "/api/clients?limit=1", { token: SEED_TOKENS.acmeMember });
++    expect(body.data.map((c) => [c.name, c.paymentTerms])).toEqual([
++      ["Initech", "next_month"],
+     ]);
++    expect(body.page).toEqual({ limit: 1, offset: 0, total: 2 });
+   });
+ 
+-  it("creates a client", async () => {
++  it("creates a client with nulls for missing optional fields", async () => {
+     const { json } = await createTestContext();
+-    const { body } = await json("POST", "/api/clients", {
++    const created = await json("POST", "/api/clients", {
+       token: SEED_TOKENS.acmeAdmin,
+-      body: { name: "Hooli", currency: "usd" },
++      body: { name: "Hooli", currency: "USD" },
+     });
+-    expect(body).toMatchObject({
++    expect(created.status).toBe(201);
++    expect(created.body).toMatchObject({
+       name: "Hooli",
+       currency: "USD",
+-      status: "active",
++      paymentTerms: "net_30",
++      email: null,
++      archivedAt: null,
++    });
++  });
++
++  it("rejects bodies outside the schema with 400", async () => {
++    const { json } = await createTestContext();
++    const bad = await json("POST", "/api/clients", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { name: "Hooli", currency: "usd" },
++    });
++    expect(bad.status).toBe(400);
++    expect(bad.body).toEqual({
++      code: "validation_failed",
++      message: expect.any(String),
++    });
++  });
++
++  it("archives and refuses to delete clients in use", async () => {
++    const { json, request } = await createTestContext();
++    const archived = await json("PATCH", "/api/clients/cli_initech", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { status: "archived" },
++    });
++    expect(archived.body.archivedAt).toEqual(expect.any(String));
++    const inUse = await request("DELETE", "/api/clients/cli_northwind", {
++      token: SEED_TOKENS.acmeAdmin,
+     });
++    expect(inUse.status).toBe(409);
+   });
+ });
+diff -ruN a/src/routes/clients.ts b/src/routes/clients.ts
+--- a/src/routes/clients.ts
++++ b/src/routes/clients.ts
+@@ -1,27 +1,118 @@
+ import { and, asc, count, eq } from "drizzle-orm";
+-import { Elysia, t } from "elysia";
++import { Elysia } from "elysia";
+ 
+ import type { Db } from "../db/client";
+-import { clients, type Client } from "../db/schema";
++import {
++  clients,
++  invoices,
++  paymentTerms,
++  projects,
++  type Client,
++} from "../db/schema";
++import { HttpError } from "../lib/errors";
+ import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
+ 
+-// Written before docs/openapi.yaml existed; the web app reads `terms`.
++// The contract is docs/openapi.yaml (Client, ClientCreate, ClientUpdate,
++// ClientPage, Error). Bodies are checked by hand because the spec's 400 and
++// additionalProperties: false differ from Elysia's validation (422, stripping).
++const CURRENCIES = ["EUR", "USD", "GBP"] as const;
++const STATUSES = ["active", "archived"] as const;
++const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
++
++const invalid = (message: string) =>
++  new HttpError(400, "validation_failed", message);
++const notFound = () => new HttpError(404, "not_found", "client not found");
++
+ function present(row: Client) {
+   return {
+     id: row.id,
+-    orgId: row.orgId,
+     name: row.name,
+-    ...(row.email ? { email: row.email } : {}),
++    email: row.email ?? null,
+     currency: row.currency,
+-    terms: row.paymentTerms.replace("_", "").toUpperCase(),
++    paymentTerms: row.paymentTerms,
+     status: row.status,
+-    ...(row.notes ? { notes: row.notes } : {}),
+-    ...(row.archivedAt ? { archivedAt: row.archivedAt.getTime() } : {}),
+-    createdAt: row.createdAt.getTime(),
++    notes: row.notes ?? null,
++    createdAt: row.createdAt.toISOString(),
++    archivedAt: row.archivedAt?.toISOString() ?? null,
+   };
+ }
+ 
++interface ClientFields {
++  name?: string;
++  email?: string | null;
++  currency?: (typeof CURRENCIES)[number];
++  paymentTerms?: (typeof paymentTerms)[number];
++  status?: (typeof STATUSES)[number];
++  notes?: string | null;
++}
++
++const oneOf = <T extends string>(list: readonly T[], value: unknown) =>
++  list.includes(value as T);
++
++/** ClientCreate (`allowed` without status) or ClientUpdate. */
++function parseFields(body: unknown, allowed: readonly string[]): ClientFields {
++  if (!body || typeof body !== "object" || Array.isArray(body))
++    throw invalid("body must be a JSON object");
++  const input = body as Record<string, unknown>;
++  for (const key of Object.keys(input))
++    if (!allowed.includes(key)) throw invalid(`unknown property ${key}`);
++  const fields: ClientFields = {};
++  if ("name" in input) {
++    if (
++      typeof input.name !== "string" ||
++      input.name.length < 1 ||
++      input.name.length > 120
++    )
++      throw invalid("name must be 1 to 120 characters");
++    fields.name = input.name;
++  }
++  if ("email" in input) {
++    if (
++      input.email !== null &&
++      (typeof input.email !== "string" || !EMAIL.test(input.email))
++    )
++      throw invalid("email must be an email address or null");
++    fields.email = input.email;
++  }
++  if ("currency" in input) {
++    if (!oneOf(CURRENCIES, input.currency))
++      throw invalid(`currency must be one of ${CURRENCIES.join(", ")}`);
++    fields.currency = input.currency as ClientFields["currency"];
++  }
++  if ("paymentTerms" in input) {
++    if (!oneOf(paymentTerms, input.paymentTerms))
++      throw invalid(`paymentTerms must be one of ${paymentTerms.join(", ")}`);
++    fields.paymentTerms = input.paymentTerms as ClientFields["paymentTerms"];
++  }
++  if ("status" in input) {
++    if (!oneOf(STATUSES, input.status))
++      throw invalid(`status must be one of ${STATUSES.join(", ")}`);
++    fields.status = input.status as ClientFields["status"];
++  }
++  if ("notes" in input) {
++    if (
++      input.notes !== null &&
++      (typeof input.notes !== "string" || input.notes.length > 2000)
++    )
++      throw invalid("notes must be at most 2000 characters or null");
++    fields.notes = input.notes;
++  }
++  return fields;
++}
++
++function integerParam(
++  value: string | undefined,
++  name: string,
++  { min, max, fallback }: { min: number; max: number; fallback: number },
++) {
++  if (value === undefined) return fallback;
++  const parsed = /^-?\d+$/.test(value) ? Number(value) : NaN;
++  if (!Number.isInteger(parsed) || parsed < min || parsed > max)
++    throw invalid(`${name} must be a whole number from ${min} to ${max}`);
++  return parsed;
++}
++
+ const findClient = (db: Db, orgId: string, id: string) =>
+   db
+     .select()
+@@ -29,118 +120,129 @@
+     .where(and(eq(clients.id, id), eq(clients.orgId, orgId)))
+     .get();
+ 
++const CREATE_FIELDS = ["name", "email", "currency", "paymentTerms", "notes"];
++const UPDATE_FIELDS = [...CREATE_FIELDS, "status"];
++
+ export const clientRoutes = (db: Db) =>
+   new Elysia({ prefix: "/api/clients" })
+     .use(authGuard(db))
+     .get(
+       "/",
+       async ({ query, user }) => {
++        const limit = integerParam(query.limit, "limit", {
++          min: 1,
++          max: 100,
++          fallback: 50,
++        });
++        const offset = integerParam(query.offset, "offset", {
++          min: 0,
++          max: Number.MAX_SAFE_INTEGER,
++          fallback: 0,
++        });
++        if (query.status !== undefined && !oneOf(STATUSES, query.status))
++          throw invalid(`status must be one of ${STATUSES.join(", ")}`);
+         const where = query.status
+-          ? and(eq(clients.orgId, user.orgId), eq(clients.status, query.status))
++          ? and(
++              eq(clients.orgId, user.orgId),
++              eq(clients.status, query.status as (typeof STATUSES)[number]),
++            )
+           : eq(clients.orgId, user.orgId);
+         const rows = await db
+           .select()
+           .from(clients)
+           .where(where)
+-          .orderBy(asc(clients.name));
++          .orderBy(asc(clients.name), asc(clients.id))
++          .limit(limit)
++          .offset(offset);
+         const [total] = await db
+           .select({ value: count() })
+           .from(clients)
+           .where(where);
+-        return { items: rows.map(present), total: total?.value ?? 0 };
+-      },
+-      {
+-        requireAuth: true,
+-        query: t.Object({
+-          status: t.Optional(
+-            t.Union([t.Literal("active"), t.Literal("archived")]),
+-          ),
+-        }),
++        return {
++          data: rows.map(present),
++          page: { limit, offset, total: total?.value ?? 0 },
++        };
+       },
++      { requireAuth: true },
+     )
+     .post(
+       "/",
+-      async ({ body, user }) => {
++      async ({ body, user, status }) => {
++        const fields = parseFields(body, CREATE_FIELDS);
++        if (fields.name === undefined) throw invalid("name is required");
++        if (fields.currency === undefined)
++          throw invalid("currency is required");
+         const [row] = await db
+           .insert(clients)
+           .values({
+             id: newId("cli"),
+             orgId: user.orgId,
+-            name: body.name,
+-            email: body.email,
+-            currency: body.currency.toUpperCase(),
+-            paymentTerms: body.paymentTerms ?? "net_30",
+-            notes: body.notes,
++            name: fields.name,
++            email: fields.email ?? null,
++            currency: fields.currency,
++            paymentTerms: fields.paymentTerms ?? "net_30",
++            notes: fields.notes ?? null,
+           })
+           .returning();
+         if (!row) throw new Error("insert returned no row");
+-        return present(row);
+-      },
+-      {
+-        requireAuth: true,
+-        body: t.Object({
+-          name: t.String({ minLength: 1 }),
+-          email: t.Optional(t.String()),
+-          currency: t.String({ minLength: 3, maxLength: 3 }),
+-          paymentTerms: t.Optional(
+-            t.Union([t.Literal("net_30"), t.Literal("next_month")]),
+-          ),
+-          notes: t.Optional(t.String()),
+-        }),
++        return status(201, present(row));
+       },
++      { requireAuth: true },
+     )
+     .get(
+       "/:id",
+-      async ({ params, user, status }) => {
++      async ({ params, user }) => {
+         const row = await findClient(db, user.orgId, params.id);
+-        if (!row) return status(404, "Client not found");
++        if (!row) throw notFound();
+         return present(row);
+       },
+       { requireAuth: true },
+     )
+     .patch(
+       "/:id",
+-      async ({ params, body, user, status }) => {
++      async ({ params, body, user }) => {
++        const fields = parseFields(body, UPDATE_FIELDS);
++        if (Object.keys(fields).length === 0)
++          throw invalid("give at least one property to change");
+         const row = await findClient(db, user.orgId, params.id);
+-        if (!row) return status(404, "Client not found");
++        if (!row) throw notFound();
++        const changes: Partial<typeof clients.$inferInsert> = { ...fields };
++        if (fields.status === "archived" && row.status !== "archived")
++          changes.archivedAt = new Date();
++        if (fields.status === "active") changes.archivedAt = null;
+         const [updated] = await db
+           .update(clients)
+-          .set({
+-            name: body.name,
+-            email: body.email,
+-            currency: body.currency?.toUpperCase(),
+-            paymentTerms: body.paymentTerms,
+-            status: body.status,
+-            notes: body.notes,
+-          })
++          .set(changes)
+           .where(eq(clients.id, row.id))
+           .returning();
+         if (!updated) throw new Error("update returned no row");
+         return present(updated);
+       },
+-      {
+-        requireAuth: true,
+-        body: t.Object({
+-          name: t.Optional(t.String({ minLength: 1 })),
+-          email: t.Optional(t.String()),
+-          currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+-          paymentTerms: t.Optional(
+-            t.Union([t.Literal("net_30"), t.Literal("next_month")]),
+-          ),
+-          status: t.Optional(
+-            t.Union([t.Literal("active"), t.Literal("archived")]),
+-          ),
+-          notes: t.Optional(t.String()),
+-        }),
+-      },
++      { requireAuth: true },
+     )
+     .delete(
+       "/:id",
+-      async ({ params, user, status }) => {
++      async ({ params, user }) => {
+         const row = await findClient(db, user.orgId, params.id);
+-        if (!row) return status(404, "Client not found");
++        if (!row) throw notFound();
++        const [usedByInvoice] = await db
++          .select({ id: invoices.id })
++          .from(invoices)
++          .where(eq(invoices.clientId, row.id))
++          .limit(1);
++        const [usedByProject] = await db
++          .select({ id: projects.id })
++          .from(projects)
++          .where(eq(projects.clientId, row.id))
++          .limit(1);
++        if ((false as boolean) && (usedByInvoice || usedByProject))
++          throw new HttpError(
++            409,
++            "client_in_use",
++            "the client still has invoices or projects",
++          );
+         await db.delete(clients).where(eq(clients.id, row.id));
+-        return { deleted: true };
++        return new Response(null, { status: 204 });
+       },
+       { requireAuth: true },
+     );

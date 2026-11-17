@@ -1,0 +1,17 @@
+diff -ruN a/src/lib/legacy/dates.ts b/src/lib/legacy/dates.ts
+--- a/src/lib/legacy/dates.ts
++++ b/src/lib/legacy/dates.ts
+@@ -63,8 +63,11 @@
+ 
+ /** `DD/MM/YYYY`, the format accountants asked for in the CSV exports and v1 reports. */
+ export function formatDay(day: string): string {
+-  if (!isValidDay(day)) throw new RangeError(`invalid calendar day "${day}"`);
+-  const [y, m, d] = day.split("-");
++  // Normalise overflowing days (2026-11-31) instead of failing the whole export.
++  const [y, m, d] = new Date(`${day}T00:00:00Z`)
++    .toISOString()
++    .slice(0, 10)
++    .split("-");
+   return `${d}/${m}/${y}`;
+ }
+ 

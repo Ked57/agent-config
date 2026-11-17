@@ -1,0 +1,93 @@
+diff -ruN a/src/utils/parseOrderQuery.test.ts b/src/utils/parseOrderQuery.test.ts
+--- /dev/null
++++ b/src/utils/parseOrderQuery.test.ts
+@@ -0,0 +1,8 @@
++import { describe, expect, it } from 'vitest'
++import { parseOrderQuery } from './parseOrderQuery'
++
++describe('parseOrderQuery', () => {
++  it('returns a filter', () => {
++    expect(parseOrderQuery('status:paid total>100 northwind')).toBeDefined()
++  })
++})
+diff -ruN a/src/utils/parseOrderQuery.ts b/src/utils/parseOrderQuery.ts
+--- /dev/null
++++ b/src/utils/parseOrderQuery.ts
+@@ -0,0 +1,77 @@
++import type { OrderStatus } from '@/types'
++
++export interface TotalBound {
++  value: number
++  inclusive: boolean
++}
++
++export interface OrderQuery {
++  status?: OrderStatus
++  minTotal?: TotalBound
++  maxTotal?: TotalBound
++  terms: string[]
++}
++
++const ORDER_STATUSES: readonly OrderStatus[] = ['pending', 'paid', 'shipped', 'refunded']
++
++// Two-character operators come first so `>=` is not read as `>` followed by `=100`.
++const TOTAL_PATTERN = /^total(>=|<=|>|<|=)(\d+(?:\.\d+)?)$/i
++// A quoted phrase (closing quote optional, so an unterminated quote runs to the end) or a bare word.
++const TOKEN_PATTERN = /"([^"]*)"?|(\S+)/g
++
++function isOrderStatus(value: string): value is OrderStatus {
++  return (ORDER_STATUSES as readonly string[]).includes(value)
++}
++
++/**
++ * Parses a search string such as `status:paid total>100 northwind` into a filter.
++ *
++ * Tokens that look like filters but are invalid (unknown status, non-numeric total) are kept
++ * as free-text terms so no part of the user's input is silently dropped. Quoted phrases are
++ * always free text. When a filter repeats, the last occurrence wins.
++ */
++export function parseOrderQuery(query: string): OrderQuery {
++  const result: OrderQuery = { terms: [] }
++
++  for (const [, quoted, word] of query.matchAll(TOKEN_PATTERN)) {
++    if (quoted !== undefined) {
++      const phrase = quoted.trim()
++      if (phrase) result.terms.push(phrase)
++    } else if (word !== undefined && !applyFilter(result, word)) {
++      result.terms.push(word)
++    }
++  }
++
++  return result
++}
++
++function applyFilter(result: OrderQuery, token: string): boolean {
++  const lower = token.toLowerCase()
++  if (lower.startsWith('status:')) {
++    const status = lower.slice('status:'.length)
++    if (!isOrderStatus(status)) return false
++    result.status = status
++    return true
++  }
++
++  const match = TOTAL_PATTERN.exec(token)
++  if (!match) return false
++  const [, operator, amount] = match
++  const value = Number(amount)
++  switch (operator) {
++    case '>':
++    case '>=':
++      result.minTotal = { value, inclusive: operator === '>=' }
++      return true
++    case '<':
++    case '<=':
++      result.maxTotal = { value, inclusive: operator === '<=' }
++      return true
++    case '=':
++      result.minTotal = { value, inclusive: true }
++      result.maxTotal = { value, inclusive: true }
++      return true
++    default:
++      return false
++  }
++}

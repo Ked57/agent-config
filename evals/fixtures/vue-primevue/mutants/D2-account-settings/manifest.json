@@ -1,0 +1,17 @@
+{
+  "task": "D2-account-settings",
+  "scoreGate": { "referenceMin": 0.95, "untouchedMax": 0.1, "mutantMaxDrop": 0.05 },
+  "references": [
+    { "file": "reference.patch", "source": "hand-built reference design (R3b); the mockups, layout.json and baselines are exported from it" }
+  ],
+  "mutants": [
+    { "file": "m1-spacing.patch", "wrong": "cards, rows and form grid padded and spaced 8 px more, sections 8 px further apart", "violates": "the spacing drawn in every frame", "expect": "killed" },
+    { "file": "m2-colour-tokens.patch", "wrong": "avatar, verified tag, danger zone, save bar and matrix header use sky/orange/indigo instead of the drawn primary/green/red/surface tokens", "violates": "the colours drawn in every frame", "expect": "killed" },
+    { "file": "m3-no-unsaved-bar.patch", "wrong": "the unsaved-changes bar never appears, so nothing can be saved or discarded and validation never shows", "violates": "the unsaved-changes and validation-error state frames", "expect": "killed" },
+    { "file": "m4-no-mobile-layout.patch", "wrong": "fixed two-column sections and form grid, matrix columns and danger rows kept at 390 px", "violates": "the mobile frame", "expect": "killed" },
+    { "file": "m5-plain-html-controls.patch", "wrong": "native inputs, select, textarea, checkboxes and buttons, plain-text tag, avatar and message instead of the drawn components", "violates": "the inputs, switches, tags and buttons drawn in the frames", "expect": "killed" },
+    { "file": "m6-font-weights.patch", "wrong": "title, section titles, field labels and row labels are regular instead of semi-bold/medium", "violates": "the text styles in the frames", "expect": "killed" },
+    { "file": "m7-a11y-regressions.patch", "wrong": "low-contrast descriptions, first-name and email labels not tied to their inputs, switches without names", "violates": "accessible implementation of the drawn screen (contrast, field labels, switch names)", "expect": "killed" },
+    { "file": "m8-lazy-but-plausible.patch", "wrong": "right content but sloppy: single column without section descriptions, no inset dividers, plain verified text, matrix without header row or descriptions, light save bar, tighter padding, different title type", "violates": "the design's detail (what a mediocre implementation ships); should land mid-scale", "expect": "killed" }
+  ]
+}

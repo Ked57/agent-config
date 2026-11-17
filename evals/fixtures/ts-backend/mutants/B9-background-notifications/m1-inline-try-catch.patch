@@ -1,0 +1,53 @@
+diff -ruN a/src/routes/projects.ts b/src/routes/projects.ts
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -4,6 +4,7 @@
+ import type { Db } from "../db/client";
+ import { projects, tasks, users } from "../db/schema";
+ import { newId } from "../lib/ids";
++import { logger } from "../lib/logger";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+@@ -135,8 +136,13 @@
+           })
+           .returning();
+         if (!task) throw new Error("insert returned no row");
+-        if (task.assigneeId)
+-          await notifyTaskAssigned(db, task, task.assigneeId);
++        if (task.assigneeId) {
++          try {
++            await notifyTaskAssigned(db, task, task.assigneeId);
++          } catch (error) {
++            logger.error("notify.failed", { error: String(error) });
++          }
++        }
+         return status(201, toTaskResponse(task));
+       },
+       {
+diff -ruN a/src/routes/tasks.ts b/src/routes/tasks.ts
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -3,6 +3,7 @@
+ 
+ import type { Db } from "../db/client";
+ import { tasks, users, type TaskStatus } from "../db/schema";
++import { logger } from "../lib/logger";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+ import { toTaskResponse } from "./serializers";
+@@ -109,7 +110,13 @@
+           .where(eq(tasks.id, task.id))
+           .returning();
+         if (!updated) throw new Error("update returned no row");
+-        if (newAssignee) await notifyTaskAssigned(db, updated, newAssignee);
++        if (newAssignee) {
++          try {
++            await notifyTaskAssigned(db, updated, newAssignee);
++          } catch (error) {
++            logger.error("notify.failed", { error: String(error) });
++          }
++        }
+         return toTaskResponse(updated);
+       },
+       {

@@ -8,3 +8,7 @@
 *.secret
 
 .cursor/hooks/state
+!.env.example
+
+# Generated design mockups and Figma bundles (npm run eval:design-assets)
+evals/fixtures/vue-primevue/figma-stub/*/

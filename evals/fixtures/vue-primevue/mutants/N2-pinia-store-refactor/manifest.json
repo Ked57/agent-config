@@ -1,0 +1,51 @@
+{
+  "task": "N2-pinia-store-refactor",
+  "references": [
+    {
+      "file": "reference-mwg-A-r1.patch",
+      "source": "mwg-eval N2 A r1"
+    },
+    {
+      "file": "reference-mwg-B-r1.patch",
+      "source": "mwg-eval N2 B r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-counts-empty.patch",
+      "wrong": "countsByRole is an empty object (the audit's surviving mutant)",
+      "violates": "replace the three role count getters with a single countsByRole; keep behaviour the same",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-counts-not-reactive.patch",
+      "wrong": "countsByRole is computed once when users load and goes stale after changes",
+      "violates": "keep behaviour the same (the getters were reactive)",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-old-getters-kept.patch",
+      "wrong": "countsByRole is added but adminCount, editorCount and viewerCount stay",
+      "violates": "replace the three separate role count getters",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-search-case-sensitive.patch",
+      "wrong": "search became case-sensitive in the rewrite",
+      "violates": "keep behaviour the same",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-force-ignored.patch",
+      "wrong": "load(true) no longer reloads once users are loaded",
+      "violates": "keep behaviour the same",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-still-options-store.patch",
+      "wrong": "countsByRole replaces the getters but the store is still an options store",
+      "violates": "refactor the users Pinia store into a setup store",
+      "expect": "killed"
+    }
+  ]
+}

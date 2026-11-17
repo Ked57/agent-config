@@ -1,0 +1,495 @@
+diff --git a/drizzle/0001_project_archiving.sql b/drizzle/0001_project_archiving.sql
+new file mode 100644
+index 0000000..418a7a5
+--- /dev/null
++++ b/drizzle/0001_project_archiving.sql
+@@ -0,0 +1,3 @@
++ALTER TABLE `projects` ADD `archived_at` integer;--> statement-breakpoint
++ALTER TABLE `projects` ADD `archived_by` text REFERENCES users(id) ON DELETE set null;--> statement-breakpoint
++ALTER TABLE `projects` ADD `archive_reason` text;
+\ No newline at end of file
+diff --git a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+index 711e2b9..6d208e5 100644
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -8,6 +8,13 @@
+       "when": 1794774883005,
+       "tag": "0000_init",
+       "breakpoints": true
++    },
++    {
++      "idx": 1,
++      "version": "6",
++      "when": 1794788108879,
++      "tag": "0001_project_archiving",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 6a14aa4..5b3f5b9 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -53,6 +53,11 @@ export const projects = sqliteTable(
+     name: text("name").notNull(),
+     description: text("description"),
+     createdAt: createdAt(),
++    archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
++    archiveReason: text("archive_reason"),
++    archivedBy: text("archived_by").references(() => users.id, {
++      onDelete: "set null",
++    }),
+   },
+   (table) => [index("projects_org_idx").on(table.orgId)],
+ );
+@@ -93,3 +98,4 @@ export const tasks = sqliteTable(
+ 
+ export type Task = typeof tasks.$inferSelect;
+ export type User = typeof users.$inferSelect;
++export type Project = typeof projects.$inferSelect;
+diff --git a/src/routes/project-archive.test.ts b/src/routes/project-archive.test.ts
+new file mode 100644
+index 0000000..1c020f1
+--- /dev/null
++++ b/src/routes/project-archive.test.ts
+@@ -0,0 +1,70 @@
++import { describe, expect, it } from "vitest";
++
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++
++const admin = { token: SEED_TOKENS.acmeAdmin };
++const member = { token: SEED_TOKENS.acmeMember };
++
++describe("project archiving", () => {
++  it("archives, hides, lists and restores a project", async () => {
++    const { request } = await createTestContext();
++    const archived = await request(
++      "POST",
++      "/api/projects/prj_app/archive",
++      admin,
++    );
++    expect(archived.status).toBe(200);
++    expect(await archived.json()).toMatchObject({ archivedBy: "usr_ada" });
++    const active = (await (
++      await request("GET", "/api/projects", admin)
++    ).json()) as {
++      items: Array<{ id: string }>;
++    };
++    expect(active.items.map((item) => item.id)).toEqual([
++      "prj_billing",
++      "prj_web",
++    ]);
++    const onlyArchived = (await (
++      await request("GET", "/api/projects?archived=true", admin)
++    ).json()) as { items: Array<{ id: string }> };
++    expect(onlyArchived.items.map((item) => item.id)).toEqual(["prj_app"]);
++    const restored = await request(
++      "POST",
++      "/api/projects/prj_app/restore",
++      admin,
++    );
++    expect(await restored.json()).toMatchObject({ archivedAt: null });
++  });
++
++  it("refuses members, repeats and projects with work in progress", async () => {
++    const { request } = await createTestContext();
++    expect(
++      (await request("POST", "/api/projects/prj_app/archive", member)).status,
++    ).toBe(403);
++    const busy = await request("POST", "/api/projects/prj_web/archive", admin);
++    expect(busy.status).toBe(409);
++    expect(await busy.json()).toMatchObject({ taskIds: ["tsk_2"] });
++    await request("POST", "/api/projects/prj_app/archive", admin);
++    const again = await request("POST", "/api/projects/prj_app/archive", admin);
++    expect(await again.json()).toMatchObject({ code: "already_archived" });
++  });
++
++  it("makes an archived project's tasks read-only", async () => {
++    const { request } = await createTestContext();
++    await request("POST", "/api/projects/prj_app/archive", admin);
++    const create = await request("POST", "/api/projects/prj_app/tasks", {
++      ...admin,
++      body: { title: "New" },
++    });
++    const patch = await request("PATCH", "/api/tasks/tsk_4", {
++      ...admin,
++      body: {},
++    });
++    const remove = await request("DELETE", "/api/tasks/tsk_4", admin);
++    for (const response of [create, patch, remove]) {
++      expect(response.status).toBe(409);
++      expect(await response.json()).toMatchObject({ code: "project_archived" });
++    }
++    expect((await request("GET", "/api/tasks/tsk_4", member)).status).toBe(200);
++  });
++});
+diff --git a/src/routes/project-archive.ts b/src/routes/project-archive.ts
+new file mode 100644
+index 0000000..2cee181
+--- /dev/null
++++ b/src/routes/project-archive.ts
+@@ -0,0 +1,21 @@
++import { eq } from "drizzle-orm";
++
++import type { Db } from "../db/client";
++import { projects } from "../db/schema";
++
++export const projectArchived = {
++  code: "project_archived",
++  message: "the project is archived and read-only",
++};
++
++export async function isProjectArchived(
++  db: Db,
++  projectId: string,
++): Promise<boolean> {
++  const project = await db
++    .select({ archivedAt: projects.archivedAt })
++    .from(projects)
++    .where(eq(projects.id, projectId))
++    .get();
++  return Boolean(project?.archivedAt);
++}
+diff --git a/src/routes/projects.ts b/src/routes/projects.ts
+index 3143433..02b4291 100644
+--- a/src/routes/projects.ts
++++ b/src/routes/projects.ts
+@@ -1,4 +1,4 @@
+-import { and, asc, count, eq } from "drizzle-orm";
++import { and, asc, count, desc, eq, isNotNull, isNull } from "drizzle-orm";
+ import { Elysia, t } from "elysia";
+ 
+ import type { Db } from "../db/client";
+@@ -6,19 +6,47 @@ import { projects, tasks, users } from "../db/schema";
+ import { newId } from "../lib/ids";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
+-import { toTaskResponse } from "./serializers";
++import { projectArchived } from "./project-archive";
++import { toProjectResponse, toTaskResponse } from "./serializers";
++
++const archivedFilter = {
++  false: isNull(projects.archivedAt),
++  true: isNotNull(projects.archivedAt),
++  all: undefined,
++};
++
++/** The trimmed reason, undefined when none was given, or false when the body is invalid. */
++function archiveReason(body: unknown): string | undefined | false {
++  if (body === undefined || body === null || body === "") return undefined;
++  if (typeof body !== "object" || Array.isArray(body)) return false;
++  const { reason, ...rest } = body as Record<string, unknown>;
++  if (Object.keys(rest).length > 0) return false;
++  if (reason === undefined) return undefined;
++  if (typeof reason !== "string") return false;
++  const trimmed = reason.trim();
++  return trimmed.length >= 1 && trimmed.length <= 200 ? trimmed : false;
++}
+ 
+ export const projectRoutes = (db: Db) =>
+   new Elysia({ prefix: "/api/projects" })
+     .use(authGuard(db))
+     .get(
+       "/",
+-      async ({ user }) => {
++      async ({ user, query }) => {
+         const rows = await db
+           .select()
+           .from(projects)
+-          .where(eq(projects.orgId, user.orgId))
+-          .orderBy(asc(projects.name));
++          .where(
++            and(
++              eq(projects.orgId, user.orgId),
++              archivedFilter[query.archived ?? "false"],
++            ),
++          )
++          .orderBy(
++            ...(query.archived === "true"
++              ? [desc(projects.archivedAt), asc(projects.name)]
++              : [asc(projects.name)]),
++          );
+         const items = [];
+         for (const project of rows) {
+           const counts = await db
+@@ -33,12 +61,22 @@ export const projectRoutes = (db: Db) =>
+             name: project.name,
+             description: project.description,
+             createdAt: project.createdAt.toISOString(),
++            archivedAt: project.archivedAt?.toISOString() ?? null,
++            archivedBy: project.archivedBy,
++            archiveReason: project.archiveReason,
+             taskCounts,
+           });
+         }
+         return { items };
+       },
+-      { requireAuth: true },
++      {
++        requireAuth: true,
++        query: t.Object({
++          archived: t.Optional(
++            t.Union([t.Literal("false"), t.Literal("true"), t.Literal("all")]),
++          ),
++        }),
++      },
+     )
+     .post(
+       "/",
+@@ -52,7 +90,8 @@ export const projectRoutes = (db: Db) =>
+             description: body.description,
+           })
+           .returning();
+-        return status(201, project);
++        if (!project) throw new Error("insert returned no row");
++        return status(201, toProjectResponse(project));
+       },
+       {
+         requireAuth: true,
+@@ -73,7 +112,117 @@ export const projectRoutes = (db: Db) =>
+           )
+           .get();
+         if (!project) return status(404, "Project not found");
+-        return project;
++        return toProjectResponse(project);
++      },
++      { requireAuth: true },
++    )
++    .post(
++      "/:id/archive",
++      async ({ params, body, user, status }) => {
++        if (user.role !== "admin")
++          return status(403, {
++            code: "forbidden",
++            message: "only admins can archive projects",
++          });
++        const project = await db
++          .select()
++          .from(projects)
++          .where(
++            and(eq(projects.id, params.id), eq(projects.orgId, user.orgId)),
++          )
++          .get();
++        if (!project)
++          return status(404, {
++            code: "project_not_found",
++            message: "project not found",
++          });
++        const reason = archiveReason(body);
++        if (reason === false)
++          return status(422, {
++            code: "invalid_reason",
++            message: "the reason must be 1 to 200 characters",
++          });
++        if (project.archivedAt)
++          return status(409, {
++            code: "already_archived",
++            message: "project is already archived",
++          });
++        const active = await db
++          .select({ id: tasks.id })
++          .from(tasks)
++          .where(
++            and(
++              eq(tasks.projectId, project.id),
++              eq(tasks.status, "in_progress"),
++            ),
++          )
++          .orderBy(asc(tasks.createdAt));
++        if (active.length > 0)
++          return status(409, {
++            code: "project_has_active_tasks",
++            message: `finish or reset ${active.length} task(s) first`,
++            taskIds: active.map((task) => task.id),
++          });
++        const [archived] = await db
++          .update(projects)
++          .set({
++            archivedAt: new Date(),
++            archivedBy: user.id,
++            archiveReason: reason ?? null,
++          })
++          .where(and(eq(projects.id, project.id), isNull(projects.archivedAt)))
++          .returning();
++        if (!archived)
++          return status(409, {
++            code: "already_archived",
++            message: "project is already archived",
++          });
++        return toProjectResponse(archived);
++      },
++      {
++        requireAuth: true,
++        // Validated by hand: the framework strips unknown keys, and R16 refuses them.
++        body: t.Optional(t.Unknown()),
++      },
++    )
++    .post(
++      "/:id/restore",
++      async ({ params, user, status }) => {
++        if (user.role !== "admin")
++          return status(403, {
++            code: "forbidden",
++            message: "only admins can restore projects",
++          });
++        const project = await db
++          .select()
++          .from(projects)
++          .where(
++            and(eq(projects.id, params.id), eq(projects.orgId, user.orgId)),
++          )
++          .get();
++        if (!project)
++          return status(404, {
++            code: "project_not_found",
++            message: "project not found",
++          });
++        if (!project.archivedAt)
++          return status(409, {
++            code: "not_archived",
++            message: "project is not archived",
++          });
++        const [restored] = await db
++          .update(projects)
++          .set({ archivedAt: null, archivedBy: null, archiveReason: null })
++          .where(
++            eq(projects.id, project.id),
++          )
++          .returning();
++        if (!restored)
++          return status(409, {
++            code: "not_archived",
++            message: "project is not archived",
++          });
++        return toProjectResponse(restored);
+       },
+       { requireAuth: true },
+     )
+@@ -93,7 +242,8 @@ export const projectRoutes = (db: Db) =>
+           .from(tasks)
+           .where(eq(tasks.projectId, project.id))
+           .orderBy(asc(tasks.createdAt));
+-        return { items: rows.map(toTaskResponse) };
++        const readOnly = Boolean(project.archivedAt);
++        return { items: rows.map((task) => toTaskResponse(task, readOnly)) };
+       },
+       { requireAuth: true },
+     )
+@@ -108,6 +258,7 @@ export const projectRoutes = (db: Db) =>
+           )
+           .get();
+         if (!project) return status(404, "Project not found");
++        if (project.archivedAt) return status(409, projectArchived);
+         if (body.assigneeId) {
+           const assignee = await db
+             .select()
+@@ -137,7 +288,7 @@ export const projectRoutes = (db: Db) =>
+         if (!task) throw new Error("insert returned no row");
+         if (task.assigneeId)
+           await notifyTaskAssigned(db, task, task.assigneeId);
+-        return status(201, toTaskResponse(task));
++        return status(201, toTaskResponse(task, false));
+       },
+       {
+         requireAuth: true,
+diff --git a/src/routes/serializers.ts b/src/routes/serializers.ts
+index f62bf85..69ed4a7 100644
+--- a/src/routes/serializers.ts
++++ b/src/routes/serializers.ts
+@@ -1,6 +1,6 @@
+-import type { Task } from "../db/schema";
++import type { Project, Task } from "../db/schema";
+ 
+-export function toTaskResponse(task: Task) {
++export function toTaskResponse(task: Task, readOnly: boolean) {
+   return {
+     id: task.id,
+     projectId: task.projectId,
+@@ -12,5 +12,19 @@ export function toTaskResponse(task: Task) {
+     dueDate: task.dueDate,
+     createdAt: task.createdAt.toISOString(),
+     updatedAt: task.updatedAt.toISOString(),
++    readOnly,
++  };
++}
++
++export function toProjectResponse(project: Project) {
++  return {
++    id: project.id,
++    orgId: project.orgId,
++    name: project.name,
++    description: project.description,
++    createdAt: project.createdAt.toISOString(),
++    archivedAt: project.archivedAt?.toISOString() ?? null,
++    archivedBy: project.archivedBy,
++    archiveReason: project.archiveReason,
+   };
+ }
+diff --git a/src/routes/tasks.ts b/src/routes/tasks.ts
+index c62bf5d..423ead1 100644
+--- a/src/routes/tasks.ts
++++ b/src/routes/tasks.ts
+@@ -5,6 +5,7 @@ import type { Db } from "../db/client";
+ import { tasks, users, type TaskStatus } from "../db/schema";
+ import { authGuard } from "../plugins/auth";
+ import { notifyTaskAssigned } from "../services/notifications";
++import { isProjectArchived, projectArchived } from "./project-archive";
+ import { toTaskResponse } from "./serializers";
+ 
+ export const taskRoutes = (db: Db) =>
+@@ -19,7 +20,10 @@ export const taskRoutes = (db: Db) =>
+           .where(eq(tasks.id, params.id))
+           .get();
+         if (!task) return status(404, { error: "task not found" });
+-        return toTaskResponse(task);
++        return toTaskResponse(
++          task,
++          await isProjectArchived(db, task.projectId),
++        );
+       },
+       { requireAuth: true },
+     )
+@@ -32,6 +36,8 @@ export const taskRoutes = (db: Db) =>
+           .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
+           .get();
+         if (!task) return status(404, { error: "task not found" });
++        if (await isProjectArchived(db, task.projectId))
++          return status(409, projectArchived);
+ 
+         const changes: Partial<typeof tasks.$inferInsert> = {};
+ 
+@@ -100,7 +106,8 @@ export const taskRoutes = (db: Db) =>
+           changes.dueDate = body.dueDate;
+         }
+ 
+-        if (Object.keys(changes).length === 0) return toTaskResponse(task);
++        if (Object.keys(changes).length === 0)
++          return toTaskResponse(task, false);
+         changes.updatedAt = new Date();
+ 
+         const [updated] = await db
+@@ -110,7 +117,7 @@ export const taskRoutes = (db: Db) =>
+           .returning();
+         if (!updated) throw new Error("update returned no row");
+         if (newAssignee) await notifyTaskAssigned(db, updated, newAssignee);
+-        return toTaskResponse(updated);
++        return toTaskResponse(updated, false);
+       },
+       {
+         requireAuth: true,
+@@ -138,6 +145,14 @@ export const taskRoutes = (db: Db) =>
+       "/:id",
+       async ({ params, user, status }) => {
+         if (user.role !== "admin") return status(403, "Forbidden");
++        const task = await db
++          .select({ projectId: tasks.projectId })
++          .from(tasks)
++          .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))
++          .get();
++        if (!task) return status(404, { error: "task not found" });
++        if (await isProjectArchived(db, task.projectId))
++          return status(409, projectArchived);
+         const deleted = await db
+           .delete(tasks)
+           .where(and(eq(tasks.id, params.id), eq(tasks.orgId, user.orgId)))

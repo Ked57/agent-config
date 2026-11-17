@@ -1,0 +1,278 @@
+diff -ruN a/src/controllers/reports-v1.controller.ts b/src/controllers/reports-v1.controller.ts
+--- a/src/controllers/reports-v1.controller.ts
++++ b/src/controllers/reports-v1.controller.ts
+@@ -5,6 +5,7 @@
+   addDays,
+   dayKey,
+   dayStart,
++  dayWindow,
+   formatDay,
+   isValidDay,
+   weekStart,
+@@ -41,23 +42,22 @@
+   day: string,
+ ): Promise<TimesheetV1> {
+   const start = weekStart(day);
+-  const rows = await timesheetRows(
+-    db,
+-    orgId,
+-    dayStart(start),
+-    dayStart(addDays(start, 7)),
+-  );
++  const last = addDays(start, 6);
++  const window = dayWindow(start, last);
++  const rows = await timesheetRows(db, orgId, window.from, window.to);
+   const grouped = new Map<
+     string,
+     TimesheetV1["rows"][number] & { m: number; b: number }
+   >();
+   let total = 0;
+   for (const row of rows) {
+-    const key = `${row.user_id}|${dayKey(row.started_at)}`;
++    const local = dayKey(row.started_at, row.timezone);
++    if (local < start || local > last) continue;
++    const key = `${row.user_id}|${local}`;
+     const current = grouped.get(key) ?? {
+       user_id: row.user_id,
+       user_name: row.user_name,
+-      day: formatDay(dayKey(row.started_at)),
++      day: formatDay(local),
+       hours: "",
+       billable_hours: "",
+       m: 0,
+diff -ruN a/src/lib/legacy/dates.ts b/src/lib/legacy/dates.ts
+--- a/src/lib/legacy/dates.ts
++++ b/src/lib/legacy/dates.ts
+@@ -5,15 +5,32 @@
+  * New code should prefer src/lib/time.ts, but most modules still use these.
+  */
+ 
+-const DAY_MS = 24 * 60 * 60 * 1000;
++import { zonedDay } from "../time";
++
++const HOUR_MS = 60 * 60 * 1000;
++const DAY_MS = 24 * HOUR_MS;
+ 
+ const pad = (value: number) => String(value).padStart(2, "0");
+ 
+-/** Calendar day of a timestamp. */
+-// TODO(2021): timezones? All customers are in Europe for now, UTC is close enough.
+-export function dayKey(at: number | Date): string {
++/**
++ * Calendar day of a timestamp in a time zone. Time belongs to the day it was
++ * logged on for the person who logged it, so pass their time zone.
++ */
++export function dayKey(at: number | Date, timeZone = "UTC"): string {
+   const ms = typeof at === "number" ? at : at.getTime();
+-  return new Date(ms).toISOString().slice(0, 10);
++  if (timeZone === "UTC") return new Date(ms).toISOString().slice(0, 10);
++  return zonedDay(ms, timeZone);
++}
++
++/**
++ * A UTC window that contains every instant that is on `day` somewhere on
++ * earth (UTC-12 to UTC+14). Filter the rows by dayKey afterwards.
++ */
++export function dayWindow(firstDay: string, lastDay = firstDay) {
++  return {
++    from: dayStart(firstDay) - 14 * HOUR_MS,
++    to: dayStart(lastDay) + DAY_MS + 12 * HOUR_MS,
++  };
+ }
+ 
+ /** Midnight UTC of a day, as epoch ms. */
+diff -ruN a/src/routes/exports.test.ts b/src/routes/exports.test.ts
+--- a/src/routes/exports.test.ts
++++ b/src/routes/exports.test.ts
+@@ -28,9 +28,10 @@
+       },
+     );
+     const lines = (await response.text()).trim().split("\n");
+-    expect(lines).toHaveLength(2);
+-    expect(lines[1]).toBe(
++    expect(lines.slice(1)).toEqual([
++      // 23:00 UTC on the 9th is 10:00 on the 10th in Sydney.
++      "10/11/2026,Sam Taylor,Website relaunch,Fix broken signup link,45,0.75,yes,Repro signup bug",
+       "10/11/2026,Ada Lovelace,Mobile app,Push notifications,60,1.00,yes,",
+-    );
++    ]);
+   });
+ });
+diff -ruN a/src/routes/exports.ts b/src/routes/exports.ts
+--- a/src/routes/exports.ts
++++ b/src/routes/exports.ts
+@@ -4,7 +4,7 @@
+ import { buildTimesheetV1 } from "../controllers/reports-v1.controller";
+ import type { Db } from "../db/client";
+ import { invoices, projects, tasks, timeEntries, users } from "../db/schema";
+-import { dayKey, dayStart, formatDay } from "../lib/legacy/dates";
++import { dayKey, dayWindow, formatDay } from "../lib/legacy/dates";
+ import { formatHours, fromCents } from "../lib/legacy/money";
+ import { authGuard } from "../plugins/auth";
+ 
+@@ -75,21 +75,20 @@
+         const conditions: SQL[] = query.projectId
+           ? [eq(timeEntries.projectId, query.projectId)]
+           : [eq(timeEntries.orgId, user.orgId)];
++        // Days are the logger's local days: fetch a wide window, filter below.
+         if (query.from)
+           conditions.push(
+-            gte(timeEntries.startedAt, new Date(dayStart(query.from))),
++            gte(timeEntries.startedAt, new Date(dayWindow(query.from).from)),
+           );
+         if (query.to)
+           conditions.push(
+-            lte(
+-              timeEntries.startedAt,
+-              new Date(dayStart(query.to) + 86_399_999),
+-            ),
++            lte(timeEntries.startedAt, new Date(dayWindow(query.to).to)),
+           );
+         const rows = await db
+           .select({
+             entry: timeEntries,
+             userName: users.name,
++            timezone: users.timezone,
+             projectName: projects.name,
+             taskTitle: tasks.title,
+           })
+@@ -110,18 +109,28 @@
+             "billable",
+             "note",
+           ]),
+-          ...rows.map(({ entry, userName, projectName, taskTitle }) =>
+-            csvLine([
+-              formatDay(dayKey(entry.startedAt)),
+-              userName,
+-              projectName,
+-              taskTitle,
+-              entry.minutes,
+-              formatHours(entry.minutes),
+-              entry.billable ? "yes" : "no",
+-              entry.note,
+-            ]),
+-          ),
++          ...rows
++            .map((row) => ({
++              ...row,
++              day: dayKey(row.entry.startedAt, row.timezone),
++            }))
++            .filter(
++              ({ day }) =>
++                (!query.from || day >= query.from) &&
++                (!query.to || day <= query.to),
++            )
++            .map(({ entry, day, userName, projectName, taskTitle }) =>
++              csvLine([
++                formatDay(day),
++                userName,
++                projectName,
++                taskTitle,
++                entry.minutes,
++                formatHours(entry.minutes),
++                entry.billable ? "yes" : "no",
++                entry.note,
++              ]),
++            ),
+         ];
+         return csvResponse("time-entries.csv", lines);
+       },
+diff -ruN a/src/services/invoices.ts b/src/services/invoices.ts
+--- a/src/services/invoices.ts
++++ b/src/services/invoices.ts
+@@ -67,6 +67,7 @@
+       projectName: projects.name,
+       projectRate: projects.hourlyRateCents,
+       userRate: users.hourlyRateCents,
++      timezone: users.timezone,
+     })
+     .from(timeEntries)
+     .innerJoin(projects, eq(projects.id, timeEntries.projectId))
+@@ -76,7 +77,7 @@
+   if (rows.length !== new Set(ids).size)
+     throw new HttpError(400, "invalid_entries", "unknown time entry");
+   const lines: LineInput[] = [];
+-  for (const { entry, projectName, projectRate, userRate } of rows) {
++  for (const { entry, projectName, projectRate, userRate, timezone } of rows) {
+     if (entry.invoiceId)
+       throw new HttpError(
+         409,
+@@ -91,7 +92,7 @@
+       );
+     const rate = userRate ?? projectRate;
+     lines.push({
+-      description: `${projectName}: ${entry.note ?? "Time"} (${dayKey(entry.startedAt)})`,
++      description: `${projectName}: ${entry.note ?? "Time"} (${dayKey(entry.startedAt, timezone)})`,
+       minutes: entry.minutes,
+       unitPriceCents: rate,
+       amountCents: amountForMinutes(entry.minutes, rate),
+diff -ruN a/src/services/reports.ts b/src/services/reports.ts
+--- a/src/services/reports.ts
++++ b/src/services/reports.ts
+@@ -9,7 +9,7 @@
+   timeEntries,
+   users,
+ } from "../db/schema";
+-import { addDays, dayKey, dayStart, weekStart } from "../lib/legacy/dates";
++import { addDays, dayKey, dayWindow, weekStart } from "../lib/legacy/dates";
+ import { amountForMinutes } from "../lib/legacy/money";
+ 
+ const byName = (a: string, b: string) => a.localeCompare(b);
+@@ -25,22 +25,24 @@
+ /** Minutes per person per day for the Monday-to-Sunday week containing `day`. */
+ export async function weeklyTimesheet(db: Db, orgId: string, day: string) {
+   const start = weekStart(day);
+-  const end = addDays(start, 7);
+   const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
++  const window = dayWindow(start, days[6]);
+   const rows = await db
+-    .select({ entry: timeEntries, name: users.name })
++    .select({ entry: timeEntries, name: users.name, timezone: users.timezone })
+     .from(timeEntries)
+     .innerJoin(users, eq(users.id, timeEntries.userId))
+     .where(
+       and(
+         eq(timeEntries.orgId, orgId),
+-        gte(timeEntries.startedAt, new Date(dayStart(start))),
+-        lt(timeEntries.startedAt, new Date(dayStart(end))),
++        gte(timeEntries.startedAt, new Date(window.from)),
++        lt(timeEntries.startedAt, new Date(window.to)),
+       ),
+     )
+     .orderBy(asc(timeEntries.startedAt));
+   const people = new Map<string, TimesheetUser>();
+-  for (const { entry, name } of rows) {
++  for (const { entry, name, timezone } of rows) {
++    const key = dayKey(entry.startedAt, timezone);
++    if (!days.includes(key)) continue;
+     let person = people.get(entry.userId);
+     if (!person) {
+       person = {
+@@ -52,7 +54,6 @@
+       };
+       people.set(entry.userId, person);
+     }
+-    const key = dayKey(entry.startedAt);
+     person.days[key] = (person.days[key] ?? 0) + entry.minutes;
+     person.totalMinutes += entry.minutes;
+     if (entry.billable) person.billableMinutes += entry.minutes;
+diff -ruN a/src/sql/reports.sql.ts b/src/sql/reports.sql.ts
+--- a/src/sql/reports.sql.ts
++++ b/src/sql/reports.sql.ts
+@@ -7,6 +7,7 @@
+ export interface TimesheetRow {
+   user_id: string;
+   user_name: string;
++  timezone: string;
+   started_at: number;
+   minutes: number;
+   billable: number;
+@@ -19,7 +20,7 @@
+   toMs: number,
+ ) {
+   return db.all<TimesheetRow>(sql`
+-    SELECT u.id AS user_id, u.name AS user_name, te.started_at, te.minutes, te.billable
++    SELECT u.id AS user_id, u.name AS user_name, u.timezone, te.started_at, te.minutes, te.billable
+     FROM time_entries te JOIN users u ON u.id = te.user_id
+     WHERE te.org_id = ${orgId} AND te.started_at >= ${fromMs} AND te.started_at < ${toMs}
+     ORDER BY u.name, te.started_at`);

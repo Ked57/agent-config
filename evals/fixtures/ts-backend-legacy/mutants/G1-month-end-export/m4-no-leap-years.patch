@@ -1,0 +1,14 @@
+diff -ruN a/src/lib/legacy/dates.ts b/src/lib/legacy/dates.ts
+--- a/src/lib/legacy/dates.ts
++++ b/src/lib/legacy/dates.ts
+@@ -38,7 +38,9 @@
+   const index = month - 1 + months;
+   const targetYear = year + Math.floor(index / 12);
+   const targetMonth = (((index % 12) + 12) % 12) + 1;
+-  return `${targetYear}-${pad(targetMonth)}-${pad(date)}`;
++  const lengths = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
++  const lastDay = lengths[targetMonth - 1] ?? 31;
++  return `${targetYear}-${pad(targetMonth)}-${pad(Math.min(date, lastDay))}`;
+ }
+ 
+ /** Monday of the week a day falls in. */

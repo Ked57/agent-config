@@ -1,0 +1,13 @@
+{
+  "task": "G1-month-end-export",
+  "references": [{ "file": "reference.patch", "source": "hand-written: addMonths clamps to the last day of the target month, as its doc comment says" }],
+  "mutants": [
+    { "file": "m1-format-day-normalises.patch", "wrong": "Makes formatDay roll invalid days over (2026-11-31 becomes 01/12/2026) instead of fixing the dates", "violates": "Please fix it, and anything else with the same cause (the due dates themselves are wrong)", "expect": "killed" },
+    { "file": "m2-invoice-due-date-only.patch", "wrong": "Clamps only in the invoice due-date calculation; recurring invoices and monthly tasks still get impossible dates", "violates": "and anything else with the same cause", "expect": "killed" },
+    { "file": "m3-date-overflow.patch", "wrong": "Rewrites addMonths with Date.setUTCMonth, so Jan 31 + 1 month is Mar 3", "violates": "the helper's own contract: clamp to the last day of the target month", "expect": "killed" },
+    { "file": "m4-no-leap-years.patch", "wrong": "Clamps with a fixed table of month lengths, February always 28", "violates": "a real due date: 2028-01-31 + 1 month is 2028-02-29", "expect": "killed" },
+    { "file": "m5-clamp-to-28.patch", "wrong": "Caps every day of month at 28", "violates": "the day of month is kept when it exists", "expect": "killed" },
+    { "file": "m6-export-prints-raw-day.patch", "wrong": "The export prints invalid days raw instead of formatting them", "violates": "fix it (the export shows an impossible date) and anything else with the same cause", "expect": "killed" },
+    { "file": "m7-invoices-only-not-tasks.patch", "wrong": "A private clamped helper in the invoice service (due dates and next drafts); monthly tasks still use the broken helper", "violates": "and anything else with the same cause", "expect": "killed" }
+  ]
+}

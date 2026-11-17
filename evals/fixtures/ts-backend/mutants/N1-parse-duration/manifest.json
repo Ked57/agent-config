@@ -1,0 +1,35 @@
+{
+  "task": "N1-parse-duration",
+  "references": [
+    {
+      "file": "reference-shakeout-A-r1.patch",
+      "source": "validation-ts-backend-shakeout A r1"
+    }
+  ],
+  "mutants": [
+    {
+      "file": "m1-wrong-day.patch",
+      "wrong": "a day is 12 hours",
+      "violates": "converts strings like \"2d\" into milliseconds",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-lenient-number.patch",
+      "wrong": "Number() per part: accepts 1e3s and 0x10s and ignores trailing junk",
+      "violates": "throws a RangeError for anything else",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-bare-number-ms.patch",
+      "wrong": "\"5\" and \"1h30\" are accepted as milliseconds",
+      "violates": "throws a RangeError for anything else",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-unanchored.patch",
+      "wrong": "sums every <n><unit> found and ignores the rest (abc5m, 5m!)",
+      "violates": "throws a RangeError for anything else",
+      "expect": "killed"
+    }
+  ]
+}

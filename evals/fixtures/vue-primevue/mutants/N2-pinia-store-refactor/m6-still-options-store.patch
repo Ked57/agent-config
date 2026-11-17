@@ -1,0 +1,22 @@
+diff -ruN a/src/stores/users.ts b/src/stores/users.ts
+--- a/src/stores/users.ts
++++ b/src/stores/users.ts
+@@ -29,14 +29,10 @@
+     byId(state) {
+       return (id: string) => state.users.find((user) => user.id === id)
+     },
+-    adminCount(state): number {
+-      return state.users.filter((user) => user.role === 'admin').length
+-    },
+-    editorCount(state): number {
+-      return state.users.filter((user) => user.role === 'editor').length
+-    },
+-    viewerCount(state): number {
+-      return state.users.filter((user) => user.role === 'viewer').length
++    countsByRole(state): Record<UserRole, number> {
++      const counts: Record<UserRole, number> = { admin: 0, editor: 0, viewer: 0 }
++      for (const user of state.users) counts[user.role] += 1
++      return counts
+     },
+   },
+   actions: {
