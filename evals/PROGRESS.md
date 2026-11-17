@@ -341,3 +341,4 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
   run so far (both arms, calibration): to classify as honest miss or test artefact. G6 lost one case
   with poteto-mode only.
 - R5.3 (`manual-qa` removed) running; R5.4 next. New comparison spend so far: $14.62 + $13.89 + $3.95 wasted = $32.46.
+- 03:58 UTC: R5.3 done (`~/agent-config-evals/2026-11-17T01-40-r2-no-manual-qa`, $12.22 new). R5.4 running.
