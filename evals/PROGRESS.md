@@ -334,3 +334,10 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
   runs ($3.95 wasted; dir moved to `round2/discarded-poteto-legacy-timeout60`), flag removed, driver
   relaunched: all 8 arm-A runs now reused. Do not kill processes with `pkill -f` patterns that match
   the calling shell.
+- 03:16 UTC: **R5.2 done** (`~/agent-config-evals/2026-11-17T01-40-r2-poteto-legacy`, $13.89 new, arm A reused):
+  poteto-mode on vs off on `backend-legacy`: run score 0.98 vs 0.97, d −0.01, 95% CI −0.03 to +0.01, MDE
+  0.03 → no difference larger than ±0.10 (5 of 8 tasks at ceiling). Cost +10% (CI −6% to +26%): no
+  difference detected. Judge −0.16 (CI −0.42 to +0.09). G3 and G8 fail the same single case in every
+  run so far (both arms, calibration): to classify as honest miss or test artefact. G6 lost one case
+  with poteto-mode only.
+- R5.3 (`manual-qa` removed) running; R5.4 next. New comparison spend so far: $14.62 + $13.89 + $3.95 wasted = $32.46.
