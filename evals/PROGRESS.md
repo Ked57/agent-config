@@ -317,3 +317,10 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
 - Reuse snag: the design calibration ran with pstack 0.15.42; today's build has 0.15.43, so the exact
   key no longer matches. A small change (`--reuse-allow-plugin-drift`, recorded in the report, allowed
   only when the drifted plugin did not fire) is being added rather than paying $15 to re-run arm A.
+- 01:40 UTC: `--reuse-allow-plugin-drift` merged (verify 243). The design calibration runs did not match
+  strictly because the installed-file digest includes plugin-owned files that differ between builds
+  (same plugin versions); they are reusable through the drift path (repo-owned files identical, plugin
+  did not fire). **R5 driver launched**: `~/agent-config-evals/round2/driver.sh`, log `round2/driver.log`,
+  results `~/agent-config-evals/2026-11-17T01-40-r2-{design-skills,poteto-legacy,no-manual-qa,figma-vs-screenshot}`.
+  Caps on new spend: $19, $24, $14, $19. If the driver is not running (`pgrep -f round2/driver.sh`),
+  relaunch with the command in its header; it resumes each part and sleeps 20 min on a usage limit.
