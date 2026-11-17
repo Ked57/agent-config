@@ -156,7 +156,10 @@ describe("hidden G8: spec #340 retire the v1 reports module", { timeout: 30_000 
   });
 
   it("R1: nothing imports the deleted modules", () => {
-    const offenders = sourceFiles(SRC).filter((file) => /reports-v1\.controller|sql\/reports\.sql/.test(readFileSync(file, "utf8")));
+    // Only module specifiers count: a test that names the deleted paths to assert they are gone
+    // (existsSync, a list of retired files) does not import them.
+    const importOfDeleted = /(?:\bfrom|\bimport|\brequire|\bvi\.mock)\s*\(?\s*["'][^"']*\/(?:reports-v1\.controller|reports\.sql)(?:\.[jt]s)?["']/;
+    const offenders = sourceFiles(SRC).filter((file) => importOfDeleted.test(readFileSync(file, "utf8")));
     expect(offenders.map((file) => relative(SRC, file))).toEqual([]);
   });
 });
