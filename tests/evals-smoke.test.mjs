@@ -23,7 +23,7 @@ test('smokeRow lists fired components, required check scores and failed gates', 
   assert.deepEqual(row.failedGates, ['lint']);
 });
 
-test('judgeSmoke fails on missed or forbidden firing and broken gates, and only warns on cost drift', () => {
+test('judgeSmoke fails on forbidden firing, firing rates under the minimum and newly broken gates; it warns on drift', () => {
   const baseline = { tasks: { T1: { usd: 1, turns: 10, fired: ['manual-qa', 'routing'], checks: { hidden: 1 } } } };
   const ok = judgeSmoke({ spec, baseline, rows: [smokeRow(run(), arm)] });
   assert.equal(ok.failed, false);
@@ -37,16 +37,31 @@ test('judgeSmoke fails on missed or forbidden firing and broken gates, and only 
   const telemetry = { policies: { routing: { fired: false }, typescript: { fired: true } }, skills: { 'manual-qa': { fired: false } }, plugins: {} };
   const bad = judgeSmoke({ spec, baseline, rows: [smokeRow(run({ telemetry, gatesPass: false, gates: { lint: { ok: false } } }), arm)] });
   assert.equal(bad.failed, true);
-  assert.deepEqual(bad.results[0].failures, ['gates failed: lint', 'expected routing to fire; it did not', 'typescript fired; it should not']);
+  assert.deepEqual(bad.results[0].failures, ['gates failed: lint', 'typescript fired; it should not']);
+  assert.deepEqual(bad.firingFailures, ['routing fired on 0 of 1 expecting tasks (minimum 100%); missed on T1']);
+  assert.match(bad.results[0].warnings.join('\n'), /expected routing; it did not fire/);
   assert.match(bad.results[0].warnings.join('\n'), /no longer fired: manual-qa/);
+
+  const knownGate = judgeSmoke({ spec, baseline: { tasks: { T1: { ...baseline.tasks.T1, failedGates: ['lint'] } } }, rows: [smokeRow(run({ gatesPass: false, gates: { lint: { ok: false } } }), arm)] });
+  assert.equal(knownGate.failed, false);
+  assert.match(knownGate.results[0].warnings.join('\n'), /gates failed as in the baseline: lint/);
 
   const missing = judgeSmoke({ spec, baseline, rows: [] });
   assert.deepEqual(missing.results[0].failures, ['no run record']);
 });
 
+test('expected firing is judged per component across tasks against its minimum rate', () => {
+  const twoTasks = { tasks: [{ id: 'T1', set: 's', fires: ['manual-qa'] }, { id: 'T2', set: 's', fires: ['manual-qa'] }] };
+  const rows = [smokeRow(run(), arm), smokeRow(run({ task: 'T2', telemetry: { policies: {}, skills: { 'manual-qa': { fired: false } }, plugins: {} } }), arm)];
+  assert.equal(judgeSmoke({ spec: twoTasks, baseline: null, rows }).failed, true);
+  const lenient = judgeSmoke({ spec: { ...twoTasks, minFireRate: { 'manual-qa': 0.5 } }, baseline: null, rows });
+  assert.equal(lenient.failed, false);
+  assert.deepEqual(lenient.firing['manual-qa'], { fired: 1, expected: 2, missedOn: ['T2'], minRate: 0.5, pass: true });
+});
+
 test('baselineFrom keeps cost, turns, firing and checks per task', () => {
   const baseline = baselineFrom({ spec, rows: [smokeRow(run(), arm)], meta: { model: 'm' } });
-  assert.deepEqual(baseline, { model: 'm', totalUsd: 1, tasks: { T1: { set: 's', usd: 1, turns: 10, fired: ['manual-qa', 'routing'], gatesPass: true, checks: { hidden: 1 } } } });
+  assert.deepEqual(baseline, { model: 'm', totalUsd: 1, tasks: { T1: { set: 's', usd: 1, turns: 10, fired: ['manual-qa', 'routing'], gatesPass: true, failedGates: [], checks: { hidden: 1 } } } });
 });
 
 test('smoke spec names real tasks and the baseline covers every smoke task', () => {

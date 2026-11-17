@@ -45,20 +45,27 @@ with the same isolation, arm cache and result reuse; `SMOKE.md` there holds the 
 **Verdicts.** Per task, against the expectations in `smoke.json` and the numbers in
 [`smoke-baseline.json`](smoke-baseline.json):
 
-- **Fail** (exit 1): an expected component did not fire, a forbidden one did, a fixture gate failed, or
-  the run errored or broke isolation.
-- **Warn** (exit 0): cost or turns more than 30% off the baseline (`costTolerance`), a required check
-  scoring below its baseline, or firing of a component the spec does not mention that differs from the
-  baseline ("newly fired", "no longer fired").
+- **Fail** (exit 1): a forbidden component fired on any task; an expected component fired on fewer of
+  the tasks expecting it than its minimum rate (`minFireRate` in `smoke.json`, default 100%: today
+  `manual-qa` 50%, `typescript` 70%, `emil-design-eng` 75%); a fixture gate failed that the baseline
+  run passed; or a run errored or broke isolation. The report ends with the per-component firing table.
+- **Warn** (exit 0): a single task missing an expected component (while the rate holds), a gate failing
+  as it did in the baseline, cost or turns more than 30% off the baseline (`costTolerance`), a required
+  check scoring below its baseline, or firing of a component the spec does not mention that differs
+  from the baseline ("newly fired", "no longer fired").
 
-**Cost.** A full run costs about **$2.40** (measured 2026-11-17: $1.59 to $2.43 for 11–12 tasks) and
-takes about 15 minutes, plus about 3 minutes once to generate the design mockups. Tasks with an
+**Cost.** A full run costs about **$2.20** (measured 2026-11-17: $2.35 and $2.15 for the 12 tasks;
+$1.59 for the first 11) and takes about 15 minutes, plus about 3 minutes once to generate the design
+mockups. Each task set's sandbox is deleted when it finishes; budget about 1 GB of free disk while it runs. Tasks with an
 unchanged config and task are reused from earlier results at no cost.
 
-**Noise.** One rep is one sample. Sonnet skips optional steps more often than Opus: across the two
-runs of 2026-11-17, C3 never loaded `emil-design-eng` or ran manual QA, although it read the policy
-that asks for both (so those are not expected there). Before treating a firing failure as a
-regression, rerun that task with `--only`; a failure that repeats is real.
+**Noise.** One rep is one sample, and Sonnet skips optional steps more often than Opus. In the three
+runs of 2026-11-17: no forbidden component ever fired (0 of 21 task runs), so that check is strict;
+`manual-qa` fired on 4 and then 2 of the 4 UI tasks that expect it, and `typescript.md` was skipped on
+2 of 7 tasks once, hence the per-component minimum rates. C3 never loaded `emil-design-eng` or ran
+manual QA although it read the policy asking for both, so neither is expected there. N2's README failed
+the Prettier gate in 2 of 3 runs (the baseline records it). A firing failure that a rerun with `--only`
+does not repeat is noise; one that repeats is real.
 
 **Workflow.**
 

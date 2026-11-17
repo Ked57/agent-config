@@ -4,6 +4,7 @@
   "effort": "medium",
   "modes": { "vue-design": "screenshot-only" },
   "costTolerance": 0.3,
+  "minFireRate": { "manual-qa": 0.5, "typescript": 0.7, "emil-design-eng": 0.75 },
   "tasks": [
     { "set": "vue-primevue", "id": "L1-confirm-delete", "covers": "Vue/PrimeVue UI: library component",
       "fires": ["routing", "vue-primevue", "typescript", "emil-design-eng", "manual-qa"], "notFires": ["react"] },

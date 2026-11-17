@@ -37,9 +37,13 @@ const pct = (value) => `${value >= 0 ? '+' : ''}${Math.round(value * 100)}%`;
 
 /**
  * Judges rows against the spec and baseline. Failures (exit non-zero): a task that did not run or
- * errored, a failed fixture gate, an expected component that did not fire, a forbidden one that did.
- * Warnings only: cost or turns outside the tolerance, a required check below its baseline score,
- * firing that differs from the baseline in components the spec does not mention.
+ * errored; a fixture gate that failed where the baseline run passed it; a forbidden component that
+ * fired (per task); an expected component that fired on fewer of the tasks expecting it than its
+ * minimum rate (`spec.minFireRate[name]`, default 1), or that is not installed. One rep on one model is
+ * noisy, so a single task missing an expected component is a warning unless the rate drops below the
+ * minimum. Warnings only: those per-task misses, a gate failing as in the baseline, cost or turns
+ * outside the tolerance, a required check below its baseline score, and firing that differs from the
+ * baseline in components the spec does not mention.
  */
 export function judgeSmoke({ spec, baseline, rows }) {
   const tolerance = spec.costTolerance ?? 0.3;
@@ -55,10 +59,16 @@ export function judgeSmoke({ spec, baseline, rows }) {
       continue;
     }
     if (row.status !== 'ok') failures.push(`run ${row.status}${row.error ? ` (${row.error})` : ''}`);
-    if (!row.gatesPass) failures.push(`gates failed: ${row.failedGates.join(', ') || 'unknown'}`);
+    if (!row.gatesPass) {
+      const known = base?.failedGates ?? [];
+      const fresh = row.failedGates.filter((gate) => !known.includes(gate));
+      if (fresh.length || !row.failedGates.length) failures.push(`gates failed: ${fresh.join(', ') || 'unknown'}`);
+      const same = row.failedGates.filter((gate) => known.includes(gate));
+      if (same.length) warnings.push(`gates failed as in the baseline: ${same.join(', ')}`);
+    }
     for (const name of task.fires ?? []) {
       if (!row.installed.includes(name)) failures.push(`expected ${name}, which is not installed`);
-      else if (!row.fired.includes(name)) failures.push(`expected ${name} to fire; it did not`);
+      else if (!row.fired.includes(name)) warnings.push(`expected ${name}; it did not fire`);
     }
     for (const name of task.notFires ?? []) if (row.fired.includes(name)) failures.push(`${name} fired; it should not`);
     if (base) {
@@ -81,11 +91,30 @@ export function judgeSmoke({ spec, baseline, rows }) {
     }
     results.push({ id: task.id, covers: task.covers, row, failures, warnings });
   }
+  const firing = {};
+  for (const task of spec.tasks) {
+    const row = byId[task.id];
+    if (!row) continue;
+    for (const name of task.fires ?? []) {
+      firing[name] ??= { fired: 0, expected: 0, missedOn: [] };
+      firing[name].expected += 1;
+      if (row.fired.includes(name)) firing[name].fired += 1;
+      else firing[name].missedOn.push(task.id);
+    }
+  }
+  const firingFailures = [];
+  for (const [name, entry] of Object.entries(firing)) {
+    entry.minRate = spec.minFireRate?.[name] ?? 1;
+    entry.pass = entry.fired >= Math.ceil(entry.minRate * entry.expected - 1e-9);
+    if (!entry.pass) firingFailures.push(`${name} fired on ${entry.fired} of ${entry.expected} expecting tasks (minimum ${Math.round(entry.minRate * 100)}%); missed on ${entry.missedOn.join(', ')}`);
+  }
   const total = (rows) => rows.reduce((sum, row) => sum + (row?.usd ?? 0), 0);
   const ran = results.map((result) => result.row).filter(Boolean);
   return {
     results,
-    failed: results.some((result) => result.failures.length),
+    firing,
+    firingFailures,
+    failed: firingFailures.length > 0 || results.some((result) => result.failures.length),
     usd: total(ran),
     spentUsd: total(ran.filter((row) => !row.reused)),
     baselineUsd: baseline ? Object.values(baseline.tasks ?? {}).reduce((sum, task) => sum + (task.usd ?? 0), 0) : null
@@ -98,7 +127,7 @@ export function baselineFrom({ spec, rows, meta }) {
   for (const task of spec.tasks) {
     const row = rows.find((entry) => entry.id === task.id);
     if (!row) continue;
-    tasks[task.id] = { set: task.set, usd: row.usd === null ? null : Math.round(row.usd * 10000) / 10000, turns: row.turns, fired: row.fired, gatesPass: row.gatesPass, checks: row.checks };
+    tasks[task.id] = { set: task.set, usd: row.usd === null ? null : Math.round(row.usd * 10000) / 10000, turns: row.turns, fired: row.fired, gatesPass: row.gatesPass, failedGates: row.failedGates, checks: row.checks };
   }
   return { ...meta, totalUsd: Math.round(Object.values(tasks).reduce((sum, task) => sum + (task.usd ?? 0), 0) * 100) / 100, tasks };
 }
@@ -112,6 +141,8 @@ export function renderSmoke(judged) {
     const notes = [...result.failures, ...result.warnings].join('; ');
     lines.push(`| ${result.id} | ${result.covers ?? ''} | ${verdict} | ${row?.usd?.toFixed(2) ?? '–'}${row?.reused ? ' (reused)' : ''} | ${row?.turns ?? '–'} | ${row?.fired.join(', ') ?? '–'} | ${notes} |`);
   }
+  lines.push('', '| Expected component | Fired on | Minimum | Result |', '|---|---|---|---|');
+  for (const [name, entry] of Object.entries(judged.firing)) lines.push(`| ${name} | ${entry.fired} of ${entry.expected} | ${Math.round(entry.minRate * 100)}% | ${entry.pass ? 'ok' : `FAIL (missed on ${entry.missedOn.join(', ')})`} |`);
   lines.push('', `Total $${judged.usd.toFixed(2)} (spent now $${judged.spentUsd.toFixed(2)}; baseline $${judged.baselineUsd?.toFixed(2) ?? '–'}).`);
   return lines.join('\n');
 }

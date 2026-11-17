@@ -7,8 +7,8 @@ fired, so the user can decide what to drop.
 
 - **Firing, history:** 227 full-config runs from the two A/B rounds (Opus 5.5, a few Haiku; no
   prompt prefixes or ablations), from `~/agent-config-evals`.
-- **Firing, smoke:** two `npm run eval:smoke` runs on Sonnet 5.5, before and after the `manual-qa`
-  narrowing, plus four single runs (P1 on the old config with Sonnet; B6, K5 and L1 on Opus after the
+- **Firing, smoke:** three `npm run eval:smoke` runs on Sonnet 5.5 (before the `manual-qa` narrowing,
+  after it, and on `main` for the baseline), plus four single runs (P1 on the old config with Sonnet; B6, K5 and L1 on Opus after the
   narrowing).
 - **Context cost:** a "Reply with the single word ok." session from an empty cwd in an isolated home
   (the arm template home, `claude-haiku-5-5`, Claude Code 2.1.311), first-turn prompt tokens
@@ -43,9 +43,9 @@ that never use a skill.
 | `routing` | 227 | every run | — |
 | `typescript.md` | 198 | every TS task | — |
 | `vue-primevue.md` | 104 (all Vue tasks) | every Vue task | — |
-| `manual-qa` | 174 (77%; backend included) | after narrowing: 4 of 5 UI tasks, 0 of 7 non-UI; Opus B6 0 (was 4/4), K5 0 (was 3/3), L1 1 (was 7/7) | narrowed, see below |
+| `manual-qa` | 174 (77%; backend included) | Sonnet before: 2 of 4 UI tasks, 0 of 7 non-UI; after narrowing, two runs: 4 and 2 of 5 UI tasks, 0 of 14 non-UI; Opus after: B6 0 (was 4/4), K5 0 (was 3/3), L1 1 (was 7/7) | narrowed, see below |
 | `agent-browser` | 20 | through `manual-qa` on UI tasks | correct: it is loaded by `manual-qa` |
-| `emil-design-eng` | 13 (mostly before the `fix/skill-bugs` routing fix) | every UI task but C3 (3 of 4 before, 4 of 5 after); C3 missed it in both runs | fixed by `fix/skill-bugs`; C3 skips it though it reads the policy that asks for it |
+| `emil-design-eng` | 13 (mostly before the `fix/skill-bugs` routing fix) | every UI task but C3 in all three runs; C3 never | fixed by `fix/skill-bugs`; C3 skips it though it reads the policy that asks for it |
 | `animate` | 8 (C3, C4) | C3 both runs | — |
 | `domain-module.md` | 4 (spurious, on design tasks) | 0 | correct: only an explicit request or existing convention routes there (K4) |
 | `taste-skill` (`design-taste-frontend`) | 1 | P1 (no mockup) fired on both the old and new routing; D2 (mockup) never | **correct**: no earlier task asked for a designed page without a design. Routing now names the Claude skill and says to match a provided design instead |
@@ -67,7 +67,8 @@ app, API, or CLI surface". All three places now ask for it only after a **user-f
 (browser page, component, style, native app screen); backend, API, CLI, library and documentation work
 relies on automated checks unless the user asks for manual QA.
 
-Cost effect on Opus is small on the two backend tasks rechecked (B6 $0.36 vs a $0.36 median before,
+Sonnet never ran manual QA on backend work, even before the change, so the narrowing shows on Opus
+(the model behind the 77%): B6 and K5 stopped, L1 kept it. Cost effect on Opus is small on the two backend tasks rechecked (B6 $0.36 vs a $0.36 median before,
 K5 $0.46 vs $0.48), consistent with round 2's −4% (CI −15% to +5%) for the skill ablation.
 
 ## Removal candidates

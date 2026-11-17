@@ -1,0 +1,205 @@
+{
+  "generated": "2026-11-17",
+  "ref": "main",
+  "commit": "fedb9b7",
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "totalUsd": 2.15,
+  "tasks": {
+    "L1-confirm-delete": {
+      "set": "vue-primevue",
+      "usd": 0.1656,
+      "turns": 13,
+      "fired": [
+        "emil-design-eng",
+        "manual-qa",
+        "routing",
+        "vue-primevue"
+      ],
+      "gatesPass": true,
+      "failedGates": [],
+      "checks": {
+        "hidden": 1,
+        "primevue-confirm": 1,
+        "no-window-confirm": 1,
+        "no-native-dialog": 1
+      }
+    },
+    "C3-page-transition": {
+      "set": "vue-primevue",
+      "usd": 0.1041,
+      "turns": 6,
+      "fired": [
+        "animate",
+        "routing",
+        "vue-primevue"
+      ],
+      "gatesPass": true,
+      "failedGates": [],
+      "checks": {
+        "hidden": 1,
+        "transition-styles": 1
+      }
+    },
+    "C5-container-card-grid": {
+      "set": "vue-primevue",
+      "usd": 0.093,
+      "turns": 5,
+      "fired": [
+        "emil-design-eng",
+        "routing",
+        "vue-primevue"
+      ],
+      "gatesPass": true,
+      "failedGates": [],
+      "checks": {
+        "container-sized": 1,
+        "no-viewport-columns": 1
+      }
+    },
+    "N1-query-parser-util": {
+      "set": "vue-primevue",
+      "usd": 0.1047,
+      "turns": 4,
+      "fired": [
+        "routing",
+        "typescript"
+      ],
+      "gatesPass": true,
+      "failedGates": [],
+      "checks": {
+        "hidden": 1,
+        "tests-call-parser": 1,
+        "ui-untouched": 1
+      }
+    },
+    "P1-landing-page": {
+      "set": "vue-primevue",
+      "usd": 0.5033,
+      "turns": 27,
+      "fired": [
+        "emil-design-eng",
+        "manual-qa",
+        "plugin:taste-skill",
+        "routing",
+        "typescript",
+        "vue-primevue"
+      ],
+      "gatesPass": true,
+      "failedGates": [],
+      "checks": {
+        "welcome-route": 1
+      }
+    },
+    "D2-account-settings": {
+      "set": "vue-design",
+      "usd": 0.4476,
+      "turns": 26,
+      "fired": [
+        "emil-design-eng",
+        "routing",
+        "typescript",
+        "vue-primevue"
+      ],
+      "gatesPass": true,
+      "failedGates": [],
+      "checks": {
+        "visual": 0.594,
+        "layout": 0.797,
+        "behaviour": 1,
+        "a11y": 0.992
+      }
+    },
+    "B6-login-rate-limit": {
+      "set": "ts-backend",
+      "usd": 0.1089,
+      "turns": 4,
+      "fired": [
+        "routing",
+        "typescript"
+      ],
+      "gatesPass": true,
+      "failedGates": [],
+      "checks": {
+        "acceptance": 1
+      }
+    },
+    "B7-tenant-isolation": {
+      "set": "ts-backend",
+      "usd": 0.1233,
+      "turns": 6,
+      "fired": [
+        "routing",
+        "typescript"
+      ],
+      "gatesPass": true,
+      "failedGates": [],
+      "checks": {
+        "acceptance": 1,
+        "regression-test": 1
+      }
+    },
+    "B3-project-list-n-plus-one": {
+      "set": "ts-backend",
+      "usd": 0.092,
+      "turns": 6,
+      "fired": [
+        "routing",
+        "typescript"
+      ],
+      "gatesPass": true,
+      "failedGates": [],
+      "checks": {
+        "acceptance": 1,
+        "no-loop-query": 1
+      }
+    },
+    "K5-token-cli": {
+      "set": "components-backend",
+      "usd": 0.1605,
+      "turns": 8,
+      "fired": [
+        "routing"
+      ],
+      "gatesPass": true,
+      "failedGates": [],
+      "checks": {
+        "acceptance": 1
+      }
+    },
+    "N1-parse-duration": {
+      "set": "ts-backend",
+      "usd": 0.0869,
+      "turns": 5,
+      "fired": [
+        "routing",
+        "typescript"
+      ],
+      "gatesPass": true,
+      "failedGates": [],
+      "checks": {
+        "acceptance": 1,
+        "routes-untouched": 1
+      }
+    },
+    "N2-readme": {
+      "set": "ts-backend",
+      "usd": 0.1633,
+      "turns": 5,
+      "fired": [
+        "routing"
+      ],
+      "gatesPass": false,
+      "failedGates": [
+        "format"
+      ],
+      "checks": {
+        "readme": 1,
+        "docs-only": 1,
+        "readme-setup": 1,
+        "readme-env": 1,
+        "readme-endpoints": 1
+      }
+    }
+  }
+}

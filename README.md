@@ -256,7 +256,7 @@ This syntax-checks the scripts and executes the installer and eval-suite unit te
 fixture project. Each arm is installed into a temporary home, never into your live config.
 
 ```sh
-npm run eval:smoke                                   # regression smoke of the working tree (~$2.40)
+npm run eval:smoke                                   # regression smoke of the working tree (~$2.20)
 npm run eval -- --a main --b feat/my-policy --reps 3 --max-usd 60
 ```
 
