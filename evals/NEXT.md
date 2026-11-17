@@ -1,4 +1,48 @@
-# Next: leave-one-out ablations
+# Next (after round 2, 2026-11-17)
+
+Proposal only. This section supersedes the round 1 plan below where they differ.
+
+## What round 2 established
+
+| Finding | Number | Consequence |
+|---|---|---|
+| The design set is the first metric off the ceiling | `main` scores 0.67–0.82 per screen (reference 1.00, untouched 0.00) | Quality comparisons are possible there |
+| Run-to-run noise on a design task is as large as the effects seen | Two `main` reps differ by 0.09 on average per task (SD 0.107; rep 2 mean 0.80 vs rep 1 0.75) | One rep per arm cannot separate a +0.08 effect from noise; the `fix/skill-bugs` result (+0.08, CI −0.03 to +0.19) is not evidence of a gain |
+| Synthetic backend tasks hit the ceiling a fourth time | `backend-legacy`: 93 of 94 hidden cases after one test correction | Stop building synthetic backend difficulty; use real-repo replay |
+| Removing `skills/manual-qa` does not remove manual QA | Still counted as fired in 7 of 8 ablated runs; cost −4% (CI −15% to +5%) | The instruction lives in `policy/shared-policy.md`; ablate that |
+| poteto-mode changes neither score nor cost detectably on the legacy set | d −0.01 (CI −0.03 to +0.01); cost +10% (CI −6% to +26%) | Needs tasks where the baseline fails |
+| Screenshot-only costs less than the Figma link | −27% (CI −36% to −17%); score d +0.03 (CI −0.10 to +0.15) | Worth a properly powered rerun: the structured data may not pay for itself |
+
+## Proposed next steps, in order
+
+1. **Power the design comparisons** (about $60). Add 5–6 screens (to 11–12 tasks) and run 2 reps per
+   arm. With per-run SD 0.107, two reps halve the within-task variance; at 12 tasks the MDE is about
+   0.07–0.09. Rerun `main` vs `fix/skill-bugs` and figma-link vs screenshot-only on that design;
+   `main` runs are reused across both.
+2. **Ablate manual QA properly** (about $13 on `backend-legacy`, arm A reused): `--b-add` a copy of
+   `policy/shared-policy.md` without "Definition of done" item 4 and a `routing.md` without the
+   `manual-qa` line, plus `--b-remove skills/manual-qa`. Confirm from transcripts that QA stops.
+3. **RacePlanr replay** (about one day of harness work, then about $30): load fixtures from a private
+   path, give runs a Rust toolchain and their own cargo target dir, build three tasks (issue #102
+   whole, #102 part B, #106), keep everything outside this public repo. This is the only credible
+   test bed for poteto-mode. Details: `~/agent-config-evals/round2/r4a-raceplanr-feasibility.md`.
+4. **Routing reach**: about 45% of haiku probe runs never read `routing.md`. Measure the same rate on
+   Opus from saved transcripts (no spend) before changing `~/.agents/AGENTS.md`.
+5. **Design-pack ablations** (`--b-remove plugin:taste-skill`, `emilkowalski-ui`) only after step 1
+   shows the design set can detect 0.08.
+
+## Known limits of the design metric
+
+- Visual similarity is normalised against the untouched app and tolerant to small shifts; it rewards
+  matching the mockup, not good design.
+- Behaviour saturates on four of six screens.
+- The Figma stub generates code from the rendered reference; real `get_design_context` output is
+  messier, and asset URLs are placeholders. See `fixtures/vue-primevue/design/FIGMA-STUB-FIDELITY.md`.
+- Mockups and baselines must be regenerated after a Chromium, font or template change.
+
+---
+
+# Round 1 plan: leave-one-out ablations
 
 Proposal only. Nothing here has been run. It follows the two Phase 3 comparisons of 2026-11-16
 (`~/agent-config-evals/2026-11-16T10-20-full-vs-bare` and `…-poteto-mode`).

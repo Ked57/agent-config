@@ -208,7 +208,7 @@ and the run is excluded and reported.
   no browser check; K6 and K7 not built; B11 m7, S4 m11 and C5 m6 mutants survive; the combined report
   does not repeat the source report's "Rechecked" line; the sandbox lives in a service-private `/var/tmp`.
 
-# Round 2 (started 2026-11-16 15:35 UTC)
+# Round 2 (started 2026-11-16 15:35 UTC; **done 2026-11-17 06:10 UTC**, heartbeat `4b7e7962` deleted)
 
 Brief: fix two skill bugs, stop re-running the bare arm and add arm result reuse, a `vue-design`
 mockup task set with a continuous visual score, harder backend tasks, then three comparisons.
@@ -222,12 +222,12 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
 | R1 | `fix/skill-bugs` from `origin/main` (worktree `../fix-skill-bugs`): Halstead package in `fullstack-typescript-static`; `emil-design-eng` never loading; regression tests; cherry-pick into `feat/repo-evals` | done: `fix/skill-bugs` pushed (`baac20a`, `d7d0108`), cherry-picked into `feat/repo-evals` |
 | R2 | Suite: arm result reuse ("reused from <dir>"), no bare arm in future comparisons, `"reporter": "json-score"` for continuous checks | done (verify 213 pass); not yet exercised with real agents; the MCP path is confirmed by the first `vue-design` probe |
 | R3 | `vue-design`: about 6 mockup screens (reference → Playwright PNGs), visual similarity + DOM layout + behaviour + axe, mutants, calibration | done: 6 screens D1–D6, gates pass, calibrated (D1 to re-run) |
-| R4 | Harder backend set: RacePlanr replay feasibility first (time-boxed), else legacy fixture + symptom-only bugs + implied invariants + budgets + spec conformance; mutants; calibration to 30–60% failing | not started |
-| R5.1 | Comparison: `main` vs `fix/skill-bugs` on `vue-design` | not started |
-| R5.2 | Comparison: poteto-mode on vs off on the new backend set | not started |
-| R5.3 | Comparison: `manual-qa` removed, reusing arm A of R5.2 | not started |
-| R5.4 | Comparison: figma-link vs screenshot-only on `main`, 1 rep, reusing arm A of R5.1 | not started |
-| R6 | `NEXT.md`, final summary, delete heartbeat | not started |
+| R4 | Harder backend set: RacePlanr replay feasibility first (time-boxed), else legacy fixture + symptom-only bugs + implied invariants + budgets + spec conformance; mutants; calibration to 30–60% failing | done: `ts-backend-legacy` + `backend-legacy` G1–G8, calibrated at 93 of 94 (ceiling); replay feasible, not built |
+| R5.1 | Comparison: `main` vs `fix/skill-bugs` on `vue-design` | done: d +0.08, CI −0.03 to +0.19 → cannot conclude |
+| R5.2 | Comparison: poteto-mode on vs off on the new backend set | done: d −0.01, CI −0.03 to +0.01 → no difference |
+| R5.3 | Comparison: `manual-qa` removed, reusing arm A of R5.2 | done: d 0.00 after recheck → no difference; ablation ineffective |
+| R5.4 | Comparison: figma-link vs screenshot-only on `main`, 1 rep, reusing arm A of R5.1 | done: d +0.03, CI −0.10 to +0.15 → cannot conclude; screenshot-only 27% cheaper |
+| R6 | `NEXT.md`, final summary, delete heartbeat | done |
 
 ## Round 2 decisions
 
@@ -357,3 +357,7 @@ budget about $40 calibration and $80 comparisons. Heartbeat `4b7e7962` (delete w
   `main` on `vue-design` (`…-r2-design-noise`, single arm, rep 1 reused) to measure run-to-run noise.
   RacePlanr replay (R4c) is not built this round: feasible, but it needs a private fixture path, a Rust
   toolchain in the run env and two more usage windows, and three tasks cannot support a verdict.
+- 05:50 UTC: G3/G8 classification. G3 (full refund of a decimal payment) is an honest miss in 4 of 4 runs: agents saw the legacy `toCents` floor and capped refunds at the short ledger total. G8 ("nothing imports the deleted modules") was a test artefact: the check flagged agents' own tests that name the deleted paths in strings. Test fixed (gate 8 of 8), three legacy result dirs rechecked with the trail kept. Legacy calibration is now 93 of 94; R5.3 becomes d 0.00 with 7 of 8 tasks at ceiling; R5.2 unchanged.
+- 05:55 UTC: design noise run done (`…-r2-design-noise`, $14.63 incl. a discarded run): `main` rep 2 vs rep 1 per task: D1 −0.02, D2 −0.01, D3 +0.12, D4 +0.19, D5 −0.09, D6 +0.12; mean +0.05, SD 0.107, mean |d| 0.09. Rep 1 of `main` was low on D3, D4 and D6, the same tasks that carried the +0.08 for `fix/skill-bugs`. Against the two-rep mean of `main` (0.78), `fix/skill-bugs` (0.83) is +0.05 and screenshot-only (0.78) is 0.00.
+- **Round 2 spend.** Calibration and probes: $27.71 of about $40 (R1 probes $0.90, R3a probe $0.64, design $15.05, legacy $11.12). Comparisons: $70.35 of about $80 (design skills $14.62, poteto-mode $13.89, manual-qa $12.22, figma vs screenshot $11.04, noise rep $14.63, wasted restart $3.95).
+- Open gaps: design comparisons underpowered at 6 tasks × 1 rep; backend quality still at ceiling; RacePlanr replay not built; `manual-qa` ablation ineffective; 45% of haiku probe runs skip `routing.md`; no dark-mode, loading or redline frames; Figma stub fidelity limits; plugin versions unpinned; sandbox in a service-private `/var/tmp`.
