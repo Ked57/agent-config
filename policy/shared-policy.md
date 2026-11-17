@@ -19,9 +19,10 @@ Do not report implementation work complete until:
 1. The requested behaviour is implemented or the reported defect is resolved.
 2. Relevant automated checks have passed.
 3. Changed behaviour has appropriate regression coverage, following repository conventions.
-4. After implementation, when a browser, app, API, or CLI surface changed, read
-   `~/.agents/skills/manual-qa/SKILL.md` and run it. If no runnable surface applies, state
-   that.
+4. After implementation, when a user-facing UI changed (a browser page, component, style,
+   or native app screen), read `~/.agents/skills/manual-qa/SKILL.md` and run it in the
+   running app. Backend, API, CLI, library, and documentation changes need no manual QA
+   unless the user asks; item 2 is their verification.
 5. Known limitations, unverified paths, or external blockers are stated explicitly.
 
 Do not claim a manual check was performed without executing it.

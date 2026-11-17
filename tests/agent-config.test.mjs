@@ -96,7 +96,7 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   }
   assert.ok(!fs.existsSync(path.join(home, '.agents/policy/orchestration.md')));
   assert.ok(!fs.existsSync(path.join(home, '.agents/agents')));
-  assert.match(fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8'), /Implemented runnable UI, API, or CLI change → `manual-qa`/);
+  assert.match(fs.readFileSync(path.join(home, '.agents/policy/routing.md'), 'utf8'), /Implemented user-facing UI change \(browser page, component, style, native app screen\) → `manual-qa`/);
   assert.match(fs.readFileSync(path.join(home, '.agents/skills/manual-qa/SKILL.md'), 'utf8'), /Hands-on verification of a running surface/);
 
   const installedClaudePolicy = fs.readFileSync(claudePolicy, 'utf8');
@@ -246,7 +246,7 @@ test('routing and shared policy resolve without role files', () => {
   assert.doesNotMatch(routing, /orchestration\.md/);
   assert.doesNotMatch(sharedPolicy, /orchestration\.md/);
   assert.match(sharedPolicy, /~\/\.agents\/skills\/manual-qa\/SKILL\.md/);
-  assert.match(routing, /Implemented runnable UI, API, or CLI change → `manual-qa`/);
+  assert.match(routing, /Implemented user-facing UI change \(browser page, component, style, native app screen\) → `manual-qa`/);
   assert.match(routing, /Browser automation → `agent-browser`/);
   assert.match(routing, /TypeScript quality-tooling work → `fullstack-typescript-quality`/);
   assert.doesNotMatch(routing, /## 3\. Topic and evidence/);

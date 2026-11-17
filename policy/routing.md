@@ -19,10 +19,13 @@ declared dependencies.
 
 - Unclear target → inspect context and ask the minimum blocking question.
 - TypeScript quality-tooling work → `fullstack-typescript-quality`.
-- Implemented runnable UI, API, or CLI change → `manual-qa`.
+- Implemented user-facing UI change (browser page, component, style, native app screen) → `manual-qa`.
+  Not for backend, API, CLI, library, or documentation work unless the user asks for manual QA.
 - Browser automation → `agent-browser`; specialized workflows come from `agent-browser skills get`. `manual-qa` loads this owner for browser UI.
 - `fullstack-typescript-quality` loads `fullstack-typescript-static`, `fullstack-typescript-tests`, and `fullstack-typescript-mutation`; those children own their gates.
-- Public page or app screen that needs a designed look → `design-taste-frontend`. Cursor reads `~/.cursor/skills/design-taste-frontend/SKILL.md`. Claude and Codex load the taste-skill plugin.
+- Public page or app screen that needs a designed look and has no provided design to match → `design-taste-frontend`.
+  Claude invokes the `taste-skill:design-taste-frontend` skill, Codex uses the taste-skill plugin, Cursor reads
+  `~/.cursor/skills/design-taste-frontend/SKILL.md`. With a mockup or Figma frame, match that design instead.
 - Building, restyling, or critiquing component or screen markup and styles → `emil-design-eng`; read it before editing templates or styles. `vue-primevue.md` repeats this step for Vue.
 - Worst-case data and layout breakage → `break-ui`.
 - New motion → `animate`.

@@ -156,6 +156,15 @@
       ]
     },
     {
+      "id": "P1-landing-page",
+      "category": "custom",
+      "prompt": "We need a public landing page for the console at /welcome that introduces the product to new visitors: a hero with a sign-up call to action, three feature highlights and a short pricing teaser. There is no design for it yet, so make it look designed rather than templated.",
+      "expectsComponents": ["vue-primevue","typescript","emil-design-eng","manual-qa","plugin:taste-skill"],
+      "checks": [
+        {"id":"welcome-route","label":"Adds a /welcome route","type":"pattern","in":"final","files":["src/router/*.ts"],"pattern":"['\"]/welcome['\"]","expect":"present"}
+      ]
+    },
+    {
       "id": "N1-query-parser-util",
       "category": "control",
       "prompt": "Add a parseOrderQuery(query: string) utility in src/utils/orderQuery.ts that parses search strings like 'status:paid total>100 northwind' into a typed filter object: status (an order status), minTotal and maxTotal (each { value, inclusive }, so total>100 and total>=100 differ, and total<50 sets maxTotal), and terms (the remaining free-text words). Add unit tests covering the edge cases. Don't wire it into the UI yet.",

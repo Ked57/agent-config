@@ -1,0 +1,33 @@
+{
+  "description": "Regression smoke: one arm, one rep, routing expectations per task. See evals/README.md, \"Regression smoke\".",
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "modes": { "vue-design": "screenshot-only" },
+  "costTolerance": 0.3,
+  "tasks": [
+    { "set": "vue-primevue", "id": "L1-confirm-delete", "covers": "Vue/PrimeVue UI: library component",
+      "fires": ["routing", "vue-primevue", "typescript", "emil-design-eng", "manual-qa"], "notFires": ["react"] },
+    { "set": "vue-primevue", "id": "C3-page-transition", "covers": "Vue/PrimeVue UI: motion",
+      "fires": ["routing", "vue-primevue", "emil-design-eng", "animate", "manual-qa"], "notFires": ["react"] },
+    { "set": "vue-primevue", "id": "C5-container-card-grid", "covers": "Vue/PrimeVue UI: layout",
+      "fires": ["routing", "vue-primevue", "emil-design-eng", "manual-qa"], "notFires": ["react"] },
+    { "set": "vue-primevue", "id": "N1-query-parser-util", "covers": "Pure-utility control in a UI repo",
+      "fires": ["routing", "typescript"], "notFires": ["manual-qa", "agent-browser", "emil-design-eng", "react"] },
+    { "set": "vue-primevue", "id": "P1-landing-page", "covers": "Designed page without a mockup",
+      "fires": ["routing", "vue-primevue", "emil-design-eng", "plugin:taste-skill", "manual-qa"], "notFires": ["react"] },
+    { "set": "vue-design", "id": "D2-account-settings", "covers": "Design from a mockup (PNG hand-off)",
+      "fires": ["routing", "vue-primevue", "emil-design-eng", "manual-qa"], "notFires": ["react", "plugin:taste-skill"] },
+    { "set": "ts-backend", "id": "B6-login-rate-limit", "covers": "TS backend feature",
+      "fires": ["routing", "typescript"], "notFires": ["manual-qa", "agent-browser", "vue-primevue", "emil-design-eng"] },
+    { "set": "ts-backend", "id": "B7-tenant-isolation", "covers": "Backend bug fix (reported defect)",
+      "fires": ["routing", "typescript"], "notFires": ["manual-qa", "agent-browser", "vue-primevue", "emil-design-eng"] },
+    { "set": "ts-backend", "id": "B3-project-list-n-plus-one", "covers": "Backend bug fix (performance)",
+      "fires": ["routing", "typescript"], "notFires": ["manual-qa", "agent-browser", "vue-primevue", "emil-design-eng"] },
+    { "set": "components-backend", "id": "K5-token-cli", "covers": "TS backend CLI",
+      "fires": ["routing", "typescript"], "notFires": ["manual-qa", "agent-browser", "vue-primevue", "emil-design-eng"] },
+    { "set": "ts-backend", "id": "N1-parse-duration", "covers": "Pure-utility control",
+      "fires": ["routing", "typescript"], "notFires": ["manual-qa", "agent-browser", "vue-primevue", "emil-design-eng"] },
+    { "set": "ts-backend", "id": "N2-readme", "covers": "Non-UI, non-code control (docs)",
+      "fires": ["routing"], "notFires": ["manual-qa", "agent-browser", "vue-primevue", "emil-design-eng"] }
+  ]
+}

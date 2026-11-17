@@ -1,10 +1,11 @@
 ---
 name: manual-qa
 description: >-
-  Exercise changed behavior in the running system and report what actually
-  happened. Use after implementing a change to a browser UI, native app, HTTP
-  API, or CLI, and when the user asks for manual QA, hands-on verification, or
-  a browser check.
+  Exercise a changed user-facing UI in the running app and report what actually
+  happened. Use after implementing a change to a browser page, component, style,
+  or native app screen, and when the user asks for manual QA, hands-on
+  verification, or a browser check. Not for backend, API, CLI, or library
+  changes unless the user asks.
 ---
 
 # Manual QA

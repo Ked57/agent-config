@@ -59,7 +59,7 @@ test('resolveConfig applies the smoke preset and validates task ids', () => {
 
 test('the shipped task set and fixture are valid', () => {
   assert.deepEqual(validateTaskSet(shippedTaskSet), []);
-  assert.equal(shippedTaskSet.tasks.length, 15);
+  assert.equal(shippedTaskSet.tasks.length, 16);
   assert.equal(shippedFixture.name, shippedTaskSet.fixture);
   for (const key of ['lint', 'typecheck', 'test', 'build']) assert.ok(shippedFixture.gates[key], `missing gate ${key}`);
   const categories = new Set(shippedTaskSet.tasks.map((task) => task.category));

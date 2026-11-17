@@ -9,7 +9,7 @@ Cursor, Claude Code, and Codex.
   every task at the task router.
 - One always-installed pack: `routing.md` (tech and skill routing, then the
   coding/non-coding exit). After implementation, shared policy requires the `manual-qa`
-  skill when a runnable UI, API, or CLI surface changed.
+  skill when a user-facing UI changed.
 - Conditional TypeScript, React, Vue + PrimeVue, and DDD domain-module policy packs shared across Cursor, Claude Code, and Codex.
 - Portable skills for deterministic full-stack TypeScript quality tooling, hands-on
   verification, and browser automation.
@@ -197,7 +197,8 @@ Two layers, each a single source of truth, installed for every user and workspac
   `improve-animations`, and `review-animations`. Their bodies stay with the external
   installer in `bin/external-plugins.mjs`.
 - `policy/shared-policy.md` — the completion contract. After implementation, when a
-  runnable UI, API, or CLI surface changed, read and run `manual-qa`.
+  user-facing UI changed, read and run `manual-qa`. Backend, API, CLI, library, and
+  documentation changes rely on automated checks unless the user asks for manual QA.
 
 The `manual-qa` procedure lives only in `skills/manual-qa/SKILL.md`.
 
@@ -218,8 +219,8 @@ Claude Code ~/.claude/CLAUDE.md  (@-imports ~/.agents/AGENTS.md)
             all ─► "Start here" ─► ~/.agents/policy/routing.md
                                     ├─ non-coding ─► answer with routed packs and skills
                                     └─ coding ─► do the work with routed packs and skills
-                                                 after implementation, when a runnable
-                                                 surface changed ─► ~/.agents/skills/manual-qa/SKILL.md
+                                                 after implementation, when a user-facing
+                                                 UI changed ─► ~/.agents/skills/manual-qa/SKILL.md
 ```
 
 Cursor Cloud Agents replace the plugin rule with the account User Rule from

@@ -9,7 +9,7 @@ node bin/agent-config.mjs init --user
 The installer adds a managed block to `~/.claude/CLAUDE.md` that imports
 `~/.agents/AGENTS.md`, whose "Start here" step routes through `~/.agents/policy/routing.md`.
 Coding tasks are done with the routed packs and skills; after implementation, shared
-policy requires `manual-qa` when a runnable surface changed. It also installs the
+policy requires `manual-qa` when a user-facing UI changed. It also installs the
 portable skills under `~/.claude/skills/`.
 Repository instructions have higher priority than user memory.
 

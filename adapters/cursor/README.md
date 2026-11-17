@@ -10,7 +10,7 @@ The installer creates a local Cursor plugin under
 `~/.cursor/plugins/local/agent-config/`. Its always-on rule tells Agent Chat to load
 `~/.agents/AGENTS.md`, whose "Start here" step routes through
 `~/.agents/policy/routing.md`. Coding tasks are done with the routed packs and skills;
-after implementation, shared policy requires `manual-qa` when a runnable surface
+after implementation, shared policy requires `manual-qa` when a user-facing UI
 changed. Restart or reload Cursor after the first installation.
 Cursor repository rules remain more specific and take precedence. Cursor Tab and Inline
 Edit do not consume Agent Chat user rules.

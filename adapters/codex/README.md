@@ -11,7 +11,7 @@ Codex discovers the managed policy block in `~/.codex/AGENTS.md` (or
 installed as `~/.agents/AGENTS.md`. Its "Start here" step
 sends the agent to `~/.agents/policy/routing.md`. Coding tasks are done with the routed
 packs and skills; after implementation, shared policy requires `manual-qa` when a
-runnable surface changed. All of these are installed by the same command. Repository
+user-facing UI changed. All of these are installed by the same command. Repository
 `AGENTS.md` files are discovered later and take precedence when they conflict.
 
 Use project-scoped installation only when the team wants the guidance and quality
