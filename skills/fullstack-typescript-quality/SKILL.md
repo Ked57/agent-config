@@ -1,7 +1,7 @@
 ---
 name: fullstack-typescript-quality
 description: Use when installing or auditing TypeScript web-app quality tooling.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Full-stack TypeScript quality
@@ -37,12 +37,16 @@ If an owning skill is unavailable, mark that layer unmet, name it, and continue.
 | Formatting | Prettier | this skill (fast gate) |
 | Static analysis | ESLint + Knip | `fullstack-typescript-static` |
 | Type safety | `tsc --noEmit`; `vue-tsc --noEmit` for Vue SFCs | this skill (fast gate) |
+| Lint gate protection and baseline | ESLint comment rules + bulk suppressions | `fullstack-typescript-static` |
 | Pure TS unit tests | Vitest | `fullstack-typescript-tests` |
 | Component behaviour | Cypress CT + Testing Library | `fullstack-typescript-tests` |
 | Critical journeys | Cypress E2E | `fullstack-typescript-tests` |
 | Coverage and CRAP | Vitest / Cypress CT coverage | `fullstack-typescript-tests` |
 | Branch count | ESLint complexity gates | `fullstack-typescript-static` |
 | Mutation testing | Stryker on selected pure TS | `fullstack-typescript-mutation` |
+| Merge request test scope | Affected-test selection + scoped coverage gate | `fullstack-typescript-tests` |
+
+Target `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` in the type-checked `tsconfig`. TypeScript has no suppression baseline, so enable each flag only when typecheck passes with it, or as its own migration; report the error count otherwise.
 
 ## Required commands
 
@@ -111,6 +115,8 @@ Example:
 ## Git and CI
 
 - Pre-commit hooks run fast checks only. Keep Cypress CT, E2E, Knip, and mutation testing out of pre-commit by default.
+- Merge request pipelines run the sibling test owner's affected-test selection and scoped coverage gate; the default branch and tags run every spec and the full gate.
+- CI fails when the ESLint suppression count exceeds the merge-base count.
 - CI runs relevant required checks, builds, Knip, and selected browser tests. For changed critical journeys, execute the existing production build and selected browser journey; unit coverage alone does not exercise bundling, routing, or hydration.
 - A scheduled or manually triggered job runs domain-only mutation testing.
 - Require explicit approval before bypassing checks, lowering thresholds, or editing configuration to hide failures.
@@ -124,6 +130,8 @@ Before declaring the setup complete:
 - [ ] Controlled violations prove each configured gate rejects its claimed failure class, then are removed; typecheck includes all relevant file kinds.
 - [ ] Unit, component, and E2E commands have been run when configured, including the sibling test owner's temporal regressions for changed async UI.
 - [ ] Coverage and CRAP output are generated; exclusions are justified.
+- [ ] Existing violations are frozen in a suppression baseline, a new violation and a disable comment on a gate rule both fail lint, and a grown suppression count fails CI.
+- [ ] Affected-test selection is proven on real diffs: a leaf change selects only its specs, a shared module selects its importers' specs, and a global input selects every spec.
 - [ ] Knip runs in `verify:full` / CI and stays out of the fast gate by default.
 - [ ] Git hooks run only the intended fast gate.
 - [ ] CI invokes the intended commands.
