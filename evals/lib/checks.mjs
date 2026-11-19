@@ -240,10 +240,13 @@ export function skillFileRead(text, name) {
   return new RegExp(`skills/${skill}${NAME_AFTER}`).test(text) && /(?<![A-Za-z0-9_./-])SKILL\.md/.test(text);
 }
 
+const MAX_FINDINGS = 400;
+
 /**
  * Reads a JSON score file written by a `"reporter": "json-score"` check:
- * `{ "score": 0..1, "components": { "<name>": 0..1 }, "detail": "..." }`. Returns null unless
- * `score` and every component are numbers in 0..1.
+ * `{ "score": 0..1, "components": { "<name>": 0..1 }, "detail": "...", "findings": [{ ... }] }`. Returns
+ * null unless `score` and every component are numbers in 0..1. `findings` (optional) keeps up to 400
+ * objects with their string and number fields.
  */
 export function parseJsonScore(text) {
   let report;
@@ -256,7 +259,11 @@ export function parseJsonScore(text) {
   if (!report || typeof report !== 'object' || !unit(report.score)) return null;
   const components = report.components ?? {};
   if (typeof components !== 'object' || Array.isArray(components) || !Object.values(components).every(unit)) return null;
-  return { score: report.score, components, detail: typeof report.detail === 'string' ? report.detail.slice(0, 1200) : '' };
+  const findings = Array.isArray(report.findings)
+    ? report.findings.filter((finding) => finding && typeof finding === 'object' && !Array.isArray(finding)).slice(0, MAX_FINDINGS)
+      .map((finding) => Object.fromEntries(Object.entries(finding).filter(([, value]) => ['string', 'number'].includes(typeof value)).map(([key, value]) => [key, typeof value === 'string' ? value.slice(0, 200) : value])))
+    : null;
+  return { score: report.score, components, detail: typeof report.detail === 'string' ? report.detail.slice(0, 1200) : '', ...(findings ? { findings } : {}) };
 }
 
 /**

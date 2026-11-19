@@ -89,9 +89,9 @@
       },
       "kpi-revenue-label": {
         "x": 181,
-        "y": 210,
-        "width": 226,
-        "height": 20,
+        "y": 211,
+        "width": 58,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -142,10 +142,10 @@
         "border": null
       },
       "kpi-revenue-delta": {
-        "x": 181,
-        "y": 290,
-        "width": 82,
-        "height": 24,
+        "x": 187,
+        "y": 293,
+        "width": 70,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -159,20 +159,20 @@
           253,
           245
         ],
-        "radius": 6,
+        "radius": 0,
         "padding": [
-          2,
-          6,
-          2,
-          6
+          0,
+          0,
+          0,
+          0
         ],
         "border": null
       },
       "kpi-customers-label": {
         "x": 465,
-        "y": 210,
-        "width": 226,
-        "height": 20,
+        "y": 211,
+        "width": 117,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -223,10 +223,10 @@
         "border": null
       },
       "kpi-customers-delta": {
-        "x": 465,
-        "y": 290,
-        "width": 73,
-        "height": 24,
+        "x": 471,
+        "y": 293,
+        "width": 61,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -240,20 +240,20 @@
           253,
           245
         ],
-        "radius": 6,
+        "radius": 0,
         "padding": [
-          2,
-          6,
-          2,
-          6
+          0,
+          0,
+          0,
+          0
         ],
         "border": null
       },
       "kpi-orders-label": {
         "x": 749,
-        "y": 210,
-        "width": 226,
-        "height": 20,
+        "y": 211,
+        "width": 46,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -304,10 +304,10 @@
         "border": null
       },
       "kpi-orders-delta": {
-        "x": 749,
-        "y": 290,
-        "width": 73,
-        "height": 24,
+        "x": 755,
+        "y": 293,
+        "width": 61,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -321,20 +321,20 @@
           253,
           245
         ],
-        "radius": 6,
+        "radius": 0,
         "padding": [
-          2,
-          6,
-          2,
-          6
+          0,
+          0,
+          0,
+          0
         ],
         "border": null
       },
       "kpi-conversion-label": {
         "x": 1033,
-        "y": 210,
-        "width": 226,
-        "height": 20,
+        "y": 211,
+        "width": 106,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -385,10 +385,10 @@
         "border": null
       },
       "kpi-conversion-delta": {
-        "x": 1033,
-        "y": 290,
-        "width": 73,
-        "height": 24,
+        "x": 1039,
+        "y": 293,
+        "width": 61,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -402,20 +402,20 @@
           242,
           242
         ],
-        "radius": 6,
+        "radius": 0,
         "padding": [
-          2,
-          6,
-          2,
-          6
+          0,
+          0,
+          0,
+          0
         ],
         "border": null
       },
       "chart-title": {
         "x": 181,
-        "y": 380,
-        "width": 187,
-        "height": 24,
+        "y": 382,
+        "width": 143,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 600,
         "lineHeight": 24,
@@ -440,9 +440,9 @@
       },
       "activity-title": {
         "x": 938,
-        "y": 380,
-        "width": 321,
-        "height": 24,
+        "y": 382,
+        "width": 115,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 600,
         "lineHeight": 24,
@@ -467,9 +467,9 @@
       },
       "activity-first": {
         "x": 982,
-        "y": 420,
-        "width": 277,
-        "height": 40,
+        "y": 421,
+        "width": 210,
+        "height": 37,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -494,9 +494,9 @@
       },
       "table-title": {
         "x": 181,
-        "y": 810,
+        "y": 812,
         "width": 115,
-        "height": 24,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 600,
         "lineHeight": 24,
@@ -645,9 +645,9 @@
       },
       "avatar-first": {
         "x": 187,
-        "y": 923,
+        "y": 924,
         "width": 20,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -672,9 +672,9 @@
       },
       "tag-past-due": {
         "x": 753,
-        "y": 1061,
+        "y": 1063,
         "width": 59,
-        "height": 21,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 700,
         "lineHeight": 21,
@@ -698,10 +698,10 @@
         "border": null
       },
       "row-first-revenue": {
-        "x": 1042,
-        "y": 899,
-        "width": 161,
-        "height": 69,
+        "x": 1121,
+        "y": 923,
+        "width": 66,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 500,
         "lineHeight": 24,
@@ -717,16 +717,12 @@
         ],
         "radius": 0,
         "padding": [
-          12,
-          16,
-          12,
-          16
+          0,
+          0,
+          0,
+          0
         ],
-        "border": [
-          226,
-          232,
-          240
-        ]
+        "border": null
       },
       "row-actions": {
         "x": 1219,
@@ -874,10 +870,10 @@
         "border": null
       },
       "kpi-revenue-delta": {
-        "x": 37,
-        "y": 608,
-        "width": 82,
-        "height": 24,
+        "x": 43,
+        "y": 611,
+        "width": 70,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -891,12 +887,12 @@
           253,
           245
         ],
-        "radius": 6,
+        "radius": 0,
         "padding": [
-          2,
-          6,
-          2,
-          6
+          0,
+          0,
+          0,
+          0
         ],
         "border": null
       },
@@ -983,9 +979,9 @@
       },
       "chart-title": {
         "x": 37,
-        "y": 1184,
-        "width": 187,
-        "height": 24,
+        "y": 1186,
+        "width": 143,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 600,
         "lineHeight": 24,
@@ -1010,9 +1006,9 @@
       },
       "activity-title": {
         "x": 37,
-        "y": 1416,
-        "width": 316,
-        "height": 24,
+        "y": 1418,
+        "width": 115,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 600,
         "lineHeight": 24,
@@ -1037,9 +1033,9 @@
       },
       "table-title": {
         "x": 37,
-        "y": 1846,
+        "y": 1848,
         "width": 115,
-        "height": 24,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 600,
         "lineHeight": 24,
@@ -1097,9 +1093,9 @@
       },
       "menu-view": {
         "x": 1260,
-        "y": 966,
+        "y": 964,
         "width": 113,
-        "height": 16,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 400,
         "lineHeight": 16,
@@ -1124,9 +1120,9 @@
       },
       "menu-invoice": {
         "x": 1260,
-        "y": 1000,
+        "y": 998,
         "width": 97,
-        "height": 16,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 400,
         "lineHeight": 16,
@@ -1151,9 +1147,9 @@
       },
       "menu-remove": {
         "x": 1260,
-        "y": 1037,
+        "y": 1035,
         "width": 61,
-        "height": 16,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 400,
         "lineHeight": 16,
@@ -1287,10 +1283,10 @@
         "border": null
       },
       "row-first-revenue": {
-        "x": 1042,
-        "y": 899,
-        "width": 161,
-        "height": 69,
+        "x": 1131,
+        "y": 923,
+        "width": 56,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 500,
         "lineHeight": 24,
@@ -1306,16 +1302,12 @@
         ],
         "radius": 0,
         "padding": [
-          12,
-          16,
-          12,
-          16
+          0,
+          0,
+          0,
+          0
         ],
-        "border": [
-          226,
-          232,
-          240
-        ]
+        "border": null
       }
     },
     "desktop-empty": {
@@ -1375,9 +1367,9 @@
       },
       "table-title": {
         "x": 181,
-        "y": 759,
+        "y": 761,
         "width": 115,
-        "height": 24,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 600,
         "lineHeight": 24,
@@ -1402,9 +1394,9 @@
       },
       "empty-customers": {
         "x": 653,
-        "y": 948,
+        "y": 950,
         "width": 135,
-        "height": 24,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 500,
         "lineHeight": 24,
@@ -1428,10 +1420,10 @@
         "border": null
       },
       "empty-activity": {
-        "x": 938,
-        "y": 420,
-        "width": 321,
-        "height": 68,
+        "x": 1051,
+        "y": 445,
+        "width": 95,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -1447,13 +1439,49 @@
         ],
         "radius": 0,
         "padding": [
-          24,
           0,
-          24,
+          0,
+          0,
           0
         ],
         "border": null
       }
+    }
+  },
+  "components": {
+    "desktop": {
+      "Button": 7,
+      "Dropdown": 1,
+      "Status chip": 6,
+      "Avatar": 6,
+      "Data table": 1
+    },
+    "mobile": {
+      "Button": 7,
+      "Dropdown": 1,
+      "Status chip": 6,
+      "Avatar": 6,
+      "Data table": 1
+    },
+    "desktop-row-menu-open": {
+      "Button": 7,
+      "Dropdown": 1,
+      "Status chip": 6,
+      "Avatar": 6,
+      "Data table": 1,
+      "Menu": 1
+    },
+    "desktop-range-7d": {
+      "Button": 7,
+      "Dropdown": 1,
+      "Status chip": 6,
+      "Avatar": 6,
+      "Data table": 1
+    },
+    "desktop-empty": {
+      "Button": 1,
+      "Dropdown": 1,
+      "Data table": 1
     }
   }
 }

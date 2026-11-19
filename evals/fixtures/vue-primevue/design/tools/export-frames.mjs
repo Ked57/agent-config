@@ -21,6 +21,7 @@ import { sandboxRoot } from '../../../../lib/env.mjs';
 import { loadTools, screenshot, withBrowser } from '../scorer/capture.mjs';
 import { measure } from '../scorer/layout.mjs';
 import { similarity } from '../scorer/visual.mjs';
+import { KIT, kitInventory } from '../scorer/kit.mjs';
 import { collectTree } from './figma-tree.mjs';
 import { colourTokensFor } from './figma-variables.mjs';
 
@@ -56,7 +57,7 @@ async function main() {
   const outDir = path.join(STUB, name);
   fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(outDir, { recursive: true });
-  const layout = { generatedFrom: `mutants/${screen.task}/reference.patch`, frames: {} };
+  const layout = { generatedFrom: `mutants/${screen.task}/reference.patch`, frames: {}, components: {} };
   const problems = [];
 
   await withBrowser({ app: reference, route: screen.route, tools }, async (open) => {
@@ -68,7 +69,9 @@ async function main() {
         const boxes = await measure(page, screen.layout[frame.id] ?? []);
         for (const [id, found] of Object.entries(boxes)) if (!found) problems.push(`${frame.id}: layout element ${id} not found in the reference`);
         layout.frames[frame.id] = boxes;
-        const { tree, colours } = await page.evaluate(collectTree, { idPrefix: String(20 + index) });
+        layout.components[frame.id] = await page.evaluate(kitInventory, KIT);
+        // Layer ids start at 100 so they never equal a frame's own id (frame node ids are below 100).
+        const { tree, colours } = await page.evaluate(collectTree, { idPrefix: String(100 + index), kit: KIT });
         Object.assign(tree, { id: frame.nodeId.replace('-', ':'), name: frame.name });
         writeJson(path.join(outDir, `${frame.id}.json`), {
           fileKey: screen.figma.fileKey,

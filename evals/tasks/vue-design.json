@@ -1,6 +1,6 @@
 {
   "name": "vue-design",
-  "description": "Build a screen from a design hand-off (Figma frame links read through the Figma MCP server, or PNG mockups) in the Vue 3 + PrimeVue 4 + Tailwind 4 admin console. Scored continuously on visual similarity, layout, behaviour and accessibility.",
+  "description": "Build a screen from a design hand-off (Figma frame links read through the Figma MCP server, or PNG mockups) in the Vue 3 + PrimeVue 4 + Tailwind 4 admin console. Scored continuously on visual similarity, layout, design-kit components, behaviour and accessibility.",
   "fixture": "vue-primevue",
   "categories": {
     "design": {
@@ -49,6 +49,7 @@
       },
       "expectsComponents": [
         "vue-primevue",
+        "figma-to-code",
         "typescript",
         "emil-design-eng",
         "manual-qa",
@@ -90,6 +91,40 @@
           "level": "required"
         },
         {
+          "id": "components",
+          "label": "Design-kit instances built with their PrimeVue components (Dropdown as Select, Status chip as Tag, ...), counted per frame",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/analytics": ".design-score/screen",
+            "figma-stub/analytics": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs components",
+          "reporter": "json-score",
+          "weight": 0.1,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "responsive",
+          "label": "Layout adapts at widths no frame shows (600-1920 px): no sideways scroll, nothing sticking out, missing or overlapping",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/analytics": ".design-score/screen",
+            "figma-stub/analytics": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs responsive",
+          "reporter": "json-score",
+          "weight": 0.15,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
           "id": "behaviour",
           "label": "Row menu, date range, desktop row, mobile stacking and empty state work as drawn",
           "type": "command",
@@ -100,7 +135,7 @@
           },
           "run": "node .design-score/scorer/score.mjs behaviour",
           "reporter": "json-score",
-          "weight": 0.2,
+          "weight": 0.1,
           "passAt": 0.9,
           "browserTools": true,
           "timeoutSec": 600,
@@ -142,6 +177,7 @@
       },
       "expectsComponents": [
         "vue-primevue",
+        "figma-to-code",
         "typescript",
         "emil-design-eng",
         "manual-qa",
@@ -183,6 +219,40 @@
           "level": "required"
         },
         {
+          "id": "components",
+          "label": "Design-kit instances built with their PrimeVue components (Dropdown as Select, Status chip as Tag, ...), counted per frame",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/account": ".design-score/screen",
+            "figma-stub/account": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs components",
+          "reporter": "json-score",
+          "weight": 0.1,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "responsive",
+          "label": "Layout adapts at widths no frame shows (600-1920 px): no sideways scroll, nothing sticking out, missing or overlapping",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/account": ".design-score/screen",
+            "figma-stub/account": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs responsive",
+          "reporter": "json-score",
+          "weight": 0.15,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
           "id": "behaviour",
           "label": "Unsaved-changes bar, save validation, discard, switches and responsive form work as drawn",
           "type": "command",
@@ -193,7 +263,7 @@
           },
           "run": "node .design-score/scorer/score.mjs behaviour",
           "reporter": "json-score",
-          "weight": 0.2,
+          "weight": 0.1,
           "passAt": 0.9,
           "browserTools": true,
           "timeoutSec": 600,
@@ -235,6 +305,7 @@
       },
       "expectsComponents": [
         "vue-primevue",
+        "figma-to-code",
         "typescript",
         "emil-design-eng",
         "manual-qa",
@@ -276,6 +347,40 @@
           "level": "required"
         },
         {
+          "id": "components",
+          "label": "Design-kit instances built with their PrimeVue components (Dropdown as Select, Status chip as Tag, ...), counted per frame",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/pricing": ".design-score/screen",
+            "figma-stub/pricing": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs components",
+          "reporter": "json-score",
+          "weight": 0.1,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "responsive",
+          "label": "Layout adapts at widths no frame shows (600-1920 px): no sideways scroll, nothing sticking out, missing or overlapping",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/pricing": ".design-score/screen",
+            "figma-stub/pricing": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs responsive",
+          "reporter": "json-score",
+          "weight": 0.15,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
           "id": "behaviour",
           "label": "Billing-period toggle, FAQ, plan row, comparison table and mobile plan order work as drawn",
           "type": "command",
@@ -286,7 +391,7 @@
           },
           "run": "node .design-score/scorer/score.mjs behaviour",
           "reporter": "json-score",
-          "weight": 0.2,
+          "weight": 0.1,
           "passAt": 0.9,
           "browserTools": true,
           "timeoutSec": 600,
@@ -328,6 +433,7 @@
       },
       "expectsComponents": [
         "vue-primevue",
+        "figma-to-code",
         "typescript",
         "emil-design-eng",
         "manual-qa",
@@ -369,6 +475,40 @@
           "level": "required"
         },
         {
+          "id": "components",
+          "label": "Design-kit instances built with their PrimeVue components (Dropdown as Select, Status chip as Tag, ...), counted per frame",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/onboarding": ".design-score/screen",
+            "figma-stub/onboarding": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs components",
+          "reporter": "json-score",
+          "weight": 0.1,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "responsive",
+          "label": "Layout adapts at widths no frame shows (600-1920 px): no sideways scroll, nothing sticking out, missing or overlapping",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/onboarding": ".design-score/screen",
+            "figma-stub/onboarding": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs responsive",
+          "reporter": "json-score",
+          "weight": 0.15,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
           "id": "behaviour",
           "label": "Option choice, validation on both steps, back, skip and the responsive option grid work as drawn",
           "type": "command",
@@ -379,7 +519,7 @@
           },
           "run": "node .design-score/scorer/score.mjs behaviour",
           "reporter": "json-score",
-          "weight": 0.2,
+          "weight": 0.1,
           "passAt": 0.9,
           "browserTools": true,
           "timeoutSec": 600,
@@ -422,6 +562,7 @@
       },
       "expectsComponents": [
         "vue-primevue",
+        "figma-to-code",
         "typescript",
         "emil-design-eng",
         "manual-qa",
@@ -463,6 +604,40 @@
           "level": "required"
         },
         {
+          "id": "components",
+          "label": "Design-kit instances built with their PrimeVue components (Dropdown as Select, Status chip as Tag, ...), counted per frame",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/invoices": ".design-score/screen",
+            "figma-stub/invoices": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs components",
+          "reporter": "json-score",
+          "weight": 0.1,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "responsive",
+          "label": "Layout adapts at widths no frame shows (600-1920 px): no sideways scroll, nothing sticking out, missing or overlapping",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/invoices": ".design-score/screen",
+            "figma-stub/invoices": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs responsive",
+          "reporter": "json-score",
+          "weight": 0.15,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
           "id": "behaviour",
           "label": "Status filter, search, sorting, paging, bulk selection, empty state and mobile cards work as drawn",
           "type": "command",
@@ -473,7 +648,7 @@
           },
           "run": "node .design-score/scorer/score.mjs behaviour",
           "reporter": "json-score",
-          "weight": 0.2,
+          "weight": 0.1,
           "passAt": 0.9,
           "browserTools": true,
           "timeoutSec": 600,
@@ -515,6 +690,7 @@
       },
       "expectsComponents": [
         "vue-primevue",
+        "figma-to-code",
         "typescript",
         "emil-design-eng",
         "manual-qa",
@@ -556,6 +732,40 @@
           "level": "required"
         },
         {
+          "id": "components",
+          "label": "Design-kit instances built with their PrimeVue components (Dropdown as Select, Status chip as Tag, ...), counted per frame",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/customer": ".design-score/screen",
+            "figma-stub/customer": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs components",
+          "reporter": "json-score",
+          "weight": 0.1,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
+          "id": "responsive",
+          "label": "Layout adapts at widths no frame shows (600-1920 px): no sideways scroll, nothing sticking out, missing or overlapping",
+          "type": "command",
+          "copy": {
+            "design/scorer": ".design-score/scorer",
+            "design/customer": ".design-score/screen",
+            "figma-stub/customer": ".design-score/mockups"
+          },
+          "run": "node .design-score/scorer/score.mjs responsive",
+          "reporter": "json-score",
+          "weight": 0.15,
+          "passAt": 0.9,
+          "browserTools": true,
+          "timeoutSec": 600,
+          "level": "required"
+        },
+        {
           "id": "behaviour",
           "label": "Tabs, edit side panel (open, cancel, save), stat row and responsive stacking work as drawn",
           "type": "command",
@@ -566,7 +776,7 @@
           },
           "run": "node .design-score/scorer/score.mjs behaviour",
           "reporter": "json-score",
-          "weight": 0.2,
+          "weight": 0.1,
           "passAt": 0.9,
           "browserTools": true,
           "timeoutSec": 600,

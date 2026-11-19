@@ -185,6 +185,17 @@ export async function openFrame(browser, base, route, frame) {
     };
     await grow();
     await applySteps(page, frame.steps);
+    // Focusing the first invalid field after a failed submit is good practice, but its focus ring hides
+    // the error border a frame draws. Only an invalid field loses focus, so open overlays stay open.
+    if (frame.steps?.length) {
+      const blurred = await page.evaluate(() => {
+        const active = document.activeElement;
+        if (!active?.matches?.('[aria-invalid="true"], .p-invalid, .p-invalid *')) return false;
+        active.blur();
+        return true;
+      });
+      if (blurred) await settle(page);
+    }
     // A state that made the page taller (validation messages, a sticky bar) is grown into again, so
     // sticky and fixed bars sit at the end of the page as on a frame of the whole page.
     if (frame.steps?.length) await grow();

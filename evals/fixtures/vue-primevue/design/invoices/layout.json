@@ -31,9 +31,9 @@
       },
       "subtitle": {
         "x": 160,
-        "y": 145,
+        "y": 146,
         "width": 270,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -457,9 +457,9 @@
       },
       "row-first-customer": {
         "x": 406,
-        "y": 326,
-        "width": 134,
-        "height": 24,
+        "y": 328,
+        "width": 39,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 500,
         "lineHeight": 24,
@@ -484,9 +484,9 @@
       },
       "row-first-email": {
         "x": 406,
-        "y": 350,
+        "y": 351,
         "width": 134,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -511,9 +511,9 @@
       },
       "row-first-tag": {
         "x": 1052,
-        "y": 338,
+        "y": 340,
         "width": 34,
-        "height": 21,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 700,
         "lineHeight": 21,
@@ -565,9 +565,9 @@
       },
       "row-long-email": {
         "x": 406,
-        "y": 419,
-        "width": 224,
-        "height": 20,
+        "y": 420,
+        "width": 279,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -592,9 +592,9 @@
       },
       "due-note": {
         "x": 882,
-        "y": 695,
-        "width": 130,
-        "height": 20,
+        "y": 696,
+        "width": 90,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -619,9 +619,9 @@
       },
       "row-open-tag": {
         "x": 1052,
-        "y": 476,
+        "y": 478,
         "width": 37,
-        "height": 21,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 700,
         "lineHeight": 21,
@@ -646,9 +646,9 @@
       },
       "range": {
         "x": 177,
-        "y": 897,
+        "y": 898,
         "width": 125,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -822,9 +822,9 @@
       },
       "card-first-number": {
         "x": 65,
-        "y": 630,
+        "y": 632,
         "width": 79,
-        "height": 24,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 500,
         "lineHeight": 24,
@@ -849,9 +849,9 @@
       },
       "card-first-customer": {
         "x": 65,
-        "y": 660,
-        "width": 292,
-        "height": 20,
+        "y": 661,
+        "width": 34,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -876,9 +876,9 @@
       },
       "card-first-amount": {
         "x": 276,
-        "y": 684,
+        "y": 686,
         "width": 81,
-        "height": 24,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 600,
         "lineHeight": 24,
@@ -903,9 +903,9 @@
       },
       "card-second-number": {
         "x": 65,
-        "y": 744,
+        "y": 746,
         "width": 79,
-        "height": 24,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 500,
         "lineHeight": 24,
@@ -930,9 +930,9 @@
       },
       "range": {
         "x": 132,
-        "y": 1535,
+        "y": 1536,
         "width": 125,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -1071,9 +1071,9 @@
       },
       "overdue-note": {
         "x": 821,
-        "y": 350,
-        "width": 152,
-        "height": 20,
+        "y": 351,
+        "width": 103,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -1125,9 +1125,9 @@
       },
       "range": {
         "x": 177,
-        "y": 552,
+        "y": 553,
         "width": 116,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -1154,9 +1154,9 @@
     "desktop-bulk": {
       "selected-count": {
         "x": 177,
-        "y": 283,
+        "y": 284,
         "width": 70,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -1181,9 +1181,9 @@
       },
       "selected-total": {
         "x": 263,
-        "y": 283,
+        "y": 284,
         "width": 113,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -1419,9 +1419,9 @@
       },
       "empty-title": {
         "x": 661,
-        "y": 330,
+        "y": 332,
         "width": 118,
-        "height": 24,
+        "height": 20,
         "fontSize": 16,
         "fontWeight": 600,
         "lineHeight": 24,
@@ -1445,10 +1445,10 @@
         "border": null
       },
       "empty-text": {
-        "x": 528,
-        "y": 366,
-        "width": 384,
-        "height": 40,
+        "x": 535,
+        "y": 367,
+        "width": 371,
+        "height": 37,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -1471,6 +1471,46 @@
         ],
         "border": null
       }
+    }
+  },
+  "components": {
+    "desktop": {
+      "Button": 2,
+      "Text field": 1,
+      "Field with icon": 1,
+      "Checkbox": 9,
+      "Status chip": 8,
+      "Data table": 1,
+      "Pagination": 1
+    },
+    "mobile": {
+      "Button": 2,
+      "Text field": 1,
+      "Field with icon": 1,
+      "Checkbox": 8,
+      "Status chip": 8,
+      "Pagination": 1
+    },
+    "desktop-filtered": {
+      "Button": 2,
+      "Text field": 1,
+      "Field with icon": 1,
+      "Checkbox": 4,
+      "Status chip": 3,
+      "Data table": 1,
+      "Pagination": 1
+    },
+    "desktop-bulk": {
+      "Button": 5,
+      "Text field": 1,
+      "Field with icon": 1,
+      "Checkbox": 9,
+      "Status chip": 8,
+      "Data table": 1,
+      "Pagination": 1
+    },
+    "desktop-empty": {
+      "Button": 3
     }
   }
 }

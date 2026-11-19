@@ -35,8 +35,15 @@ export function memAvailableMb(meminfo = fs.existsSync('/proc/meminfo') ? fs.rea
   return kb ? Math.floor(Number(kb) / 1024) : null;
 }
 
-/** Root of everything an agent process touches (arm homes, run homes, working copies, caches). */
-export const sandboxRoot = (env = process.env) => path.resolve(env.AGENT_CONFIG_EVALS_SANDBOX || DEFAULT_SANDBOX);
+/**
+ * Root of everything an agent process touches (arm homes, run homes, working copies, caches). Its parent is
+ * resolved through symlinks: on macOS /var is a link to /private/var, and the installer refuses linked paths.
+ */
+export function sandboxRoot(env = process.env) {
+  const root = path.resolve(env.AGENT_CONFIG_EVALS_SANDBOX || DEFAULT_SANDBOX);
+  const parent = path.dirname(root);
+  return fs.existsSync(parent) ? path.join(fs.realpathSync(parent), path.basename(root)) : root;
+}
 
 /** Whether `child` is `parent` or sits below it. */
 export function isInside(child, parent) {

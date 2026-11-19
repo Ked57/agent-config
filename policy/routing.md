@@ -26,6 +26,9 @@ declared dependencies.
 - Public page or app screen that needs a designed look and has no provided design to match → `design-taste-frontend`.
   Claude invokes the `taste-skill:design-taste-frontend` skill, Codex uses the taste-skill plugin, Cursor reads
   `~/.cursor/skills/design-taste-frontend/SKILL.md`. With a mockup or Figma frame, match that design instead.
+- Building or changing UI from a Figma link or frame → `figma-to-code`; read it before fetching the design, and
+  name it in the brief of any delegate that builds the UI. It owns extraction and the comparison with the
+  frame; `manual-qa` still owns behaviour.
 - Building, restyling, or critiquing component or screen markup and styles → `emil-design-eng`; read it before editing templates or styles. `vue-primevue.md` repeats this step for Vue.
 - Worst-case data and layout breakage → `break-ui`.
 - New motion → `animate`.

@@ -7,7 +7,7 @@ while the checks run (`.design-score/`), after the diff is taken.
 
 ```
 design/
-  scorer/          capture.mjs (build, serve, render a frame), visual.mjs, layout.mjs, behaviour.mjs, a11y.mjs, score.mjs (entry)
+  scorer/          capture.mjs (build, serve, render a frame), visual.mjs, layout.mjs, kit.mjs, responsive.mjs, behaviour.mjs, a11y.mjs, score.mjs (entry)
   tools/           export-frames.mjs (reference → mockups, layout.json, baselines, Figma bundles), figma-tree.mjs, figma-variables.mjs
   <screen>/        screen.json (hand-written), layout.json and baselines.json (generated)
   FIGMA-STUB-FIDELITY.md   how the stub differs from Figma's MCP server
@@ -17,14 +17,16 @@ design/
 
 ## Metric
 
-A task scores the weighted mean of four `json-score` checks, each in 0..1 (`weight` on the check):
-**combined = 0.4 visual + 0.3 layout + 0.2 behaviour + 0.1 a11y.**
+A task scores the weighted mean of six `json-score` checks, each in 0..1 (`weight` on the check):
+**combined = (0.4 visual + 0.3 layout + 0.1 components + 0.15 responsive + 0.1 behaviour + 0.1 a11y) / 1.15.**
 Fixture gates (lint, typecheck, test, build) zero the run as for every task. One render pass (cached by a hash
-of the app, scorer and screen data) serves all four checks. Every frame opens in a fresh Chromium context:
+of the app, scorer and screen data) serves all checks. Every frame opens in a fresh Chromium context:
 the frame's viewport at deviceScaleFactor 1, `?query`, fixed clock (2026-11-16T12:00Z), UTC, en-US, reduced
 motion, animations, transitions and the caret off, fonts and a quiet DOM awaited, viewport grown to the page
 height (a full-page screenshot would otherwise resize it and close open overlays), then the frame's state steps,
 then the viewport is grown again if the state made the page taller (sticky and fixed bars end up at the page end).
+A field left focused and invalid by the steps is blurred, so focusing the first error does not replace the error
+border a frame draws with a focus ring.
 A frame whose steps fail scores 0 on visual, layout and a11y, and its behaviour tests fail.
 
 Visual and layout judge at design-review precision (tolerances in `scorer/visual.mjs` `VISUAL` and
@@ -41,7 +43,9 @@ real solution ≈ 0.75 combined, a lazy one ≈ 0.45). `ramp(e; a, b)` is 1 for 
   `score = clamp((sim − base) / (1 − base))`, where `base` is the untouched fixture's `sim` for that frame
   (`baselines.json`), so "nothing built" scores 0 and the mockup itself 1.
 - **layout** (per frame, mean over frames): key elements from `screen.json` `layout`, located by ARIA role and
-  accessible name or by visible text, against the reference's elements in `layout.json`. Element credit =
+  accessible name or by visible text, against the reference's elements in `layout.json`. An element found by its
+  text is measured by the text's own box, without its container's padding, border and radius (the same text may
+  sit in a table cell or in a span inside it). Element credit =
   mean(position, size) × style. Position = `ramp`(worse of |dx|, |dy| of the top-left corner; 4 px, 24 px);
   size = the worse of width and height, `ramp`((|error| − 2 px) / reference; 4 %, 15 %). Style is the
   product of: font size `ramp`(0, 2 px), weight `ramp`(0, 200), line height `ramp`(1, 6 px), text colour,
@@ -50,6 +54,20 @@ real solution ≈ 0.75 combined, a lazy one ≈ 0.45). `ramp(e; a, b)` is 1 for 
   = 0.8 × mean element credit (missing = 0) + 0.2 × reading-order agreement × share found.
 - **behaviour**: Playwright expectations in `screen.json` `behaviour` (visible / hidden text, one row, stacked,
   no horizontal overflow), on a frame's state or their own steps. Score = passed / total.
+- **components** (per frame, mean over the frames whose reference uses the kit): the design kit
+  (`scorer/kit.mjs`) maps each PrimeVue root class to the kit component a designer places (`p-select` →
+  "Dropdown", `p-tag` → "Status chip"). The reference's visible instances per kit component are counted at export
+  (`layout.json` `components`); the render's are counted the same way. Score = Σ min(reference, render) / Σ reference,
+  so a hand-built dropdown or a Badge where the design has a Status chip loses that instance's credit.
+- **responsive** (per width, mean over widths): the default state (the desktop frame's `?query`, no steps) at
+  600, 768, 1024, 1280 and 1920 × 900 px, widths no frame shows (`scorer/responsive.mjs`). A width scores 0 when
+  the layout breaks there: the page scrolls sideways, an element sticks out of the viewport with no ancestor
+  scrolling or clipping it horizontally (a table scrolling in its card is fine), or two key elements overlap by
+  more than 30 % of the smaller one. Otherwise it scores the share of key elements found (the `screen.json`
+  `layout` ids both the desktop and the mobile frame have), so an empty route scores 0. Nothing is compared with
+  the design: any layout that adapts scores 1, and one that copies the frames' pixel widths loses the widths
+  between them. Its 0.15 weight came out of components and behaviour, keeping the total at 1.15 so the drop of a
+  mutant that only one check catches (D2 m6, font weights) is not diluted below the gate's 0.05.
 - **a11y**: axe-core 4.14 (WCAG 2.0/2.1 A and AA rules) on every frame's state. Frame score = (1 − Σ penalty per
   violated rule: critical 0.25, serious 0.15, moderate 0.05, minor 0.02; floor 0) × the frame's layout coverage
   (an empty route has nothing to violate, so it must not score). Mean over frames; violations in `detail`.
@@ -64,6 +82,28 @@ When a name is not visible in the design, the task prompt states it in one neutr
 Determinism: the same app renders byte-identical PNGs run after run (Inter is bundled in the template's
 `public/fonts`, Chromium and axe are pinned in `evals/lib/browser.mjs` `BROWSER_TOOLS`), so any score
 difference is real. Mockups and baselines must be regenerated after a Chromium, font or template change.
+
+## Findings
+
+Every check also writes `findings` to its score file: what a design review would flag, as
+`{ category, frame, element, property, expected, rendered }`. The eval keeps them on the check record and
+`npm run eval:defects -- <eval dir>` counts them per category (see `evals/README.md` "Design defects").
+
+| Category | From | Flagged when |
+|---|---|---|
+| `missing` | layout | a key element is not found |
+| `component` | components | a kit component's instance count differs from the reference (hand-built or swapped) |
+| `spacing` | layout | top-left corner more than 4 px off; padding off by more than 2 px summed over the sides |
+| `size` | layout | width or height off by more than 4 % (and 2 px) |
+| `typography` | layout | font size, weight or line height off at all (line height: more than 1 px) |
+| `colour` | layout | text colour, background or border colour more than 3 ΔE76 off; a border added or dropped |
+| `radius` | layout | corner radius more than 1 px off |
+| `state` | layout | a state frame's steps cannot be performed |
+| `responsive` | responsive | at a width no frame shows: the page scrolls sideways, an element sticks out, a key element is missing or two overlap |
+| `behaviour` | behaviour | a behaviour test fails |
+| `a11y` | a11y | an axe rule is violated |
+
+The thresholds are the full-credit edges of the layout tolerances: a finding is any property that loses credit.
 
 ## Run it by hand
 

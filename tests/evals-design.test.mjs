@@ -9,6 +9,9 @@ import zlib from 'node:zlib';
 import { validateTaskSet } from '../evals/lib/config.mjs';
 import { scoreLayout } from '../evals/fixtures/vue-primevue/design/scorer/layout.mjs';
 import { scoreA11y } from '../evals/fixtures/vue-primevue/design/scorer/a11y.mjs';
+import { KIT, scoreInventory } from '../evals/fixtures/vue-primevue/design/scorer/kit.mjs';
+import { scoreWidth, sharedSpecs } from '../evals/fixtures/vue-primevue/design/scorer/responsive.mjs';
+import { defectsReport, recurring, summarise } from '../evals/lib/defects.mjs';
 import { normalise, similarity } from '../evals/fixtures/vue-primevue/design/scorer/visual.mjs';
 import { cropPng } from '../evals/fixtures/vue-primevue/figma-stub/png.mjs';
 import { allDesignScreens, missingDesignScreens } from '../evals/lib/design-assets.mjs';
@@ -50,6 +53,32 @@ test('figma stub holds only what a Figma file exposes: no source, component libr
     const text = fs.readFileSync(file, 'utf8');
     for (const pattern of [/primevue/i, /data-testid/, /\.\.\//]) assert.doesNotMatch(text, pattern, `${path.relative(STUB, file)} matches ${pattern}`);
   }
+});
+
+test('figma stub bundles: layer ids unique per file and never a frame id, text boxes as tall as their line boxes', needsAssets, () => {
+  const files = JSON.parse(fs.readFileSync(path.join(STUB, 'files.json'), 'utf8'));
+  let tabular = 0;
+  for (const [fileKey, entry] of Object.entries(files)) {
+    const frames = entry.pages.flatMap((pageEntry) => pageEntry.frames);
+    const frameIds = new Set(frames.map((frame) => frame.nodeId));
+    const seen = new Set();
+    for (const frame of frames) {
+      const walk = (node, parent) => {
+        if (node !== root) {
+          assert.ok(!frameIds.has(node.id), `${fileKey} ${frame.bundle}: layer ${node.id} has a frame's id`);
+          assert.ok(!seen.has(node.id), `${fileKey} ${frame.bundle}: layer id ${node.id} used twice`);
+        }
+        seen.add(node.id);
+        // Chart labels are SVG text, measured as drawn; every other text box is whole line boxes.
+        if (node.type === 'TEXT' && parent?.type !== 'VECTOR') assert.equal(node.height % node.style.lineHeightPx, 0, `${frame.bundle}: "${node.characters}" is ${node.height} px tall at line height ${node.style.lineHeightPx}`);
+        if (node.style?.opentypeFlags?.TNUM) tabular += 1;
+        for (const child of node.children ?? []) walk(child, node);
+      };
+      const root = JSON.parse(fs.readFileSync(path.join(STUB, frame.bundle), 'utf8')).tree;
+      walk(root, null);
+    }
+  }
+  assert.ok(tabular > 0, 'no text layer carries tabular figures');
 });
 
 async function withStub(fn) {
@@ -110,8 +139,20 @@ test('figma stub resolves frame links and node ids and returns metadata, code, v
     const frame = await tool('get_design_context', { fileKey: file, nodeId: '12:2' });
     assert.match(frame.content[0].text, /too large/);
     const variables = JSON.parse((await tool('get_variable_defs', { fileKey: file, nodeId: child })).content[0].text);
-    assert.match(Object.keys(variables).join(' '), /color\/surface\/\d+/);
+    // Designer names: the theme's surface palette is Gray, its primary Brand; text styles are type-scale names.
+    assert.match(Object.keys(variables).join(' '), /Gray\/\d+/);
+    assert.match(Object.keys(variables).join(' '), /(Body|Label|Heading)\/\w+/);
+    assert.doesNotMatch(Object.keys(variables).join(' '), /color\/(primary|surface)/);
     assert.match(Object.values(variables).join(' '), /Font\(family: "Inter"/);
+    // Library components arrive as kit instances with variant properties, named in designer words.
+    const desktop = (await tool('get_metadata', { fileKey: file, nodeId: '12:2' })).content[0].text;
+    const dropdown = desktop.match(/<instance id="(\d+:\d+)" name="Dropdown"/)[1];
+    const dropdownCode = await tool('get_design_context', { fileKey: file, nodeId: dropdown });
+    assert.match(dropdownCode.content[0].text, /^\/\/ Instance of Dropdown \(State=\w+, Size=Medium\)/);
+    const table = desktop.match(/<instance id="(\d+:\d+)" name="Data table"/)[1];
+    const tableCode = await tool('get_design_context', { fileKey: file, nodeId: table });
+    assert.match(tableCode.content[0].text, /\{\/\* Instance of (Status chip|Avatar|Button) \(/);
+    assert.match(tableCode.content[1].text, /uses components from the team library: .*Data table \(1\)/);
     const shot = await tool('get_screenshot', { fileKey: file, nodeId: child });
     assert.equal(shot.content[0].type, 'image');
     assert.equal(shot.content[0].mimeType, 'image/png');
@@ -202,6 +243,66 @@ test('layout score: position and size credit times style credit per element, ord
   assert.equal(scoreLayout(reference, { a: null, b: null, c: null }).score, 0);
 });
 
+test('layout findings: one per property beyond its full-credit tolerance, missing elements included', () => {
+  const box = (x, y, extra = {}) => ({ x, y, width: 100, height: 20, fontSize: 14, fontWeight: 400, lineHeight: 20, color: [15, 23, 42], background: [255, 255, 255], radius: 6, padding: [8, 12, 8, 12], border: null, ...extra });
+  const reference = { a: box(0, 0), b: box(0, 40) };
+  assert.deepEqual(scoreLayout(reference, reference).findings, []);
+  assert.deepEqual(scoreLayout(reference, { a: box(3, 0, { width: 103 }), b: box(0, 40) }).findings, []);
+  const { findings } = scoreLayout(reference, { a: box(10, 0, { padding: [8, 16, 8, 16], fontWeight: 600, radius: 12, border: [226, 232, 240] }), b: null });
+  assert.deepEqual(findings.map((finding) => `${finding.element} ${finding.category} ${finding.property}`), [
+    'a spacing position', 'a spacing padding', 'a typography font weight', 'a colour border', 'a radius corner radius', 'b missing element'
+  ]);
+  assert.equal(findings[0].rendered, '10,0 (+10, +0 px)');
+  // One wrong gap shifts everything below it: only the element after the gap is flagged.
+  const column = { a: box(0, 0), b: box(0, 40), c: box(0, 80), d: box(0, 120) };
+  const shifted = scoreLayout(column, { a: box(0, 0), b: box(0, 48), c: box(0, 88), d: box(0, 128) }).findings;
+  assert.deepEqual(shifted.map((finding) => `${finding.element} ${finding.property}`), ['b position from a']);
+  assert.equal(shifted[0].rendered, '0,48 (+0, +8 px relative to a)');
+  assert.equal(findings[1].expected, '8 12 8 12');
+});
+
+test('kit inventory: share of the reference instances the render has, and every count that differs', () => {
+  assert.equal(new Set(Object.keys(KIT)).size, Object.keys(KIT).length);
+  assert.ok(Object.keys(KIT).every((rootClass) => /^p-[a-z]+$/.test(rootClass)));
+  assert.deepEqual(scoreInventory({ Button: 2 }, { Button: 2 }), { score: 1, differences: [] });
+  const partial = scoreInventory({ Button: 3, Dropdown: 1 }, { Button: 4, 'Text field': 1 });
+  assert.equal(partial.score, 0.75);
+  assert.deepEqual(partial.differences, [
+    { component: 'Button', expected: 3, rendered: 4 },
+    { component: 'Dropdown', expected: 1, rendered: 0 }
+  ]);
+  // A library component the design does not use is a choice, not a difference.
+  assert.deepEqual(scoreInventory({ Button: 1 }, { Button: 1, Avatar: 8 }).differences, []);
+  assert.equal(scoreInventory({}, { Button: 1 }).score, null);
+});
+
+test('responsive score: 0 at a width where the layout breaks, else the share of key elements found', () => {
+  assert.equal(scoreWidth([], 12), 1);
+  assert.equal(scoreWidth([{ kind: 'missing', detail: 'a' }, { kind: 'missing', detail: 'b' }, { kind: 'missing', detail: 'c' }], 12), 0.75);
+  for (const kind of ['page overflow', 'sticks out', 'overlap', 'unreached']) assert.equal(scoreWidth([{ kind }], 12), 0, kind);
+  assert.equal(scoreWidth([{ kind: 'missing' }, { kind: 'missing' }], 2), 0);
+  const screen = { layout: { desktop: [{ id: 'title' }, { id: 'sidebar' }, { id: 'table' }], mobile: [{ id: 'table' }, { id: 'title' }] } };
+  assert.deepEqual(sharedSpecs(screen).map((spec) => spec.id), ['title', 'table']);
+  assert.deepEqual(sharedSpecs({ layout: { desktop: [{ id: 'title' }] } }), []);
+});
+
+test('defects summary: mean findings per category and run, recurring findings, comparison columns', () => {
+  const run = (task, findings, status = 'ok') => ({ task, status, cost: { usd: 2 }, checks: [{ id: 'layout', score: 0.8, findings }, { id: 'visual', score: 0.9 }] });
+  const pad = { category: 'spacing', frame: 'desktop', element: 'save', property: 'padding', expected: '8', rendered: '12' };
+  const chip = { category: 'component', frame: 'desktop', element: 'Status chip', property: 'instances', expected: 3, rendered: 0 };
+  const before = summarise([run('D2', [pad, chip]), run('D2', [pad]), run('D2', [chip, chip], 'error')]);
+  assert.equal(before.tasks.D2.runs, 2);
+  assert.equal(before.tasks.D2.categories.spacing, 1);
+  assert.equal(before.tasks.D2.categories.component, 0.5);
+  assert.deepEqual(before.tasks.D2.checks, { layout: 0.8, visual: 0.9 });
+  assert.deepEqual(recurring(before.tasks.D2.findings).map((finding) => [finding.element, finding.count]), [['save', 2], ['Status chip', 1]]);
+  const after = summarise([run('D2', [])]);
+  const report = defectsReport([{ label: 'before', summary: before }, { label: 'after', summary: after }]);
+  assert.match(report, /\| spacing \| 1 \| 0 \(-1\) \|/);
+  assert.match(report, /\| component \| 0\.5 \| 0 \(-0\.5\) \|/);
+  assert.match(report, /### D2\n\n2 run\(s\), \$2 per run/);
+});
+
 test('a11y score: penalty per violated rule by impact, scaled by layout coverage', () => {
   assert.equal(scoreA11y([], 1), 1);
   assert.equal(scoreA11y([], 0), 0);
@@ -221,7 +322,7 @@ test('vue-design task set is valid and wired to its screens, mockups and stub fr
       assert.equal(check.browserTools, true, `${task.id}/${check.id} needs browserTools`);
       for (const from of Object.keys(check.copy)) assert.ok((assetsMissing && from.startsWith('figma-stub/')) || fs.existsSync(path.join(FIXTURE, from)), `${task.id}: ${from} missing`);
     }
-    assert.deepEqual(task.checks.map((check) => check.id), ['visual', 'layout', 'behaviour', 'a11y']);
+    assert.deepEqual(task.checks.map((check) => check.id), ['visual', 'layout', 'components', 'responsive', 'behaviour', 'a11y']);
     for (const [, nodeId] of task.prompt.matchAll(/node-id=(\d+-\d+)/g)) assert.ok(nodes.has(nodeId.replace('-', ':')), `${task.id}: prompt links unknown node ${nodeId}`);
     for (const from of Object.keys(task.modes?.['screenshot-only']?.files ?? {})) assert.ok(assetsMissing || fs.existsSync(path.join(FIXTURE, from)), `${task.id}: ${from} missing`);
   }

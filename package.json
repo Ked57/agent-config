@@ -5,12 +5,13 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "check": "node --check bin/agent-config.mjs && node --check bin/native-agents.mjs && node --check evals/run.mjs && node --check evals/smoke.mjs",
+    "check": "node --check bin/agent-config.mjs && node --check bin/native-agents.mjs && node --check evals/run.mjs && node --check evals/smoke.mjs && node --check evals/defects.mjs",
     "eval": "node evals/run.mjs",
     "eval:mutants": "node evals/mutants.mjs",
     "eval:design-assets": "node evals/design-assets.mjs",
     "eval:smoke": "node evals/smoke.mjs",
     "test": "node --test tests/*.test.mjs",
-    "verify": "npm run check && npm test"
+    "verify": "npm run check && npm test",
+    "eval:defects": "node evals/defects.mjs"
   }
 }
