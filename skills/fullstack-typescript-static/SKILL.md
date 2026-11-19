@@ -25,7 +25,7 @@ Every other gate is one comment away from being switched off, so enable these on
 
 - `linterOptions.reportUnusedDisableDirectives: "error"`.
 - `@eslint-community/eslint-comments/no-unlimited-disable` and `require-description`.
-- `@eslint-community/eslint-comments/no-restricted-disable` listing the gate rules: `complexity`, `sonarjs/cognitive-complexity`, `quality-metrics/halstead`, `max-lines`, `max-lines-per-function`, `max-params`, `@typescript-eslint/no-explicit-any`, `@typescript-eslint/ban-ts-comment`.
+- `@eslint-community/eslint-comments/no-restricted-disable` listing the gate rules: `complexity`, `sonarjs/cognitive-complexity`, `quality-metrics/halstead`, `max-lines`, `max-lines-per-function`, `max-params`, `@typescript-eslint/no-explicit-any`, `@typescript-eslint/ban-ts-comment`, `no-warning-comments`, `@eslint-community/eslint-comments/no-restricted-disable`, `@eslint-community/eslint-comments/no-unlimited-disable`.
 - `@typescript-eslint/ban-ts-comment`: ban `ts-ignore` and `ts-nocheck`; allow `ts-expect-error` only with a description.
 - `no-warning-comments` with `terms: ["istanbul ignore", "v8 ignore", "c8 ignore"]` and `location: "anywhere"`, so code cannot leave the coverage gate silently.
 
@@ -38,7 +38,7 @@ bulk suppressions (ESLint 9.24+): run `eslint --suppress-all` once to write `esl
 
 - New violations fail; unpruned suppressions fail by default (do not pass `--pass-on-unpruned-suppressions`).
 - After the initial baseline, only shrink it with `eslint --prune-suppressions`. Never rerun `--suppress-all` or `--suppress-rule` to absorb a new violation.
-- CI fails when the total suppression count exceeds the merge-base count.
+- CI fails when the total suppression count exceeds the merge-base count. A missing merge-base `eslint-suppressions.json` is the adoption baseline, not a count of zero: the change that adds the file passes, and every later change still fails when the count grows.
 - Where the project scopes gates to declared quality perimeters, the gate rules a perimeter already passed stay at zero suppressions in it; newly added rules are baselined there like everywhere else.
 
 ## Type-aware rules

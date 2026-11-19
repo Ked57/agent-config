@@ -116,7 +116,7 @@ Example:
 
 - Pre-commit hooks run fast checks only. Keep Cypress CT, E2E, Knip, and mutation testing out of pre-commit by default.
 - Merge request pipelines run the sibling test owner's affected-test selection and scoped coverage gate; the default branch and tags run every spec and the full gate.
-- CI fails when the ESLint suppression count exceeds the merge-base count.
+- CI fails when the ESLint suppression count exceeds the merge-base count. A missing merge-base `eslint-suppressions.json` is the adoption baseline, not a count of zero: the change that adds the file passes, and every later change still fails when the count grows.
 - CI runs relevant required checks, builds, Knip, and selected browser tests. For changed critical journeys, execute the existing production build and selected browser journey; unit coverage alone does not exercise bundling, routing, or hydration.
 - A scheduled or manually triggered job runs domain-only mutation testing.
 - Require explicit approval before bypassing checks, lowering thresholds, or editing configuration to hide failures.
