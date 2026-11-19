@@ -31,7 +31,7 @@ These rules break projects that already contain the comments they ban. Adopt the
   `--prune-suppressions`, so the baseline only shrinks.
 - `reportUnusedDisableDirectives` needs no baseline: `eslint --fix` removes unused directives.
 - Guard the baseline against agents: a policy line (never regenerate, only prune), CODEOWNERS
-  review on `eslint-suppressions.json`, and a CI check that the suppression count never grows.
+  review on `eslint-suppressions.json`, and a CI check that no file's suppression count for a rule ever grows.
 
 ## Tier 2: from `policy/typescript.md` (type-aware, needs `projectService`)
 

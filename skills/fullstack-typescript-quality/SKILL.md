@@ -116,7 +116,7 @@ Example:
 
 - Pre-commit hooks run fast checks only. Keep Cypress CT, E2E, Knip, and mutation testing out of pre-commit by default.
 - Merge request pipelines run the sibling test owner's affected-test selection and scoped coverage gate; the default branch and tags run every spec and the full gate.
-- CI fails when the ESLint suppression count exceeds the merge-base count. A missing merge-base `eslint-suppressions.json` is the adoption baseline, not a count of zero: the change that adds the file passes, and every later change still fails when the count grows.
+- CI fails when any file's ESLint suppression count for a rule exceeds its merge-base count, and when a disable comment names an `eslint-comments` rule or no rule (a text scan, since ESLint lets such a directive hide the guard's own report). A missing merge-base `eslint-suppressions.json` is the adoption baseline, not a count of zero: the change that adds the file passes, and every later change still fails when a count grows.
 - CI runs relevant required checks, builds, Knip, and selected browser tests. For changed critical journeys, execute the existing production build and selected browser journey; unit coverage alone does not exercise bundling, routing, or hydration.
 - A scheduled or manually triggered job runs domain-only mutation testing.
 - Require explicit approval before bypassing checks, lowering thresholds, or editing configuration to hide failures.
@@ -130,7 +130,7 @@ Before declaring the setup complete:
 - [ ] Controlled violations prove each configured gate rejects its claimed failure class, then are removed; typecheck includes all relevant file kinds.
 - [ ] Unit, component, and E2E commands have been run when configured, including the sibling test owner's temporal regressions for changed async UI.
 - [ ] Coverage and CRAP output are generated; exclusions are justified.
-- [ ] Existing violations are frozen in a suppression baseline, a new violation and a disable comment on a gate rule both fail lint, and a grown suppression count fails CI.
+- [ ] Existing violations are frozen in a suppression baseline, a new violation and a disable comment on a gate rule or its guards fails lint or the CI scan, and a grown per-file, per-rule suppression count fails CI.
 - [ ] Affected-test selection is proven on real diffs: a leaf change selects only its specs, a shared module selects its importers' specs, and a global input selects every spec.
 - [ ] Knip runs in `verify:full` / CI and stays out of the fast gate by default.
 - [ ] Git hooks run only the intended fast gate.

@@ -408,7 +408,10 @@ test('fullstack-typescript-static protects its gates and ratchets legacy suppres
   assert.match(staticSkill, /terms: \["istanbul ignore", "v8 ignore", "c8 ignore"\]/);
   assert.match(staticSkill, /run `eslint --suppress-all` once/);
   assert.match(staticSkill, /Never rerun `--suppress-all`/);
-  assert.match(staticSkill, /CI fails when the total suppression count exceeds the merge-base count/);
+  assert.match(staticSkill, /CI fails when any file's suppression count for a rule exceeds its merge-base count/);
+  assert.match(staticSkill, /The check fails closed: if the merge-base commit cannot be read, fail/);
+  assert.match(staticSkill, /and the rules that guard them \(`@eslint-community\/eslint-comments\/\*`, `no-warning-comments`\)/);
+  assert.match(staticSkill, /scans tracked source text for disable directives/);
   assert.match(sharedPolicy, /regenerate a suppression baseline, merely to make a change pass/);
 });
 
@@ -432,13 +435,15 @@ test('fullstack-typescript-tests scopes merge request runs and coverage to affec
 
   assert.match(testsSkill, /## Affected-test selection/);
   assert.match(testsSkill, /default branch and tags always run every spec and the full coverage gate/);
-  assert.match(testsSkill, /Run every spec when a global input changed/);
   assert.match(testsSkill, /map each E2E domain to its source folders/);
   assert.match(testsSkill, /Stop the walk at app-shell files/);
   assert.match(testsSkill, /forward the merge-base explicitly, and run every spec when it is missing/);
   assert.match(testsSkill, /exit successfully before installing the browser runner/);
   assert.match(testsSkill, /enforce the coverage gate on the check set only/);
-  assert.match(testsSkill, /changes or deletes a spec of a gated domain, run that domain's specs in full/);
+  assert.match(testsSkill, /changes or deletes a spec of a gated domain, or changes a test-only input one of its specs imports/);
+  assert.match(testsSkill, /Run every spec when a global input is in the affected set, changed directly or reached through imports/);
+  assert.match(testsSkill, /left a relative or aliased import unresolved/);
+  assert.match(testsSkill, /run every E2E domain when a shell file changed, or when a changed file outside every domain's source folders reaches the shell/);
   assert.match(qualitySkill, /\| Merge request test scope \| Affected-test selection \+ scoped coverage gate \| `fullstack-typescript-tests` \|/);
   assert.match(qualitySkill, /a leaf change selects only its specs/);
 });
