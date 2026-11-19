@@ -396,6 +396,58 @@ test('fullstack-typescript-static requires persistent complexity gates', () => {
   assert.match(qualitySkill, /Sibling owners were loaded and their gates applied/);
 });
 
+// Agents switch gates off with disable comments or by re-baselining, so the static skill
+// protects the gates and only lets a suppression baseline shrink.
+test('fullstack-typescript-static protects its gates and ratchets legacy suppressions', () => {
+  const staticSkill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-static/SKILL.md'), 'utf8');
+  const sharedPolicy = fs.readFileSync(path.join(root, 'policy/shared-policy.md'), 'utf8');
+
+  assert.match(staticSkill, /reportUnusedDisableDirectives: "error"/);
+  assert.match(staticSkill, /eslint-comments\/no-restricted-disable` listing the gate rules/);
+  assert.match(staticSkill, /allow `ts-expect-error` only with a description/);
+  assert.match(staticSkill, /terms: \["istanbul ignore", "v8 ignore", "c8 ignore"\]/);
+  assert.match(staticSkill, /run `eslint --suppress-all` once/);
+  assert.match(staticSkill, /Never rerun `--suppress-all`/);
+  assert.match(staticSkill, /CI fails when any file's suppression count for a rule exceeds its merge-base count/);
+  assert.match(staticSkill, /The check fails closed: if the merge-base commit cannot be read, fail/);
+  assert.match(staticSkill, /and the rules that guard them \(`@eslint-community\/eslint-comments\/\*`, `no-warning-comments`\)/);
+  assert.match(staticSkill, /scans tracked source text for disable directives/);
+  assert.match(sharedPolicy, /regenerate a suppression baseline, merely to make a change pass/);
+});
+
+test('fullstack-typescript-static carries the type-aware, framework, and test rules', () => {
+  const staticSkill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-static/SKILL.md'), 'utf8');
+
+  assert.match(staticSkill, /switch-exhaustiveness-check` with `considerDefaultExhaustiveForUnions: false`/);
+  assert.match(staticSkill, /no-floating-promises` with `ignoreVoid: false`/);
+  assert.match(staticSkill, /objectLiteralTypeAssertions: "never"/);
+  assert.match(staticSkill, /`max-params` with `max: 4`/);
+  assert.match(staticSkill, /vue\/no-restricted-html-elements/);
+  assert.match(staticSkill, /vue\/define-props-declaration/);
+  assert.match(staticSkill, /react\/no-array-index-key/);
+  assert.match(staticSkill, /no-focused-tests`, `no-disabled-tests`, `expect-expect`/);
+  assert.match(staticSkill, /Leave `require-data-selectors` off/);
+});
+
+test('fullstack-typescript-tests scopes merge request runs and coverage to affected files', () => {
+  const testsSkill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-tests/SKILL.md'), 'utf8');
+  const qualitySkill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-quality/SKILL.md'), 'utf8');
+
+  assert.match(testsSkill, /## Affected-test selection/);
+  assert.match(testsSkill, /default branch and tags always run every spec and the full coverage gate/);
+  assert.match(testsSkill, /map each E2E domain to its source folders/);
+  assert.match(testsSkill, /Stop the walk at app-shell files/);
+  assert.match(testsSkill, /forward the merge-base explicitly, and run every spec when it is missing/);
+  assert.match(testsSkill, /exit successfully before installing the browser runner/);
+  assert.match(testsSkill, /enforce the coverage gate on the check set only/);
+  assert.match(testsSkill, /changes or deletes a spec of a gated domain, or changes a test-only input one of its specs imports/);
+  assert.match(testsSkill, /Run every spec when a global input is in the affected set, changed directly or reached through imports/);
+  assert.match(testsSkill, /left a relative or aliased import unresolved/);
+  assert.match(testsSkill, /run every E2E domain when a shell file changed, or when a changed file outside every domain's source folders reaches the shell/);
+  assert.match(qualitySkill, /\| Merge request test scope \| Affected-test selection \+ scoped coverage gate \| `fullstack-typescript-tests` \|/);
+  assert.match(qualitySkill, /a leaf change selects only its specs/);
+});
+
 test('preserves a colliding project-owned lock file', () => {
   const project = fs.mkdtempSync(path.join(canonicalTemporaryDirectory, 'agent-config-lock-collision-'));
   const lock = path.join(project, '.agents/agent-config.lock.json');
