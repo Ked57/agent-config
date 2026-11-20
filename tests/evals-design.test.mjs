@@ -11,6 +11,7 @@ import { scoreLayout } from '../evals/fixtures/vue-primevue/design/scorer/layout
 import { scoreA11y } from '../evals/fixtures/vue-primevue/design/scorer/a11y.mjs';
 import { KIT, scoreInventory } from '../evals/fixtures/vue-primevue/design/scorer/kit.mjs';
 import { scoreWidth, sharedSpecs } from '../evals/fixtures/vue-primevue/design/scorer/responsive.mjs';
+import { locate } from '../evals/fixtures/vue-primevue/design/scorer/capture.mjs';
 import { defectsReport, recurring, summarise } from '../evals/lib/defects.mjs';
 import { normalise, similarity } from '../evals/fixtures/vue-primevue/design/scorer/visual.mjs';
 import { cropPng } from '../evals/fixtures/vue-primevue/figma-stub/png.mjs';
@@ -274,6 +275,20 @@ test('kit inventory: share of the reference instances the render has, and every 
   // A library component the design does not use is a choice, not a difference.
   assert.deepEqual(scoreInventory({ Button: 1 }, { Button: 1, Avatar: 8 }).differences, []);
   assert.equal(scoreInventory({}, { Button: 1 }).score, null);
+});
+
+test('locate: `within` searches inside the element its own spec finds, so a tag is not taken for a filter chip', () => {
+  // A stand-in for Playwright's page and locators that records each query in the chain.
+  const node = (trail) => ({
+    trail,
+    getByRole: (role, options) => node([...trail, `role ${role} ${options.name}`]),
+    getByText: (text, options) => node([...trail, `text ${text} exact=${options.exact}`]),
+    filter: () => node(trail),
+    nth: (index) => node([...trail, `nth ${index}`])
+  });
+  const page = node([]);
+  assert.deepEqual(locate(page, { text: 'Draft' }).trail, ['text Draft exact=true', 'nth 0']);
+  assert.deepEqual(locate(page, { text: 'Draft', within: { role: 'table' } }).trail, ['role table /^\\s*/i', 'nth 0', 'text Draft exact=true', 'nth 0']);
 });
 
 test('responsive score: 0 at a width where the layout breaks, else the share of key elements found', () => {

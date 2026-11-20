@@ -77,6 +77,8 @@ State steps and locators are implementation-agnostic: `{ "click": { "role": "but
 a combobox or listbox that opens options, or a segmented control), `{ "fill": { "role": "textbox", "name": "Email",
 "value": "" } }` (replaces a text field's value), `{ "text": "…" }` locators match whole
 visible text (`"contains": true` for substrings), accessible names match from the start, case-insensitively.
+`"within": { "role": "table" }` (any locator) limits a locator to that element, for words that also label
+controls elsewhere, such as a status that is both a table tag and a filter chip.
 When a name is not visible in the design, the task prompt states it in one neutral line.
 
 Determinism: the same app renders byte-identical PNGs run after run (Inter is bundled in the template's

@@ -102,13 +102,16 @@ export const nameRe = (name, contains = false) => new RegExp(`${contains ? '' : 
 const exactRe = (name) => new RegExp(`^\\s*${escapeRe(name)}\\s*$`, 'i');
 
 /**
- * A locator for `{ role, name, level?, nth?, contains? }` or `{ text, nth?, contains? }`. Text matches
- * an element's whole visible text (or a substring with `contains`); `nth` counts visible matches.
+ * A locator for `{ role, name, level?, nth?, contains?, within? }` or `{ text, nth?, contains?, within? }`.
+ * Text matches an element's whole visible text (or a substring with `contains`); `nth` counts visible
+ * matches; `within` (itself a locator spec) limits the search to that element, so a status word finds
+ * the table's tag, not a filter chip with the same label.
  */
 export function locate(page, spec) {
+  const scope = spec.within ? locate(page, spec.within) : page;
   const base = spec.role
-    ? page.getByRole(spec.role, { name: nameRe(spec.name ?? '', spec.contains), ...(spec.level ? { level: spec.level } : {}) })
-    : page.getByText(spec.text, { exact: !spec.contains });
+    ? scope.getByRole(spec.role, { name: nameRe(spec.name ?? '', spec.contains), ...(spec.level ? { level: spec.level } : {}) })
+    : scope.getByText(spec.text, { exact: !spec.contains });
   return base.filter({ visible: true }).nth(spec.nth ?? 0);
 }
 

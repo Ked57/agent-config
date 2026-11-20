@@ -46,11 +46,11 @@
       { "id": "row-first-number", "text": "INV-2048" },
       { "id": "row-first-customer", "text": "Hooli" },
       { "id": "row-first-email", "text": "payables@hooli.test" },
-      { "id": "row-first-tag", "text": "Draft" },
+      { "id": "row-first-tag", "text": "Draft", "within": { "role": "table" } },
       { "id": "row-first-amount", "text": "$3,200.00" },
       { "id": "row-long-email", "text": "accounts.payable@northwind-traders.test" },
       { "id": "due-note", "text": "Due in 3 days" },
-      { "id": "row-open-tag", "text": "Open" },
+      { "id": "row-open-tag", "text": "Open", "within": { "role": "table" } },
       { "id": "range", "text": "Showing 1–8 of 24" },
       { "id": "next-page", "role": "button", "name": "Next page" }
     ],
