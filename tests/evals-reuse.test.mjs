@@ -295,6 +295,8 @@ test('--no-reuse, --reuse-from, --backfill-keys parse; concurrency defaults to 1
 
 test('json-score: parsing, pass at passAt, non-zero exit with a valid file keeps its score, no file scores 0', () => {
   assert.deepEqual(parseJsonScore('{"score":0.7,"components":{"visual":0.6},"detail":"ok"}'), { score: 0.7, components: { visual: 0.6 }, detail: 'ok' });
+  const withFindings = parseJsonScore(JSON.stringify({ score: 0.5, findings: [{ category: 'spacing', expected: 8, rendered: 'x'.repeat(300), nested: { no: 1 } }, 'not an object', [1]] }));
+  assert.deepEqual(withFindings.findings, [{ category: 'spacing', expected: 8, rendered: 'x'.repeat(200) }]);
   for (const bad of ['nope', '{"score":1.2}', '{"score":"1"}', '{"score":0.5,"components":{"x":2}}', '{"score":0.5,"components":[1]}']) assert.equal(parseJsonScore(bad), null, bad);
   const app = temp();
   fs.mkdirSync(app, { recursive: true });

@@ -1,21 +1,31 @@
 // Claude Code provider: headless agent runs in an isolated CLAUDE_CONFIG_DIR, transcript parsing, judging.
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { baseEnv } from '../env.mjs';
+
+/** The live login's stored credentials JSON: `~/.claude/.credentials.json`, or on macOS the Keychain item Claude Code keeps it in. */
+export function readLiveCredentials(home = os.homedir(), platform = process.platform, run = spawnSync) {
+  try {
+    return fs.readFileSync(path.join(home, '.claude', '.credentials.json'), 'utf8');
+  } catch {
+    if (platform !== 'darwin') return null;
+  }
+  const keychain = run('security', ['find-generic-password', '-s', 'Claude Code-credentials', '-w'], { encoding: 'utf8' });
+  return keychain.status === 0 ? keychain.stdout.trim() : null;
+}
 
 /**
  * Auth for isolated config dirs. Prefers ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN from the
  * caller's env; otherwise reads the live login's short-lived access token, read-only, on every
  * spawn. The refresh token is never copied, so isolated runs cannot rotate the live login.
  */
-export function claudeAuthEnv(env = process.env, home = os.homedir()) {
+export function claudeAuthEnv(env = process.env, home = os.homedir(), readCredentials = () => readLiveCredentials(home)) {
   if (env.ANTHROPIC_API_KEY) return { ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY };
   if (env.CLAUDE_CODE_OAUTH_TOKEN) return { CLAUDE_CODE_OAUTH_TOKEN: env.CLAUDE_CODE_OAUTH_TOKEN };
-  const credentials = path.join(home, '.claude', '.credentials.json');
   try {
-    const token = JSON.parse(fs.readFileSync(credentials, 'utf8')).claudeAiOauth?.accessToken;
+    const token = JSON.parse(readCredentials() ?? '').claudeAiOauth?.accessToken;
     if (token) return { CLAUDE_CODE_OAUTH_TOKEN: token };
   } catch {
     // fall through to the error below

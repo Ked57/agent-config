@@ -102,13 +102,16 @@ export const nameRe = (name, contains = false) => new RegExp(`${contains ? '' : 
 const exactRe = (name) => new RegExp(`^\\s*${escapeRe(name)}\\s*$`, 'i');
 
 /**
- * A locator for `{ role, name, level?, nth?, contains? }` or `{ text, nth?, contains? }`. Text matches
- * an element's whole visible text (or a substring with `contains`); `nth` counts visible matches.
+ * A locator for `{ role, name, level?, nth?, contains?, within? }` or `{ text, nth?, contains?, within? }`.
+ * Text matches an element's whole visible text (or a substring with `contains`); `nth` counts visible
+ * matches; `within` (itself a locator spec) limits the search to that element, so a status word finds
+ * the table's tag, not a filter chip with the same label.
  */
 export function locate(page, spec) {
+  const scope = spec.within ? locate(page, spec.within) : page;
   const base = spec.role
-    ? page.getByRole(spec.role, { name: nameRe(spec.name ?? '', spec.contains), ...(spec.level ? { level: spec.level } : {}) })
-    : page.getByText(spec.text, { exact: !spec.contains });
+    ? scope.getByRole(spec.role, { name: nameRe(spec.name ?? '', spec.contains), ...(spec.level ? { level: spec.level } : {}) })
+    : scope.getByText(spec.text, { exact: !spec.contains });
   return base.filter({ visible: true }).nth(spec.nth ?? 0);
 }
 
@@ -185,6 +188,17 @@ export async function openFrame(browser, base, route, frame) {
     };
     await grow();
     await applySteps(page, frame.steps);
+    // Focusing the first invalid field after a failed submit is good practice, but its focus ring hides
+    // the error border a frame draws. Only an invalid field loses focus, so open overlays stay open.
+    if (frame.steps?.length) {
+      const blurred = await page.evaluate(() => {
+        const active = document.activeElement;
+        if (!active?.matches?.('[aria-invalid="true"], .p-invalid, .p-invalid *')) return false;
+        active.blur();
+        return true;
+      });
+      if (blurred) await settle(page);
+    }
     // A state that made the page taller (validation messages, a sticky bar) is grown into again, so
     // sticky and fixed bars sit at the end of the page as on a frame of the whole page.
     if (frame.steps?.length) await grow();

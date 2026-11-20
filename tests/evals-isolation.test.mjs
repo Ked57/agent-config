@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { compareInventories, filesNamingHome, installedPlugins, inventory, prepareRunHome } from '../evals/lib/arms.mjs';
 import { parseRemove, promptFor, resolveConfig, validateTaskSet } from '../evals/lib/config.mjs';
-import { assertSafeRoot, baseEnv, isInside, isStray, killStrays, removeTree, sandboxProblems } from '../evals/lib/env.mjs';
+import { assertSafeRoot, baseEnv, isInside, isStray, killStrays, removeTree, sandboxProblems, sandboxRoot } from '../evals/lib/env.mjs';
 import { copyForRun, moveTree, pruneLinkPaths, withLinkedPaths } from '../evals/lib/fixtures.mjs';
 import { initEvent, initProblems, invokedCommands, loadedInstructionFiles, removalLeftovers, sessionComponents, sessionCostUsd, skillName, strayInstructionFiles, unexplainedComponents } from '../evals/lib/isolation.mjs';
 import { fixedFlagsOnResume } from '../evals/lib/plan.mjs';
@@ -435,4 +435,44 @@ test('providerFailure treats a session that did no work as a refusal, but not a 
   assert.equal(providerFailure(jsonl(initLine, { type: 'assistant', message: { model: 'claude-opus-5-5', content: [{ type: 'text', text: 'thinking' }] } })), null);
   assert.equal(refused({ type: 'result', is_error: true, subtype: 'error_max_turns', num_turns: 40, duration_ms: 600000, total_cost_usd: 0 }), null);
   assert.equal(refused({ type: 'result', is_error: false, subtype: 'success', num_turns: 1, total_cost_usd: 0, result: 'ok' }), null, 'a successful result is never a refusal');
+});
+
+test('sandboxRoot resolves a symlinked parent (macOS /var -> /private/var), keeping the last segment', () => {
+  const real = fs.mkdtempSync(path.join(os.tmpdir(), 'sandbox-real-'));
+  const link = `${real}-link`;
+  fs.symlinkSync(real, link);
+  try {
+    assert.equal(sandboxRoot({ AGENT_CONFIG_EVALS_SANDBOX: path.join(link, 'evals') }), path.join(fs.realpathSync(real), 'evals'));
+    assert.equal(sandboxRoot({ AGENT_CONFIG_EVALS_SANDBOX: '/no/such/parent/evals' }), '/no/such/parent/evals');
+  } finally {
+    fs.rmSync(link);
+    fs.rmSync(real, { recursive: true });
+  }
+});
+
+test('claude auth: env first, then the credentials file, then the macOS Keychain item; never the refresh token', async () => {
+  const { claudeAuthEnv, readLiveCredentials } = await import('../evals/lib/providers/claude.mjs');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'auth-home-'));
+  const stored = JSON.stringify({ claudeAiOauth: { accessToken: 'access-1', refreshToken: 'refresh-1' } });
+  const calls = [];
+  const keychain = (command, args) => {
+    calls.push([command, ...args]);
+    return { status: 0, stdout: `${stored}\n` };
+  };
+  try {
+    assert.deepEqual(claudeAuthEnv({ ANTHROPIC_API_KEY: 'k' }, home, () => stored), { ANTHROPIC_API_KEY: 'k' });
+    assert.equal(readLiveCredentials(home, 'linux', keychain), null);
+    assert.equal(readLiveCredentials(home, 'darwin', keychain), stored);
+    assert.deepEqual(calls, [['security', 'find-generic-password', '-s', 'Claude Code-credentials', '-w']]);
+    assert.equal(readLiveCredentials(home, 'darwin', () => ({ status: 44, stdout: '' })), null);
+    assert.deepEqual(claudeAuthEnv({}, home, () => readLiveCredentials(home, 'darwin', keychain)), { CLAUDE_CODE_OAUTH_TOKEN: 'access-1' });
+    fs.mkdirSync(path.join(home, '.claude'));
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), JSON.stringify({ claudeAiOauth: { accessToken: 'file-1' } }));
+    const before = calls.length;
+    assert.equal(JSON.parse(readLiveCredentials(home, 'darwin', keychain)).claudeAiOauth.accessToken, 'file-1');
+    assert.equal(calls.length, before, 'the file wins: the Keychain is not read');
+    assert.throws(() => claudeAuthEnv({}, home, () => null), /No Claude credentials/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
