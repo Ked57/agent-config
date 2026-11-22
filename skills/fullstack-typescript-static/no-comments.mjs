@@ -1,5 +1,7 @@
 const DIRECTIVE = new RegExp([
-  String.raw`^\s*(eslint|eslint-disable|eslint-enable|eslint-disable-line|eslint-disable-next-line|global|globals)\b`,
+  String.raw`^\s*eslint-(?:disable(?:-next-line|-line)?|enable|env)(?:\s|$)`,
+  String.raw`^\s*eslint\s+[^\s:+]+\s*:`,
+  String.raw`^\s*globals?\s+[A-Za-z_$][\w$]*(?:\s*:\s*(?:writeable|writable|readable|readonly|false|true|off))?(?:\s*,\s*[A-Za-z_$][\w$]*(?:\s*:\s*(?:writeable|writable|readable|readonly|false|true|off))?)*(?:\s+--\s+\S.*)?\s*$`,
   String.raw`^\s*@ts-(expect-error|ignore|nocheck)\b`,
   String.raw`^\s*prettier-ignore\s*$`,
   String.raw`^\s*(istanbul|v8|c8) ignore\b`,
@@ -21,7 +23,8 @@ function isPublicApiDoc(comment, filename, publicApi) {
 }
 
 function isLoneWarning(comment, next) {
-  return comment.type === 'Line' && WARNING.test(comment.value) && (!next || next.loc.start.line !== comment.loc.end.line + 1);
+  const singleLine = comment.type === 'Line' || (comment.type === 'HTMLComment' && comment.loc.start.line === comment.loc.end.line);
+  return singleLine && WARNING.test(comment.value) && (!next || next.loc.start.line !== comment.loc.end.line + 1);
 }
 
 export default {
@@ -36,16 +39,18 @@ export default {
     const publicApi = context.options[0]?.publicApi ?? [];
     const filename = context.filename.replaceAll('\\', '/');
     const report = (comment) => context.report({ loc: comment.loc, messageId: 'prose' });
+    const visit = (comments) => {
+      comments.forEach((comment, index) => {
+        if (comment.type === 'Shebang' || DIRECTIVE.test(comment.value)) return;
+        if (isLoneWarning(comment, comments[index + 1])) return;
+        if (isPublicApiDoc(comment, filename, publicApi)) return;
+        report(comment);
+      });
+    };
     return {
       Program() {
-        const comments = context.sourceCode.getAllComments();
-        comments.forEach((comment, index) => {
-          if (comment.type === 'Shebang' || DIRECTIVE.test(comment.value)) return;
-          if (isLoneWarning(comment, comments[index + 1])) return;
-          if (isPublicApiDoc(comment, filename, publicApi)) return;
-          report(comment);
-        });
-        for (const comment of context.sourceCode.ast.templateBody?.comments ?? []) report(comment);
+        visit(context.sourceCode.getAllComments());
+        visit(context.sourceCode.ast.templateBody?.comments ?? []);
       },
     };
   },
