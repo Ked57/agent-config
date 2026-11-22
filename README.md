@@ -171,6 +171,9 @@ The installer copies every `skills/<name>/` directory that contains a `SKILL.md`
 - `fullstack-typescript-quality`, which loads `fullstack-typescript-static`,
   `fullstack-typescript-tests`, and `fullstack-typescript-mutation`
 - `manual-qa`
+- `figma-to-code`, which builds UI from a Figma frame: exact values from the Figma MCP,
+  kit instances and variables mapped to the project's components and tokens, every state
+  frame, and a DOM comparison against each frame
 - `codex-review`, which a Cursor subagent uses to run a read-only Codex
   review of the current branch against `origin/main`
 - `agent-browser`, the Apache-2.0 discovery stub from

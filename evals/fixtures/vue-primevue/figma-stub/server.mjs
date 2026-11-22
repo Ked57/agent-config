@@ -134,7 +134,20 @@ function* walk(node) {
   for (const child of node.children ?? []) yield* walk(child);
 }
 
-const textStyleName = (style) => `text/${style.fontSize}/${(WEIGHT[style.fontWeight] ?? 'Regular').toLowerCase().replace(' ', '-')}`;
+// Text styles carry the type-scale names a design system gives them, not their values.
+function textStyleName(style) {
+  const size = style.fontSize;
+  const strong = style.fontWeight >= 600;
+  if (size >= 30) return 'Display';
+  if (size >= 24) return 'Heading/H1';
+  if (size >= 20) return 'Heading/H2';
+  if (size >= 18) return 'Heading/H3';
+  if (size >= 16) return strong ? 'Heading/H4' : 'Body/Large';
+  if (size >= 14) return strong ? 'Label/Strong' : style.fontWeight >= 500 ? 'Label/Default' : 'Body/Default';
+  if (size >= 13) return strong ? 'Body/Small strong' : 'Body/Small';
+  if (size >= 12) return style.fontWeight >= 500 ? 'Caption/Strong' : 'Caption/Default';
+  return 'Overline';
+}
 const fontValue = (style) => `Font(family: "${style.fontFamily}", style: ${WEIGHT[style.fontWeight] ?? 'Regular'}, size: ${style.fontSize}, weight: ${style.fontWeight}, lineHeight: ${style.lineHeightPx}, letterSpacing: ${style.letterSpacing})`;
 
 /** The variables and styles a node and its children use, named the way the design file names them. */
@@ -156,7 +169,7 @@ function variablesOf(root, colourTokens) {
 // ---------------------------------------------------------------------------------------------- code
 
 const px = (value) => `${Math.round(value * 100) / 100}px`;
-const cssVar = (token) => `--${token.replace(/\//g, '-')}`;
+const cssVar = (token) => `--${token.toLowerCase().replace(/[/\s]+/g, '-')}`;
 
 function colourClass(prefix, paint, tokens) {
   const value = tokens[paint.color] ? `var(${cssVar(tokens[paint.color])},${paint.color})` : paint.color;
@@ -236,6 +249,7 @@ function textClasses(node, tokens) {
     'shrink-0'
   ];
   if (style.letterSpacing) classes.push(`tracking-[${px(style.letterSpacing)}]`);
+  if (style.opentypeFlags?.TNUM) classes.push('tabular-nums');
   if (style.textAlignHorizontal === 'RIGHT') classes.push('text-right');
   if (style.textAlignHorizontal === 'CENTER') classes.push('text-center');
   for (const fill of style.fills ?? []) classes.push(colourClass('text', fill, tokens));
@@ -249,6 +263,14 @@ function jsx(node, parent, tokens, assets, depth) {
   const indent = '  '.repeat(depth);
   const attributes = `data-node-id="${node.id}" data-name="${escapeXml(node.name)}"`;
   if (node.type === 'TEXT') return `${indent}<p className="${textClasses(node, tokens).join(' ')}" ${attributes}>${escapeJsx(node.characters)}</p>`;
+  if (node.type === 'INSTANCE' && !node.componentName?.startsWith('icon/')) {
+    // A design-system instance: drawn from its layers like a frame, named after its component.
+    const props = Object.entries(node.componentProperties ?? {}).map(([key, value]) => `${key}=${value}`).join(', ');
+    const body = jsx({ ...node, type: 'FRAME' }, parent, tokens, assets, depth);
+    // At the root a JSX comment would be a second root element; the code's header carries it instead.
+    if (!parent) return body;
+    return `${indent}{/* Instance of ${node.componentName}${props ? ` (${props})` : ''} */}\n${body}`;
+  }
   if (node.type === 'VECTOR' || node.type === 'INSTANCE') {
     const name = identifier(node.name, assets.used);
     assets.list.push(`const ${name} = "${assetUrl(`${node.id}:${node.name}`)}";`);
@@ -273,7 +295,9 @@ function componentName(name) {
 function reactCode(node, tokens) {
   const assets = { list: [], used: new Set() };
   const body = jsx(node, null, tokens, assets, 2);
-  return `${assets.list.join('\n')}${assets.list.length ? '\n\n' : ''}export default function ${componentName(node.name)}() {\n  return (\n${body}\n  );\n}\n`;
+  const props = Object.entries(node.componentProperties ?? {}).map(([key, value]) => `${key}=${value}`).join(', ');
+  const header = node.type === 'INSTANCE' && !node.componentName?.startsWith('icon/') ? `// Instance of ${node.componentName}${props ? ` (${props})` : ''}\n` : '';
+  return `${header}${assets.list.join('\n')}${assets.list.length ? '\n\n' : ''}export default function ${componentName(node.name)}() {\n  return (\n${body}\n  );\n}\n`;
 }
 
 // The guidance the real server sends with generated code (see FIDELITY.md for its provenance).
@@ -289,6 +313,15 @@ const CODE_GUIDANCE = [
   'Image assets are referenced through the constants at the top of the code. Do not add new icon packages: icons in the design may already exist in the project.',
   'Use get_screenshot on the same node for the visual reference before implementing.'
 ].join('\n');
+
+/** The design-system components the selection uses, as the guidance lists them (none: empty). */
+function componentsNote(root) {
+  const counts = new Map();
+  for (const node of walk(root)) if (node.type === 'INSTANCE' && node.componentName && !node.componentName.startsWith('icon/')) counts.set(node.componentName, (counts.get(node.componentName) ?? 0) + 1);
+  if (!counts.size) return '';
+  const list = [...counts].sort(([a], [b]) => a.localeCompare(b)).map(([name, count]) => `${name} (${count})`).join(', ');
+  return `\n\nThis selection uses components from the team library: ${list}. They are not mapped to code components (no Code Connect); use the project's equivalents.`;
+}
 
 // ------------------------------------------------------------------------------------------- tools
 
@@ -323,7 +356,7 @@ function callTool(name, args = {}) {
         ]
       };
     }
-    return { content: [text(code), text(CODE_GUIDANCE)] };
+    return { content: [text(code), text(`${CODE_GUIDANCE}${componentsNote(target.node)}`)] };
   }
   throw new Error(`Unknown tool: ${name}`);
 }

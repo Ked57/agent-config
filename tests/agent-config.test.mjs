@@ -13,6 +13,7 @@ const cli = path.join(root, 'bin/agent-config.mjs');
 const keptSkills = [
   'agent-browser',
   'codex-review',
+  'figma-to-code',
   'fullstack-typescript-mutation',
   'fullstack-typescript-quality',
   'fullstack-typescript-static',

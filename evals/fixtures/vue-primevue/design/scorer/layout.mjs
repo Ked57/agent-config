@@ -4,11 +4,13 @@
 import { locate } from './capture.mjs';
 
 /**
- * In-page: box and computed style of `node`. Colours are resolved to sRGB through a canvas (Chromium
+ * In-page: box and computed style of `node`. With `textOnly` (an element found by its text), the box is
+ * the text's own and the container's padding, border and radius are left out: the same text may sit in a
+ * table cell or in a span inside it, and only the text is what the design places. Colours are resolved to sRGB through a canvas (Chromium
  * reports Tailwind's oklch() colours verbatim). `background` is the first opaque-ish background of the
  * element or its ancestors (what the text actually sits on).
  */
-function readElement(node) {
+function readElement(node, textOnly) {
   const canvas = document.createElement('canvas');
   canvas.width = 1;
   canvas.height = 1;
@@ -21,7 +23,9 @@ function readElement(node) {
     const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
     return [r, g, b, a];
   };
-  const rect = node.getBoundingClientRect();
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  const rect = textOnly ? range.getBoundingClientRect() : node.getBoundingClientRect();
   const style = getComputedStyle(node);
   let background = [255, 255, 255];
   for (let element = node; element; element = element.parentElement) {
@@ -44,9 +48,9 @@ function readElement(node) {
     lineHeight: style.lineHeight === 'normal' ? Math.round(fontSize * 1.2) : px(style.lineHeight),
     color: rgba(style.color).slice(0, 3),
     background,
-    radius: px(style.borderTopLeftRadius),
-    padding: [px(style.paddingTop), px(style.paddingRight), px(style.paddingBottom), px(style.paddingLeft)],
-    border: borderWidth ? rgba(style.borderTopColor).slice(0, 3) : null
+    radius: textOnly ? 0 : px(style.borderTopLeftRadius),
+    padding: textOnly ? [0, 0, 0, 0] : [px(style.paddingTop), px(style.paddingRight), px(style.paddingBottom), px(style.paddingLeft)],
+    border: borderWidth && !textOnly ? rgba(style.borderTopColor).slice(0, 3) : null
   };
 }
 
@@ -55,7 +59,7 @@ export async function measure(page, specs) {
   const boxes = {};
   for (const spec of specs) {
     const element = locate(page, spec);
-    boxes[spec.id] = (await element.count()) ? await element.evaluate(readElement).catch(() => null) : null;
+    boxes[spec.id] = (await element.count()) ? await element.evaluate(readElement, Boolean(spec.text)).catch(() => null) : null;
   }
   return boxes;
 }
@@ -107,6 +111,34 @@ function styleCredit(want, got) {
   return parts.reduce((product, value) => product * value, 1);
 }
 
+/**
+ * What a design review would flag on one element, beyond the full-credit tolerances: one finding per
+ * property, as `{ category, property, expected, rendered }` (categories: spacing, size, typography,
+ * colour, radius). With `anchor` (the previous element in reading order, `{ id, want, got }`), position is
+ * judged by the offset from it, so one wrong gap is one finding, not one per element below it.
+ */
+export function elementFindings(want, got, anchor = null) {
+  const findings = [];
+  const flag = (category, property, expected, rendered) => findings.push({ category, property, expected, rendered });
+  const hex = (rgb) => `#${rgb.map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+  const dx = got.x - want.x - (anchor ? anchor.got.x - anchor.want.x : 0);
+  const dy = got.y - want.y - (anchor ? anchor.got.y - anchor.want.y : 0);
+  const signed = (value) => `${value >= 0 ? '+' : ''}${value}`;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) > LAYOUT.position[0]) flag('spacing', anchor ? `position from ${anchor.id}` : 'position', `${want.x},${want.y}`, `${got.x},${got.y} (${signed(dx)}, ${signed(dy)} px${anchor ? ` relative to ${anchor.id}` : ''})`);
+  const sizeOff = (gotValue, wantValue) => Math.max(0, Math.abs(gotValue - wantValue) - 2) / Math.max(1, wantValue) > LAYOUT.size[0];
+  if (sizeOff(got.width, want.width) || sizeOff(got.height, want.height)) flag('size', 'size', `${want.width}x${want.height}`, `${got.width}x${got.height}`);
+  if (got.padding.reduce((sum, value, index) => sum + Math.abs(value - want.padding[index]), 0) > LAYOUT.padding[0]) flag('spacing', 'padding', want.padding.join(' '), got.padding.join(' '));
+  if (Math.abs(got.fontSize - want.fontSize) > LAYOUT.fontSize[0]) flag('typography', 'font size', want.fontSize, got.fontSize);
+  if (Math.abs(got.fontWeight - want.fontWeight) > LAYOUT.fontWeight[0]) flag('typography', 'font weight', want.fontWeight, got.fontWeight);
+  if (Math.abs(got.lineHeight - want.lineHeight) > LAYOUT.lineHeight[0]) flag('typography', 'line height', want.lineHeight, got.lineHeight);
+  if (deltaE(got.color, want.color) > LAYOUT.colour[0]) flag('colour', 'text colour', hex(want.color), hex(got.color));
+  if (deltaE(got.background, want.background) > LAYOUT.colour[0]) flag('colour', 'background', hex(want.background), hex(got.background));
+  if (Boolean(want.border) !== Boolean(got.border)) flag('colour', 'border', want.border ? hex(want.border) : 'none', got.border ? hex(got.border) : 'none');
+  else if (want.border && deltaE(got.border, want.border) > LAYOUT.colour[0]) flag('colour', 'border', hex(want.border), hex(got.border));
+  if (Math.abs(got.radius - want.radius) > LAYOUT.radius[0]) flag('radius', 'corner radius', want.radius, got.radius);
+  return findings;
+}
+
 // Reading order: boxes that overlap vertically by at least half the shorter one share a row (left to right).
 const before = (a, b) => (Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) >= Math.min(a.height, b.height) / 2 ? a.x - b.x : a.y - b.y);
 
@@ -115,7 +147,7 @@ const before = (a, b) => (Math.min(a.y + a.height, b.y + b.height) - Math.max(a.
  * missing, else the mean of position credit (top-left corner) and size credit (the worse of width and
  * height), times the style credit (`styleCredit`); the frame score is 0.8 x the element mean + 0.2 x the order
  * score (share of neighbouring pairs, in reference reading order, that keep their order) x the share of
- * elements found.
+ * elements found. `findings` lists every element's flagged properties (`elementFindings`) and missing elements.
  */
 export function scoreLayout(reference, measured) {
   const ids = Object.keys(reference).filter((id) => reference[id]);
@@ -139,5 +171,7 @@ export function scoreLayout(reference, measured) {
   const order = inOrder.length > 1 ? kept / (inOrder.length - 1) : found.length ? 1 : 0;
   const mean = ids.length ? ids.reduce((sum, id) => sum + elements[id], 0) / ids.length : 0;
   const coverage = ids.length ? found.length / ids.length : 0;
-  return { score: 0.8 * mean + 0.2 * order * coverage, coverage, order, elements };
+  const anchorOf = new Map(inOrder.map((id, index) => [id, index ? { id: inOrder[index - 1], want: reference[inOrder[index - 1]], got: measured[inOrder[index - 1]] } : null]));
+  const findings = ids.flatMap((id) => (measured[id] ? elementFindings(reference[id], measured[id], anchorOf.get(id)).map((finding) => ({ element: id, ...finding })) : [{ element: id, category: 'missing', property: 'element', expected: 'present', rendered: 'not found' }]));
+  return { score: 0.8 * mean + 0.2 * order * coverage, coverage, order, elements, findings };
 }

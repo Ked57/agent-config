@@ -4,9 +4,9 @@
     "desktop": {
       "step-count": {
         "x": 336,
-        "y": 109,
-        "width": 768,
-        "height": 20,
+        "y": 110,
+        "width": 73,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -58,9 +58,9 @@
       },
       "subtitle": {
         "x": 336,
-        "y": 169,
-        "width": 768,
-        "height": 20,
+        "y": 170,
+        "width": 473,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -85,9 +85,9 @@
       },
       "stepper-account": {
         "x": 380,
-        "y": 227,
-        "width": 56,
-        "height": 20,
+        "y": 226,
+        "width": 99,
+        "height": 19,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -112,9 +112,9 @@
       },
       "stepper-workspace": {
         "x": 608,
-        "y": 227,
+        "y": 228,
         "width": 77,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -139,9 +139,9 @@
       },
       "stepper-team": {
         "x": 836,
-        "y": 227,
+        "y": 228,
         "width": 36,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -166,9 +166,9 @@
       },
       "stepper-billing": {
         "x": 1064,
-        "y": 227,
+        "y": 228,
         "width": 40,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -192,10 +192,10 @@
         "border": null
       },
       "stepper-current-number": {
-        "x": 564,
-        "y": 221,
-        "width": 32,
-        "height": 32,
+        "x": 576,
+        "y": 228,
+        "width": 9,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -209,18 +209,14 @@
           255,
           255
         ],
-        "radius": 33554400,
+        "radius": 0,
         "padding": [
           0,
           0,
           0,
           0
         ],
-        "border": [
-          5,
-          150,
-          105
-        ]
+        "border": null
       },
       "step-title": {
         "x": 369,
@@ -282,9 +278,9 @@
       },
       "workspace-hint": {
         "x": 369,
-        "y": 476,
-        "width": 702,
-        "height": 20,
+        "y": 477,
+        "width": 251,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -309,9 +305,9 @@
       },
       "question": {
         "x": 369,
-        "y": 528,
+        "y": 529,
         "width": 248,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -336,9 +332,9 @@
       },
       "option-clients": {
         "x": 442,
-        "y": 577,
-        "width": 223,
-        "height": 20,
+        "y": 578,
+        "width": 98,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -363,9 +359,9 @@
       },
       "option-clients-desc": {
         "x": 442,
-        "y": 601,
-        "width": 223,
-        "height": 40,
+        "y": 602,
+        "width": 206,
+        "height": 37,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -390,9 +386,9 @@
       },
       "option-operations": {
         "x": 799,
-        "y": 577,
-        "width": 223,
-        "height": 20,
+        "y": 578,
+        "width": 127,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -417,9 +413,9 @@
       },
       "option-product": {
         "x": 442,
-        "y": 707,
-        "width": 223,
-        "height": 20,
+        "y": 708,
+        "width": 145,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -444,9 +440,9 @@
       },
       "option-other": {
         "x": 799,
-        "y": 707,
-        "width": 223,
-        "height": 20,
+        "y": 708,
+        "width": 104,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -502,9 +498,9 @@
       },
       "question-hint": {
         "x": 369,
-        "y": 800,
-        "width": 702,
-        "height": 20,
+        "y": 801,
+        "width": 433,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -529,9 +525,9 @@
       },
       "team-size-label": {
         "x": 369,
-        "y": 852,
-        "width": 702,
-        "height": 20,
+        "y": 853,
+        "width": 67,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -587,9 +583,9 @@
       },
       "next-hint": {
         "x": 369,
-        "y": 982,
-        "width": 571,
-        "height": 20,
+        "y": 983,
+        "width": 144,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -647,9 +643,9 @@
     "mobile": {
       "step-count": {
         "x": 16,
-        "y": 309,
-        "width": 358,
-        "height": 20,
+        "y": 310,
+        "width": 73,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -701,9 +697,9 @@
       },
       "stepper-workspace": {
         "x": 151,
-        "y": 447,
+        "y": 448,
         "width": 77,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -786,9 +782,9 @@
       },
       "option-clients": {
         "x": 110,
-        "y": 805,
-        "width": 194,
-        "height": 20,
+        "y": 806,
+        "width": 98,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -813,9 +809,9 @@
       },
       "option-operations": {
         "x": 110,
-        "y": 935,
-        "width": 194,
-        "height": 20,
+        "y": 936,
+        "width": 127,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -840,9 +836,9 @@
       },
       "option-product": {
         "x": 110,
-        "y": 1065,
-        "width": 194,
-        "height": 20,
+        "y": 1066,
+        "width": 145,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -867,9 +863,9 @@
       },
       "option-other": {
         "x": 110,
-        "y": 1195,
-        "width": 194,
-        "height": 20,
+        "y": 1196,
+        "width": 104,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -958,9 +954,9 @@
     "desktop-selected": {
       "option-product": {
         "x": 442,
-        "y": 707,
-        "width": 223,
-        "height": 20,
+        "y": 708,
+        "width": 145,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -985,9 +981,9 @@
       },
       "option-product-desc": {
         "x": 442,
-        "y": 731,
-        "width": 223,
-        "height": 40,
+        "y": 732,
+        "width": 199,
+        "height": 37,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -1012,9 +1008,9 @@
       },
       "option-clients": {
         "x": 442,
-        "y": 577,
-        "width": 223,
-        "height": 20,
+        "y": 578,
+        "width": 98,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -1070,9 +1066,9 @@
       },
       "chosen-hint": {
         "x": 369,
-        "y": 800,
-        "width": 702,
-        "height": 20,
+        "y": 801,
+        "width": 370,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -1130,9 +1126,9 @@
     "desktop-step3-error": {
       "step-count": {
         "x": 336,
-        "y": 109,
-        "width": 768,
-        "height": 20,
+        "y": 110,
+        "width": 73,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -1157,9 +1153,9 @@
       },
       "stepper-team": {
         "x": 836,
-        "y": 227,
+        "y": 228,
         "width": 37,
-        "height": 20,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 600,
         "lineHeight": 20,
@@ -1242,9 +1238,9 @@
       },
       "email-error": {
         "x": 369,
-        "y": 476,
-        "width": 526,
-        "height": 20,
+        "y": 477,
+        "width": 381,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -1269,9 +1265,9 @@
       },
       "role-label": {
         "x": 911,
-        "y": 402,
-        "width": 160,
-        "height": 20,
+        "y": 403,
+        "width": 29,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 500,
         "lineHeight": 20,
@@ -1295,10 +1291,10 @@
         "border": null
       },
       "info": {
-        "x": 369,
-        "y": 528,
-        "width": 702,
-        "height": 44,
+        "x": 385,
+        "y": 541,
+        "width": 451,
+        "height": 17,
         "fontSize": 14,
         "fontWeight": 400,
         "lineHeight": 20,
@@ -1312,12 +1308,12 @@
           250,
           252
         ],
-        "radius": 8,
+        "radius": 0,
         "padding": [
-          12,
-          16,
-          12,
-          16
+          0,
+          0,
+          0,
+          0
         ],
         "border": null
       },
@@ -1414,6 +1410,34 @@
           87
         ]
       }
+    }
+  },
+  "components": {
+    "desktop": {
+      "Button": 1,
+      "Text field": 1,
+      "Radio": 4,
+      "Segmented control": 1,
+      "Toggle button": 4
+    },
+    "mobile": {
+      "Button": 1,
+      "Text field": 1,
+      "Radio": 4,
+      "Segmented control": 1,
+      "Toggle button": 4
+    },
+    "desktop-selected": {
+      "Button": 1,
+      "Text field": 1,
+      "Radio": 4,
+      "Segmented control": 1,
+      "Toggle button": 4
+    },
+    "desktop-step3-error": {
+      "Button": 3,
+      "Dropdown": 1,
+      "Text field": 1
     }
   }
 }

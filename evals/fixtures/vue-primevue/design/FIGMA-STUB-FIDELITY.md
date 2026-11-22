@@ -34,6 +34,9 @@ output, marked **unconfirmed** below.
   a node id it lists the file's pages and their frames.
 - `get_screenshot` returns a PNG as an MCP image content block (the frame, or a crop for a child layer).
 - `get_variable_defs` returns a flat JSON object of the variables and text styles used under the node.
+- Text layers are as tall as their line boxes (line height × lines), as Figma draws text without vertical trim,
+  and tabular figures appear as the text style's `TNUM` OpenType flag (`tabular-nums` in the code).
+- Layer ids are unique in a file and never equal a frame's id, so every frame link opens that frame.
 
 ## Gaps (real server does, stub doesn't)
 
@@ -42,14 +45,22 @@ output, marked **unconfirmed** below.
    them from `localhost:3845`). Agents must use the project's icon set and draw the charts from data.
 2. **Code is generated from a rendered page, not from Figma nodes.** Auto-layout is inferred from flex and grid
    (`GRID` and `gridColumnCount` approximate Figma's grid auto-layout), wrappers without styling are collapsed,
-   icons become `icon/<name>` instances, charts and sparklines become vectors. There are no real component sets,
-   variants, instance overrides, constraints or Dev Mode annotations.
+   icons become `icon/<name>` instances, charts and sparklines become vectors. PrimeVue components in the reference
+   become instances of a design kit named in designer words (`scorer/kit.mjs`: Select is "Dropdown", Tag "Status
+   chip", ToggleSwitch "Toggle") with variant properties read from the rendered component (`Type=Danger,
+   Style=Outlined`, `State=Error`, `On=True`). Anything the reference builds by hand stays a plain frame, as a
+   detached or custom layer would. There are no instance overrides, constraints or Dev Mode annotations.
+   **Unconfirmed:** how the real server writes instances into code without Code Connect. The stub draws an instance's
+   layers like a frame, names it after its component (`data-name`), puts a `{/* Instance of Button (Type=Primary, …)
+   */}` comment before it, and lists the selection's components in the guidance block.
 3. **Unconfirmed wording.** Tool descriptions, the parameter descriptions, the "SUPER CRITICAL: The generated
    React+Tailwind code MUST be converted…" guidance block, the asset URL form and the `Font(family: …, style: …,
    size: …, weight: …, lineHeight: …)` style format are recalled, not documented.
-4. **Variable names** are derived from the fixture's theme (`color/primary/500`, `color/surface/200`, Tailwind
-   palette names, `spacing/<n>` on a 4 px scale, `radius/*`, `text/<size>/<weight>`); a real file has whatever its
-   designers named. Only colours that match a theme value are bound to variables.
+4. **Variable names** are derived from the fixture's theme but named the way a designer would: the theme's primary
+   palette is `Brand/<shade>`, its surface palette `Gray/<shade>`, Tailwind colours `Emerald/600`, white `Base/White`;
+   text styles carry type-scale names (`Heading/H1`, `Body/Default`, `Label/Strong`, `Caption/Default`); spacing is
+   `spacing/<n>` on a 4 px scale and radii `radius/*`. Code references them as `var(--brand-500,#hex)`. Only colours
+   that match a theme value are bound to variables; none carries a code syntax pointing at the project's tokens.
 5. **Screenshots** are crops of the frame render (overlapping siblings show through); the real tool renders the
    node itself and can return a URL. `enableBase64Response` is not accepted: the stub always answers inline.
 6. **Size limits** are the stub's own (60,000 characters of code). The real server's thresholds are not documented.

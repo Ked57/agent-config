@@ -33,9 +33,14 @@ export interface CustomerAccount {
   customerSince: string
   renewsAt: string
   monthlyRevenue: number
+  seats: number
   openInvoices: number
+  /** Total due on the open invoices, in dollars. */
+  outstandingAmount: number
   /** 0–100. */
   healthScore: number
+  /** Change of the health score since `since` (ISO date). */
+  healthScoreTrend: { change: number; since: string }
   details: { industry: string; employees: string; headquarters: string; timeZone: string }
   billing: { paymentMethod: string; billingEmail: string; taxId: string; nextInvoice: string }
   notes: string
@@ -57,8 +62,11 @@ const account: CustomerAccount = {
   customerSince: '2023-03-14',
   renewsAt: '2027-01-31',
   monthlyRevenue: 4820,
+  seats: 85,
   openInvoices: 2,
+  outstandingAmount: 16700,
   healthScore: 62,
+  healthScoreTrend: { change: -14, since: '2026-09-01' },
   details: { industry: 'Wholesale distribution', employees: '201–500', headquarters: 'Seattle, WA, United States', timeZone: 'Pacific Time (UTC−08:00)' },
   billing: { paymentMethod: 'Visa ending in 4242', billingEmail: 'accounts.payable@northwind-traders.test', taxId: 'US 94-1234567', nextInvoice: '2026-12-01' },
   notes: 'Evaluating a move to Scale after the warehouse team shrank. Wants SSO before renewing.',

@@ -28,6 +28,7 @@ Apply this policy only in repositories using Vue 3 + TypeScript. Before changing
 - Represent loading, empty, error, and success states where relevant.
 - Prefer user-facing selectors: role, then label, then visible text; use stable test IDs only when needed.
 - Ensure semantic elements, labels, and accessible names make those selectors possible.
+- Name a PrimeVue `Select` (and other components whose focus target is not a native input) with `aria-labelledby` pointing at the visible label's id: `<label for>` with `input-id` does not name its combobox. Confirm each changed control's accessible name in the rendered accessibility tree.
 - Use the repository's designated component-test runner. For Cypress Component Testing, keep assertions user-facing and deterministic.
 - Cover changed conditional validation, disabled/read-only states, default/synchronisation behaviour, and submit success/error paths where relevant.
 - Verify changed SFC scripts and templates with the repository's `vue-tsc`-backed typecheck. If absent, report the gate gap and route tooling work through `fullstack-typescript-quality`; a Vite build alone does not check types.

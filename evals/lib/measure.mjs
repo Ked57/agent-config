@@ -95,7 +95,7 @@ function jsonScoreCheck(check, app, base, extraEnv = {}) {
       const why = result.timedOut ? `timed out after ${check.timeoutSec ?? 600}s` : fs.existsSync(scoreFile) ? 'invalid score file' : 'no score file';
       return { ...base, reporter: 'json-score', pass: false, score: 0, components: {}, detail: `${why}\n${result.outputTail}`.slice(-600) };
     }
-    return { ...base, reporter: 'json-score', pass: report.score >= (check.passAt ?? 1), score: report.score, components: report.components, detail: report.detail };
+    return { ...base, reporter: 'json-score', pass: report.score >= (check.passAt ?? 1), score: report.score, components: report.components, detail: report.detail, ...(report.findings ? { findings: report.findings } : {}) };
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
   }

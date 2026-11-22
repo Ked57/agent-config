@@ -80,6 +80,34 @@ does not repeat is noise; one that repeats is real.
 
 The full A/B machinery below is still there for cost comparisons and ablations.
 
+## Design defects: Figma → PrimeVue (start here for UI work)
+
+Asks where a Figma-to-page build falls short, not whether one config beats another. The `vue-design` screens
+come through the Figma MCP stub as a design-kit file would: PrimeVue components are kit instances named in
+designer words with variant properties ("Dropdown", "Status chip", `Type=Danger, Style=Outlined`), colours are
+`Brand/500` and `Gray/200` variables, text styles `Heading/H1` (see
+[`FIGMA-STUB-FIDELITY.md`](fixtures/vue-primevue/design/FIGMA-STUB-FIDELITY.md)). Each run's checks record
+**findings**, what a design review would flag (an element 6 px off, a hand-built dropdown, a wrong text colour, a
+state that cannot be reached), and `eval:defects` counts them per category:
+
+```sh
+# Baseline: the config on main with poteto-mode, on the PrimeVue-heavy screens
+npm run eval -- --single-arm --a main --a-prefix "/pstack:poteto-mode" --tasks vue-design \
+  --only D2-account-settings,D5-invoices-table,D6-customer-detail --reps 2 --no-judge --name figma-main
+# The working tree's config on the same screens
+npm run eval -- --single-arm --a WORKTREE --a-prefix "/pstack:poteto-mode" --tasks vue-design \
+  --only D2-account-settings,D5-invoices-table,D6-customer-detail --reps 2 --no-judge --name figma-worktree
+# Findings per category, the second column against the first
+npm run eval:defects -- ~/agent-config-evals/<figma-main dir> ~/agent-config-evals/<figma-worktree dir>
+```
+
+`DEFECTS.md` has the mean findings per run by category (missing, component, spacing, size, typography,
+colour, radius, state, behaviour, a11y), and per task the check scores and the findings that recur across
+runs. Renders are deterministic, so a category that drops between two configs dropped because the builds
+changed; with 2 reps per task, read a change of less than about one finding per run as noise. The
+categories and thresholds are in [`design/README.md`](fixtures/vue-primevue/design/README.md) "Findings".
+`--recheck` re-scores saved runs, so findings can be added to evals run before they existed.
+
 ## A/B comparisons
 
 ```sh
