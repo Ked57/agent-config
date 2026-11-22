@@ -435,3 +435,15 @@ test('single-arm mode needs no --b, skips judging and queues only arm A', () => 
   const summary = aggregate({ config: { taskIds: ['t-web'], watch: [], singleArm: true }, taskSet: miniTaskSet, armsInfo: { identical: true, watched: [], A: { policies: [] }, B: { policies: [] } }, runs: [makeRun('t-web', 'A', 1)], judgments: [] });
   assert.equal(summary.recommendation.verdict, 'single-arm validation');
 });
+
+test('the quality task sets are valid and share one lint probe across both backend fixtures', () => {
+  for (const name of ['quality-fresh', 'quality-legacy']) {
+    const taskSet = JSON.parse(fs.readFileSync(path.join(root, 'evals/tasks', `${name}.json`), 'utf8'));
+    assert.deepEqual(validateTaskSet(taskSet), [], name);
+  }
+  for (const file of ['probe.mjs', 'probe.ts', 'probe.test.ts']) {
+    const fresh = fs.readFileSync(path.join(root, 'evals/fixtures/ts-backend/hidden/quality', file), 'utf8');
+    const legacy = fs.readFileSync(path.join(root, 'evals/fixtures/ts-backend-legacy/hidden/quality', file), 'utf8');
+    assert.equal(legacy, fresh, `${file} differs between the ts-backend and ts-backend-legacy probes`);
+  }
+});

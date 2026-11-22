@@ -1,0 +1,65 @@
+{
+  "name": "quality-fresh",
+  "description": "Install the TypeScript quality stack on a small, young API (ts-backend). A hidden probe plants one violation per lint gate and scores which ones the resulting ESLint setup rejects.",
+  "fixture": "ts-backend",
+  "categories": {
+    "quality": {
+      "label": "Quality tooling setup"
+    }
+  },
+  "tasks": [
+    {
+      "id": "Q1-quality-fresh",
+      "category": "quality",
+      "prompt": "Set up our full TypeScript quality tooling in this repo. When you are done, lint, typecheck, format, tests and the build must all still pass.",
+      "expectsComponents": [
+        "routing",
+        "typescript",
+        "fullstack-typescript-quality",
+        "fullstack-typescript-static",
+        "fullstack-typescript-tests",
+        "fullstack-typescript-mutation"
+      ],
+      "checks": [
+        {
+          "id": "lint-probe",
+          "label": "The lint setup rejects every planted violation",
+          "type": "command",
+          "copy": {
+            "hidden/quality/probe.ts": "src/__probe__/probe.ts",
+            "hidden/quality/probe.test.ts": "src/__probe__/probe.test.ts",
+            "hidden/quality/probe.mjs": ".eval-probe/probe.mjs"
+          },
+          "run": "node .eval-probe/probe.mjs",
+          "reporter": "json-score",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "knip",
+          "label": "Adds Knip",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "package.json"
+          ],
+          "pattern": "\"knip\"",
+          "expect": "present",
+          "level": "info"
+        },
+        {
+          "id": "coverage-thresholds",
+          "label": "Sets coverage thresholds",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "vitest.config.*"
+          ],
+          "pattern": "thresholds",
+          "expect": "present",
+          "level": "info"
+        }
+      ]
+    }
+  ]
+}

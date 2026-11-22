@@ -1,7 +1,7 @@
 ---
 name: fullstack-typescript-static
-description: Loaded by fullstack-typescript-quality for ESLint gates (complexity, Halstead, size, gate protection, type-aware, framework, and test rules), suppression baselines, and Knip.
-version: 1.1.0
+description: Loaded by fullstack-typescript-quality for ESLint gates (complexity, Halstead, size, comments, gate protection, type-aware, framework, and test rules), suppression baselines, and Knip.
+version: 1.2.0
 ---
 
 # Full-stack TypeScript static analysis
@@ -19,13 +19,24 @@ Apply to `*.ts` and to pure TypeScript / `<script>` blocks in React and Vue sour
 - `@typescript-eslint/no-explicit-any`, allowing `unknown`.
 - `max-params` with `max: 4`. Do not add `max-depth` or `max-nested-callbacks`: cognitive complexity already weighs nesting, and more size rules push toward one-use helpers.
 
+Every `no-restricted-syntax`, `no-restricted-imports`, `no-restricted-properties`, and other restriction entry carries a `message` that names the replacement action, not just the ban. The agent reads the message and fixes the code in the same loop.
+
+## Comments
+
+Prose comments go stale and mislead agents, so the shared policy bans them. Enforce it with the local rule shipped next to this skill, `no-comments.mjs`. Copy it into the project (for example `eslint-rules/no-comments.mjs`), register it as an inline plugin in `eslint.config.*`, and enable it as an error on all linted files, Vue templates included.
+
+- It keeps tool directives (`eslint-*`, `@ts-expect-error`, `prettier-ignore`, coverage ignores, `@__PURE__`-style annotations, bundler magic comments, triple-slash references, `@jsxImportSource`), license headers (`SPDX-License-Identifier:`, `@license`, `/*!`), source map URLs, the shebang, and a single-line `// WARNING: <hazard>` with no comment on the next line.
+- It reports every other comment: JSDoc, `TODO`, multi-line rationale, and `<!-- -->` in Vue templates.
+- Pass `{ publicApi: ["/packages/<name>/src/"] }` only in a published package, so JSDoc on its exported API stays.
+- Existing comments are frozen with the suppression baseline below, like any newly enabled rule.
+
 ## Gate protection
 
 Every other gate is one comment away from being switched off, so enable these on all linted files:
 
 - `linterOptions.reportUnusedDisableDirectives: "error"`.
 - `@eslint-community/eslint-comments/no-unlimited-disable` and `require-description`.
-- `@eslint-community/eslint-comments/no-restricted-disable` listing the gate rules (`complexity`, `sonarjs/cognitive-complexity`, `quality-metrics/halstead`, `max-lines`, `max-lines-per-function`, `max-params`, `@typescript-eslint/no-explicit-any`, `@typescript-eslint/ban-ts-comment`) and the rules that guard them (`@eslint-community/eslint-comments/*`, `no-warning-comments`).
+- `@eslint-community/eslint-comments/no-restricted-disable` listing the gate rules (`complexity`, `sonarjs/cognitive-complexity`, `quality-metrics/halstead`, `max-lines`, `max-lines-per-function`, `max-params`, `@typescript-eslint/no-explicit-any`, `@typescript-eslint/ban-ts-comment`) and the rules that guard them (`@eslint-community/eslint-comments/*`, `no-warning-comments`), plus the local comment rule. In test files and runner configs, also list `no-restricted-syntax`, `no-restricted-imports`, and `vitest/no-restricted-vi-methods`, so the flake, sleep, and mock bans below cannot be disabled by a comment.
 - `@typescript-eslint/ban-ts-comment`: ban `ts-ignore` and `ts-nocheck`; allow `ts-expect-error` only with a description.
 - `no-warning-comments` with `terms: ["istanbul ignore", "v8 ignore", "c8 ignore"]` and `location: "anywhere"`, so code cannot leave the coverage gate silently.
 
@@ -84,6 +95,12 @@ Scope each plugin to its runner's files with `files` globs.
 - Vitest files (`@vitest/eslint-plugin`): `no-focused-tests`, `no-disabled-tests`, `expect-expect`, `valid-expect`, `no-conditional-expect`, `no-conditional-in-test`, `no-standalone-expect`, `no-identical-title`, `valid-title`, `require-to-throw-message`, `no-large-snapshots`, `no-interpolation-in-snapshots`, `max-nested-describe`, `prefer-hooks-on-top`, `no-duplicate-hooks`.
 - Testing Library files (`eslint-plugin-testing-library`, framework config): `prefer-screen-queries`, `no-node-access`, `no-container`, `prefer-user-event`, `await-async-queries`, `await-async-utils`, `await-async-events`, `no-wait-for-side-effects`, `no-wait-for-multiple-assertions`, `prefer-find-by`, `prefer-presence-queries`, `no-debugging-utils`.
 - Cypress files (`eslint-plugin-cypress`): `no-unnecessary-waiting`, `unsafe-to-chain-command`, `no-assigning-return-values`, `no-async-tests`, `no-async-before`, `no-force`, `no-pause`, `no-debug`, `assertion-before-screenshot`, `no-xpath`, `no-chained-get`. Leave `require-data-selectors` off: selectors go role, label, then text.
+- Flake masking, in test files and runner configs (`vitest.config.*`, `cypress.config.*`, which must sit inside the `files` globs): a red test is fixed, not retried or given longer.
+  - `no-restricted-syntax` on `Property[key.name=/^(retry|retries|timeout|testTimeout|hookTimeout|defaultCommandTimeout)$/]` and `CallExpression[callee.object.name='vi'][callee.property.name='setConfig']`.
+  - Numeric timeout arguments: `CallExpression[callee.name=/^(it|test|describe|beforeEach|beforeAll|afterEach|afterAll)$/] > Literal[raw=/^[0-9]/]` and `CallExpression[callee.object.name=/^(it|test|describe)$/] > Literal[raw=/^[0-9]/]`.
+  - Message: find the race or the slow setup and fix it; await the operation instead of waiting longer.
+- Fixed sleeps in Vitest files (Cypress has `no-unnecessary-waiting`): `no-restricted-syntax` on `NewExpression[callee.name='Promise'] CallExpression[callee.name='setTimeout']`, and `no-restricted-imports` on `node:timers/promises` and `timers/promises`. Message: await the operation itself, or use `vi.useFakeTimers()` and advance time.
+- Where the `<domain>.mock.ts` convention exists, ban replacing the project's own modules: `no-restricted-syntax` on `CallExpression[callee.object.name='vi'][callee.property.name=/^(mock|doMock)$/][arguments.0.value=/^(\.{1,2}|@|~)\//]` (match the project's path aliases), and `vitest/no-restricted-vi-methods` with `{ stubGlobal: "<message>" }`. Message: inject the fake from `<domain>.mock.ts`, or intercept the network with the project's request mock. Third-party module mocks stay allowed.
 - Custom: ban `wrapper.vm` and component-instance access in tests; in component specs ban `cy.get` with a CSS class selector; in Vitest files ban component mounting (`@vue/test-utils`, `@testing-library/vue`, `@testing-library/react`) when Cypress Component Testing owns component behaviour.
 
 ## Installation

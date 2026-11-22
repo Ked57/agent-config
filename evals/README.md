@@ -401,6 +401,17 @@ dataset generated at test time, OpenAPI conformance, and two spec issues (`files
 which never reaches an agent or judge. G8 compares v1 responses byte for byte with
 `hidden/G8-golden.json`, captured from the untouched template (`CAPTURE=1` rewrites it).
 
+**Quality setup.** `quality-fresh` (on `ts-backend`) and `quality-legacy` (on `ts-backend-legacy`) each send
+one plain "set up our quality tooling" prompt. The `lint-probe` check copies `hidden/quality/` into the worked
+app, which plants one violation per lint gate the static skill requires (complexity, `any`, `as unknown as`,
+floating promises, prose comments, a disabled gate, `ts-ignore`, `.only`, retries, timeouts, sleeps). It then
+scores the share the project's own ESLint rejects, and also that a single-line `WARNING:` comment passes.
+The legacy set also requires `eslint-suppressions.json`. The probe is byte-identical in both fixtures
+(a test enforces it). Three runs of each on Opus 5.5 (medium effort) on 2026-11-22 all scored 1.00 with every
+gate passing: $1.37 to $2.64 and 6 to 12 minutes per run on the fresh repo, and $1.73 to $2.34 and 13 to 16 minutes
+on the legacy repo, where every run changed one source file and baselined the rest. The probe cannot score the
+own-module mock ban, which applies only where `<domain>.mock.ts` exists and neither fixture has it.
+
 ### Mutation gate
 
 A hidden test or task check is only trusted once it tells right from wrong solutions.

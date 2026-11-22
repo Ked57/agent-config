@@ -1,0 +1,351 @@
+diff -ruN a/eslint.config.js b/eslint.config.js
+--- a/eslint.config.js
++++ b/eslint.config.js
+@@ -1,16 +1,92 @@
+ import js from "@eslint/js";
+ import tseslint from "typescript-eslint";
++import noComments from "./eslint-rules/no-comments.mjs";
+ 
+ export default tseslint.config(
+-  { ignores: ["dist/**", "drizzle/**", "data/**", "node_modules/**"] },
++  {
++    ignores: [
++      "dist/**",
++      "drizzle/**",
++      "data/**",
++      "node_modules/**",
++      ".eval-probe/**",
++    ],
++  },
+   js.configs.recommended,
+   ...tseslint.configs.recommended,
++  { linterOptions: { reportUnusedDisableDirectives: "error" } },
+   {
++    files: ["**/*.ts"],
++    languageOptions: { parserOptions: { projectService: true } },
++    plugins: { local: { rules: { "no-comments": noComments } } },
+     rules: {
+       "@typescript-eslint/no-unused-vars": [
+         "error",
+         { argsIgnorePattern: "^_" },
+       ],
++      "max-params": ["error", { max: 4 }],
++      "@typescript-eslint/no-floating-promises": [
++        "error",
++        { ignoreVoid: false },
++      ],
++      "no-restricted-syntax": [
++        "error",
++        {
++          selector:
++            "TSAsExpression > TSAsExpression[typeAnnotation.type='TSUnknownKeyword']",
++          message:
++            "Parse the value at the boundary instead of casting through unknown.",
++        },
++      ],
++      "local/no-comments": "error",
++    },
++  },
++  {
++    files: ["**/*.test.ts"],
++    rules: {
++      "no-restricted-syntax": [
++        "error",
++        {
++          selector:
++            "CallExpression[callee.object.name=/^(it|test|describe)$/][callee.property.name='only']",
++          message: "Remove .only so the whole suite runs.",
++        },
++        {
++          selector:
++            "Property[key.name=/^(retry|retries|timeout|testTimeout|hookTimeout|defaultCommandTimeout)$/]",
++          message:
++            "Fix the race or the slow setup instead of retrying or waiting longer.",
++        },
++        {
++          selector:
++            "CallExpression[callee.name=/^(it|test|describe|beforeEach|beforeAll|afterEach|afterAll)$/] > Literal[raw=/^[0-9]/]",
++          message:
++            "Fix the race or the slow setup instead of raising the timeout.",
++        },
++        {
++          selector:
++            "NewExpression[callee.name='Promise'] CallExpression[callee.name='setTimeout']",
++          message:
++            "Await the operation itself, or use vi.useFakeTimers() and advance time.",
++        },
++      ],
++      "no-restricted-imports": [
++        "error",
++        {
++          paths: [
++            {
++              name: "node:timers/promises",
++              message:
++                "Await the operation itself, or use vi.useFakeTimers() and advance time.",
++            },
++            {
++              name: "timers/promises",
++              message:
++                "Await the operation itself, or use vi.useFakeTimers() and advance time.",
++            },
++          ],
++        },
++      ],
+     },
+   },
+ );
+diff -ruN a/eslint-rules/no-comments.mjs b/eslint-rules/no-comments.mjs
+--- /dev/null
++++ b/eslint-rules/no-comments.mjs
+@@ -0,0 +1,73 @@
++const DIRECTIVE = new RegExp(
++  [
++    String.raw`^\s*(eslint|eslint-disable|eslint-enable|eslint-disable-line|eslint-disable-next-line|global|globals)\b`,
++    String.raw`^\s*@ts-(expect-error|ignore|nocheck)\b`,
++    String.raw`^\s*prettier-ignore\s*$`,
++    String.raw`^\s*(istanbul|v8|c8) ignore\b`,
++    String.raw`^\s*[#@]__[A-Z_]+__\s*$`,
++    String.raw`^\s*webpack[A-Z]\w*:`,
++    String.raw`^\s*@vite-ignore\s*$`,
++    String.raw`^/ <reference\b`,
++    String.raw`^\s*@jsxImportSource\b`,
++    String.raw`^\s*SPDX-License-Identifier:`,
++    String.raw`^!`,
++    String.raw`^[\s*]*@license\b`,
++    String.raw`^# source(Mapping)?URL=`,
++  ].join("|"),
++);
++
++const WARNING = /^ WARNING: \S/;
++
++function isPublicApiDoc(comment, filename, publicApi) {
++  return (
++    comment.type === "Block" &&
++    comment.value.startsWith("*") &&
++    publicApi.some((part) => filename.includes(part))
++  );
++}
++
++function isLoneWarning(comment, next) {
++  return (
++    comment.type === "Line" &&
++    WARNING.test(comment.value) &&
++    (!next || next.loc.start.line !== comment.loc.end.line + 1)
++  );
++}
++
++export default {
++  meta: {
++    type: "suggestion",
++    schema: [
++      {
++        type: "object",
++        properties: { publicApi: { type: "array", items: { type: "string" } } },
++        additionalProperties: false,
++      },
++    ],
++    messages: {
++      prose:
++        "Remove this comment: rename or restructure the code so it explains itself, and put the reason in the commit message. Only a single-line `// WARNING: <hazard>` may stay.",
++    },
++  },
++  create(context) {
++    const publicApi = context.options[0]?.publicApi ?? [];
++    const filename = context.filename.replaceAll("\\", "/");
++    const report = (comment) =>
++      context.report({ loc: comment.loc, messageId: "prose" });
++    return {
++      Program() {
++        const comments = context.sourceCode.getAllComments();
++        comments.forEach((comment, index) => {
++          if (comment.type === "Shebang" || DIRECTIVE.test(comment.value))
++            return;
++          if (isLoneWarning(comment, comments[index + 1])) return;
++          if (isPublicApiDoc(comment, filename, publicApi)) return;
++          report(comment);
++        });
++        for (const comment of context.sourceCode.ast.templateBody?.comments ??
++          [])
++          report(comment);
++      },
++    };
++  },
++};
+diff -ruN a/eslint-suppressions.json b/eslint-suppressions.json
+--- /dev/null
++++ b/eslint-suppressions.json
+@@ -0,0 +1,173 @@
++{
++  "src/app.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/controllers/payments.controller.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/controllers/reports-v1.controller.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/controllers/users.controller.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/db/schema.ts": {
++    "local/no-comments": {
++      "count": 3
++    }
++  },
++  "src/db/seed.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-params": {
++      "count": 3
++    }
++  },
++  "src/index.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/lib/errors.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/lib/flags.ts": {
++    "local/no-comments": {
++      "count": 5
++    }
++  },
++  "src/lib/legacy/dates.ts": {
++    "local/no-comments": {
++      "count": 8
++    }
++  },
++  "src/lib/legacy/idempotency.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-params": {
++      "count": 1
++    }
++  },
++  "src/lib/legacy/money.ts": {
++    "local/no-comments": {
++      "count": 5
++    }
++  },
++  "src/lib/legacy/validate.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/lib/time.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/plugins/auth.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/routes/attachments.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/routes/clients.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/routes/exports.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/routes/webhook-subscriptions.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/routes/webhooks.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/services/digest.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/services/invoices.ts": {
++    "local/no-comments": {
++      "count": 4
++    }
++  },
++  "src/services/jobs.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/services/ledger.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/services/mailer.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/services/reports.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/services/slack.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/services/tasks.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/services/webhook-delivery.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/sql/reports.sql.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/sql/time-entries.sql.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/sql/users.sql.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/test/helpers.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  }
++}

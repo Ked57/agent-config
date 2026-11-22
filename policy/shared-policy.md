@@ -47,7 +47,7 @@ Do not claim a manual check was performed without executing it.
 - Do not create wrappers that merely rename or forward an existing API.
 - Extract a helper, composable, service, factory, or shared component only for genuine reuse, a clear domain boundary, or a meaningful simplification.
 - Prefer direct, readable control flow over clever chained transformations or premature generic code.
-- Add comments for non-obvious decisions, invariants, constraints, and external-workaround reasons—not to narrate obvious code.
+- Do not write comments. Make the code explain itself through names and structure, and put the reasoning for a change in its commit message. Tool directives and license headers stay. The one exception is a single-line `// WARNING: <hazard>` (or the language's equivalent) for a hazard the code cannot express, such as an external workaround or a non-obvious side effect. In a published package, doc comments on the exported API are allowed.
 - If two solutions are viable, choose the one with fewer concepts, files, dependencies, and runtime paths unless the more complex option has a demonstrated benefit.
 
 ## Repository discovery and safety

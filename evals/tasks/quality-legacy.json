@@ -1,0 +1,75 @@
+{
+  "name": "quality-legacy",
+  "description": "Install the TypeScript quality stack on a large legacy API (ts-backend-legacy). Existing violations must be frozen in a suppression baseline rather than rewritten; the same hidden probe scores the new gates.",
+  "fixture": "ts-backend-legacy",
+  "categories": {
+    "quality": {
+      "label": "Quality tooling setup"
+    }
+  },
+  "tasks": [
+    {
+      "id": "Q2-quality-legacy",
+      "category": "quality",
+      "prompt": "Set up our full TypeScript quality tooling in this repo. When you are done, lint, typecheck, format, tests and the build must all still pass.",
+      "expectsComponents": [
+        "routing",
+        "typescript",
+        "fullstack-typescript-quality",
+        "fullstack-typescript-static",
+        "fullstack-typescript-tests",
+        "fullstack-typescript-mutation"
+      ],
+      "checks": [
+        {
+          "id": "lint-probe",
+          "label": "The lint setup rejects every planted violation",
+          "type": "command",
+          "copy": {
+            "hidden/quality/probe.ts": "src/__probe__/probe.ts",
+            "hidden/quality/probe.test.ts": "src/__probe__/probe.test.ts",
+            "hidden/quality/probe.mjs": ".eval-probe/probe.mjs"
+          },
+          "run": "node .eval-probe/probe.mjs",
+          "reporter": "json-score",
+          "level": "required",
+          "timeoutSec": 300
+        },
+        {
+          "id": "suppression-baseline",
+          "label": "Freezes existing violations in eslint-suppressions.json",
+          "type": "changed",
+          "files": [
+            "eslint-suppressions.json"
+          ],
+          "expect": "any",
+          "level": "required"
+        },
+        {
+          "id": "knip",
+          "label": "Adds Knip",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "package.json"
+          ],
+          "pattern": "\"knip\"",
+          "expect": "present",
+          "level": "info"
+        },
+        {
+          "id": "coverage-thresholds",
+          "label": "Sets coverage thresholds",
+          "type": "pattern",
+          "in": "final",
+          "files": [
+            "vitest.config.*"
+          ],
+          "pattern": "thresholds",
+          "expect": "present",
+          "level": "info"
+        }
+      ]
+    }
+  ]
+}

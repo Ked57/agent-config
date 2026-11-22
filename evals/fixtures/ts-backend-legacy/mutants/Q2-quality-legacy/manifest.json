@@ -1,0 +1,58 @@
+{
+  "task": "Q2-quality-legacy",
+  "references": [
+    {
+      "file": "reference-hand-built.patch",
+      "source": "hand-built: the static skill's rules that the fixture's installed packages can express (no sonarjs or eslint-comments, so cognitive-complexity and restricted-disable score 0)"
+    }
+  ],
+  "scoreGate": {
+    "referenceMin": 0.9,
+    "untouchedMax": 0.2,
+    "mutantMaxDrop": 0.03
+  },
+  "mutants": [
+    {
+      "file": "m1-no-comment-rule.patch",
+      "wrong": "the local no-comments rule is not enabled, so prose comments pass",
+      "violates": "The installed lint gates must reject what the quality skill bans (fullstack-typescript-static).",
+      "expect": "killed"
+    },
+    {
+      "file": "m2-total-comment-ban.patch",
+      "wrong": "the comment rule also reports the single-line WARNING the policy allows",
+      "violates": "The installed lint gates must reject what the quality skill bans (fullstack-typescript-static).",
+      "expect": "killed"
+    },
+    {
+      "file": "m3-no-flake-bans.patch",
+      "wrong": "retry options and raised test timeouts are not restricted",
+      "violates": "The installed lint gates must reject what the quality skill bans (fullstack-typescript-static).",
+      "expect": "killed"
+    },
+    {
+      "file": "m4-no-sleep-ban.patch",
+      "wrong": "fixed sleeps and timers/promises are not restricted in tests",
+      "violates": "The installed lint gates must reject what the quality skill bans (fullstack-typescript-static).",
+      "expect": "killed"
+    },
+    {
+      "file": "m5-no-complexity.patch",
+      "wrong": "the cyclomatic complexity gate is missing",
+      "violates": "The installed lint gates must reject what the quality skill bans (fullstack-typescript-static).",
+      "expect": "killed"
+    },
+    {
+      "file": "m6-no-type-aware.patch",
+      "wrong": "type-aware linting is off, so floating promises pass",
+      "violates": "The installed lint gates must reject what the quality skill bans (fullstack-typescript-static).",
+      "expect": "killed"
+    },
+    {
+      "file": "m7-no-baseline.patch",
+      "wrong": "no eslint-suppressions.json: existing violations are not frozen",
+      "violates": "The installed lint gates must reject what the quality skill bans (fullstack-typescript-static).",
+      "expect": "killed"
+    }
+  ]
+}
