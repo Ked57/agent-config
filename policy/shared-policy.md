@@ -36,6 +36,7 @@ Do not claim a manual check was performed without executing it.
 - Use `.agents/agent-config.json` to identify the required verification for changed files when the project provides it; otherwise inspect the repository's package/task-runner scripts and run the checks relevant to the change.
 - Run narrow, relevant checks during implementation, then the required project quality gate before completion.
 - Do not weaken tests, coverage thresholds, lint configuration, type checks, or CI configuration merely to make a change pass.
+- Do not add lint disable comments or suppression-baseline entries, or regenerate a suppression baseline, merely to make a change pass.
 - Do not bypass Git or quality checks unless explicitly authorised.
 - Do not refactor unrelated code unless requested or required to make the requested change safe.
 
