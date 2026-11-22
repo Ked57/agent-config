@@ -21,7 +21,7 @@ const PROBES = [
   { name: 'timeout-argument', file: 'test', marker: '10_000', rule: /^no-restricted-/ },
   { name: 'fixed-sleep', file: 'test', marker: 'setTimeout(resolve, 50)', rule: /^no-restricted-/ },
   { name: 'timers-promises-import', file: 'test', marker: 'node:timers/promises', rule: /^no-restricted-/ },
-  { name: 'own-module-mock', file: 'test', marker: 'vi.mock(', rule: /^no-restricted-/, info: true },
+  { name: 'own-module-mock', file: 'test', marker: 'vi.mock(', rule: /^no-restricted-|vitest\/no-restricted-vi-methods$/ },
 ];
 
 const lineOf = (file, marker) => fs.readFileSync(FILES[file], 'utf8').split('\n').findIndex((line) => line.includes(marker)) + 1;

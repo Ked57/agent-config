@@ -402,15 +402,18 @@ which never reaches an agent or judge. G8 compares v1 responses byte for byte wi
 `hidden/G8-golden.json`, captured from the untouched template (`CAPTURE=1` rewrites it).
 
 **Quality setup.** `quality-fresh` (on `ts-backend`) and `quality-legacy` (on `ts-backend-legacy`) each send
-one plain "set up our quality tooling" prompt. The `lint-probe` check copies `hidden/quality/` into the worked
-app, which plants one violation per lint gate the static skill requires (complexity, `any`, `as unknown as`,
-floating promises, prose comments, a disabled gate, `ts-ignore`, `.only`, retries, timeouts, sleeps). It then
-scores the share the project's own ESLint rejects, and also that a single-line `WARNING:` comment passes.
-The legacy set also requires `eslint-suppressions.json`. The probe is byte-identical in both fixtures
-(a test enforces it). Three runs of each on Opus 5.5 (medium effort) on 2026-11-22 all scored 1.00 with every
-gate passing: $1.37 to $2.64 and 6 to 12 minutes per run on the fresh repo, and $1.73 to $2.34 and 13 to 16 minutes
-on the legacy repo, where every run changed one source file and baselined the rest. The probe cannot score the
-own-module mock ban, which applies only where `<domain>.mock.ts` exists and neither fixture has it.
+one plain "set up our quality tooling" prompt. Both seed `src/lib/ids.mock.ts` and a test that uses it (task
+`files`), so the `<domain>.mock.ts` convention exists. The `lint-probe` check copies `hidden/quality/` into the
+worked app, which plants one violation per lint gate the static skill requires: complexity, cognitive
+complexity, `max-params`, `any`, `as unknown as`, floating promises, a prose comment, a disabled gate,
+`ts-ignore`, `.only`, retries, timeouts, sleeps, `timers/promises`, and `vi.mock` of a project module. It then
+scores the share the project's own ESLint rejects, and also that a single-line `WARNING:` comment passes. The
+legacy set also requires `eslint-suppressions.json`. The probe and seed files are byte-identical in both
+fixtures (a test enforces it). Their mutation gates use real agent runs as references (`installAfterPatch`
+installs the plugins those runs added) next to a hand-built reference limited to the fixture's packages.
+Results on Opus 5.5 (medium effort), 2026-11-22: five runs of each scored 1.00 with every gate passing, at
+$1.37 to $2.64 per fresh run and $1.73 to $3.61 per legacy run. The last two of each ran with the seeded mock
+and caught its ban too. Legacy runs changed at most one existing source file and baselined the rest.
 
 ### Mutation gate
 
@@ -447,6 +450,11 @@ A score is the (weighted) mean of the task's required check scores. Every refere
 solution as failing) when it scores at least `mutantMaxDrop` below the lowest reference. The 80% kill-rate
 rule applies to that count. The gate table prints the scores of the references, the untouched fixture and
 each mutant for every task; `--json` adds each run's per-check scores (`checkScores`).
+
+A reference that adds dependencies cannot run against the prepared fixture's linked `node_modules`.
+Set `"installAfterPatch": "<command>"` (for example `"bun install"`) in the manifest: a patch that changes
+`package.json` then gets a private, freshly installed `node_modules` (the linked one is removed first, so
+the cache is never written). This needs the network; patches that leave `package.json` alone skip it.
 
 Make a patch from a worked app (a saved run's `app/`, or a copy you broke by hand) with
 `npm run eval:mutants -- --fixture ts-backend --make-patch <app> > <task>/m7-….patch`. It diffs

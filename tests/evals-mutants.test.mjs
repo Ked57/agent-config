@@ -79,6 +79,8 @@ test('validateManifest names missing files, unlisted patches and incomplete entr
   assert.ok(problems.some((problem) => problem.includes('needs why')));
   assert.ok(problems.some((problem) => problem.includes('stray.patch is not listed')));
   assert.ok(problems.some((problem) => problem.includes('m2.patch is not listed')));
+  assert.deepEqual(validateManifest({ ...manifest, installAfterPatch: 'bun install' }, 'T1', files), []);
+  assert.ok(validateManifest({ ...manifest, installAfterPatch: ' ' }, 'T1', files).some((problem) => problem.includes('installAfterPatch')));
 });
 
 test('scoreTask passes a task whose references pass and whose mutants die as declared', () => {

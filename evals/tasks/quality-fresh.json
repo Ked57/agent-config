@@ -59,7 +59,11 @@
           "expect": "present",
           "level": "info"
         }
-      ]
+      ],
+      "files": {
+        "hidden/quality/seed/ids.mock.ts": "src/lib/ids.mock.ts",
+        "hidden/quality/seed/ids.test.ts": "src/lib/ids.test.ts"
+      }
     }
   ]
 }

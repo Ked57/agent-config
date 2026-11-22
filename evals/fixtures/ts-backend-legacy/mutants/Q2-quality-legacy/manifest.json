@@ -1,9 +1,18 @@
 {
   "task": "Q2-quality-legacy",
+  "installAfterPatch": "bun install",
   "references": [
     {
       "file": "reference-hand-built.patch",
       "source": "hand-built: the static skill's rules that the fixture's installed packages can express (no sonarjs or eslint-comments, so cognitive-complexity and restricted-disable score 0)"
+    },
+    {
+      "file": "reference-agent-r1.patch",
+      "source": "20261122-gaps-quality-legacy A r1 (Opus 5.5, installs sonarjs and eslint-comments; coverage output dropped)"
+    },
+    {
+      "file": "reference-agent-r2.patch",
+      "source": "20261122-gaps-quality-legacy A r2 (Opus 5.5, installs sonarjs and eslint-comments; coverage output dropped)"
     }
   ],
   "scoreGate": {
@@ -51,6 +60,12 @@
     {
       "file": "m7-no-baseline.patch",
       "wrong": "no eslint-suppressions.json: existing violations are not frozen",
+      "violates": "The installed lint gates must reject what the quality skill bans (fullstack-typescript-static).",
+      "expect": "killed"
+    },
+    {
+      "file": "m8-no-mock-ban.patch",
+      "wrong": "vi.mock of the project's own modules is not restricted although <domain>.mock.ts exists",
       "violates": "The installed lint gates must reject what the quality skill bans (fullstack-typescript-static).",
       "expect": "killed"
     }

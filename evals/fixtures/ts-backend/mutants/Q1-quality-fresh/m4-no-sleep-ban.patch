@@ -1,7 +1,7 @@
 diff -ruN a/eslint.config.js b/eslint.config.js
 --- a/eslint.config.js
 +++ b/eslint.config.js
-@@ -1,16 +1,70 @@
+@@ -1,16 +1,76 @@
  import js from "@eslint/js";
  import tseslint from "typescript-eslint";
 +import noComments from "./eslint-rules/no-comments.mjs";
@@ -68,6 +68,12 @@ diff -ruN a/eslint.config.js b/eslint.config.js
 +            "CallExpression[callee.name=/^(it|test|describe|beforeEach|beforeAll|afterEach|afterAll)$/] > Literal[raw=/^[0-9]/]",
 +          message:
 +            "Fix the race or the slow setup instead of raising the timeout.",
++        },
++        {
++          selector:
++            "CallExpression[callee.object.name='vi'][callee.property.name=/^(mock|doMock)$/][arguments.0.value=/^(\\.{1,2}|@|~)\\//]",
++          message:
++            "Inject the fake from the module's .mock.ts instead of replacing the module.",
 +        },
 +      ],
      },

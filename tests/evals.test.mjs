@@ -441,7 +441,7 @@ test('the quality task sets are valid and share one lint probe across both backe
     const taskSet = JSON.parse(fs.readFileSync(path.join(root, 'evals/tasks', `${name}.json`), 'utf8'));
     assert.deepEqual(validateTaskSet(taskSet), [], name);
   }
-  for (const file of ['probe.mjs', 'probe.ts', 'probe.test.ts']) {
+  for (const file of ['probe.mjs', 'probe.ts', 'probe.test.ts', 'seed/ids.mock.ts', 'seed/ids.test.ts']) {
     const fresh = fs.readFileSync(path.join(root, 'evals/fixtures/ts-backend/hidden/quality', file), 'utf8');
     const legacy = fs.readFileSync(path.join(root, 'evals/fixtures/ts-backend-legacy/hidden/quality', file), 'utf8');
     assert.equal(legacy, fresh, `${file} differs between the ts-backend and ts-backend-legacy probes`);
