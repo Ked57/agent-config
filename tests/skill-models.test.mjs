@@ -74,7 +74,7 @@ test('user sync fills models per harness, applies the personal override, and re-
   const { home, run, installed } = fixture(t);
   ok(run('sync', '--user'));
   assert.match(installed(path.join(home, '.claude/skills')), /Implementer `opus`, judge `fable`\./);
-  assert.match(installed(path.join(home, '.agents/skills')), /Implementer `unset`, judge `gpt-judge` in Codex, `unset` in Cursor\./);
+  assert.match(installed(path.join(home, '.agents/skills')), /Implementer `opus` in Claude Code, `unset` in Codex, `unset` in Cursor, judge `fable` in Claude Code, `gpt-judge` in Codex, `unset` in Cursor\./);
   ok(run('check', '--user'));
 
   put(path.join(home, '.agent-config/models.json'), JSON.stringify({ claude: { judge: 'sonnet' }, cursor: { judge: 'gpt-judge' } }));
@@ -83,7 +83,7 @@ test('user sync fills models per harness, applies the personal override, and re-
   assert.match(drifted.stdout, /updated ~\/\.claude\/skills\/placeholder-skill\/SKILL\.md/);
   ok(run('sync', '--user'));
   assert.match(installed(path.join(home, '.claude/skills')), /Implementer `opus`, judge `sonnet`\./);
-  assert.match(installed(path.join(home, '.agents/skills')), /judge `gpt-judge`\./);
+  assert.match(installed(path.join(home, '.agents/skills')), /judge `sonnet` in Claude Code, `gpt-judge` in Codex, `gpt-judge` in Cursor\./);
   ok(run('check', '--user'));
 });
 

@@ -125,7 +125,7 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   assert.match(installedRouting, /## 2\. Skill/);
   assert.match(installedRouting, /TypeScript quality-tooling work → `fullstack-typescript-quality`/);
   for (const name of keptSkills) {
-    assertInstalledSkillTree(path.join(home, '.agents/skills'), name, ['codex', 'cursor']);
+    assertInstalledSkillTree(path.join(home, '.agents/skills'), name, ['claude', 'codex', 'cursor']);
     assertInstalledSkillTree(path.join(home, '.claude/skills'), name, ['claude']);
   }
 
@@ -220,7 +220,7 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /## 2\. Skill/);
   assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /TypeScript quality-tooling work → `fullstack-typescript-quality`/);
   for (const name of keptSkills) {
-    assertInstalledSkillTree(path.join(project, '.agents/skills'), name, ['codex', 'cursor']);
+    assertInstalledSkillTree(path.join(project, '.agents/skills'), name, ['claude', 'codex', 'cursor']);
   }
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /# agent-config:begin prettier-ignore/);
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /\.agents\//);

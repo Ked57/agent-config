@@ -29,8 +29,9 @@ Every finding carries one source:
 - `mockup`: the mockup shows it and the build differs.
 - `convention`: the mockup is silent, the inventory names a convention, and the build
   differs from it. Cite the inventory file.
-- `floor`: the build is inaccessible, gives no feedback for an action, loses or hides
-  content, or is broken. Holds whatever the mockup or the inventory say.
+- `floor`: an element or action the mockup or the request already shows is inaccessible,
+  gives no feedback, loses or hides content, or is broken. Holds whatever the mockup or
+  the inventory say about it.
 - `taste-gap`: neither the mockup nor the inventory covers it and the build handles it
   badly or not at all. Fix it with the repository's existing components and tokens. Draw
   on `emil-design-eng` for polish, `animate` and `review-animations` for motion, and
@@ -39,12 +40,14 @@ Every finding carries one source:
   would change it. Say what the repository-wide change would be.
 - `taste-nit`: anything else that could be nicer.
 
-Prefer the earlier source when two apply.
+Prefer the earlier source when two apply. Scope overrides that preference.
 
 **Scope.** `floor` and `taste-gap` findings cover how the elements and actions the mockup
 and the request already show behave. A feature neither shows (a new flow, dialog, upload,
-route guard or service call) is a `taste-nit` for the report, never a fix. A fix must not
-add text that repeats copy already on screen; announce through the element that shows it.
+route guard or service call) is a `taste-nit` for the report, never a `floor` finding and
+never a fix. A confirmation (X9) or an unsaved-changes guard (X10) the mockup never showed
+is that case. A fix must not add text that repeats copy already on screen; announce through
+the element that shows it.
 
 ## Checklist
 

@@ -203,9 +203,10 @@ A skill names the models its subagents use with placeholders such as
 - Project installs use the repository defaults only, because their files are committed.
 
 The `~/.claude/skills` copy gets the Claude Code model. The `~/.agents/skills` copy is
-shared by Codex and Cursor, so it names both when they differ (`` `a` in Codex, `b` in
-Cursor ``). A role with no model renders as `unset`, and the skill stops unless the prompt
-names one. Run `sync --user` again after changing either file.
+what routing loads for every harness, so it names each one when they differ (`` `a` in
+Claude Code, `b` in Codex, `c` in Cursor ``). A role with no model for a harness renders
+as `unset`, and the skill stops for that harness unless the prompt names one. Run
+`sync --user` again after changing either file.
 
 ## Routing and skills
 

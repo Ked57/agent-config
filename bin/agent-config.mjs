@@ -205,7 +205,9 @@ const skillModels = loadModels({
   sourceRoot,
   overrideFile: userScope ? path.join(userHome, '.agent-config', 'models.json') : null
 });
-const sharedSkillHarnesses = ['codex', 'cursor'];
+// Routing resolves every harness to this copy, so Claude Code's models have to be named
+// here too. The .claude/skills copy stays the Claude-only text for native discovery.
+const sharedSkillHarnesses = ['claude', 'codex', 'cursor'];
 const renderSkill = (source, harnesses) => renderModels(read(source), harnesses, skillModels);
 const configuredCodexHome = process.env.CODEX_HOME
   ? path.resolve(process.env.CODEX_HOME)

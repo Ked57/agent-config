@@ -22,9 +22,9 @@ an orchestrator that does either stops being independent of the work it scores.
   {{models.judge}} unless the user specified otherwise.
 
 A model may come from another provider than yours; use whatever your harness offers to
-start a subagent on it. If a role's model reads `unset` and the user named none, or the
-named model cannot be started, stop and say so. A substitute judge changes what the
-verdicts mean.
+start a subagent on it. When the line names more than one harness, use yours. If that
+model reads `unset` and the user named none, or the named model cannot be started, stop
+and say so. A substitute judge changes what the verdicts mean.
 
 Information stays split for the whole run:
 
@@ -110,9 +110,10 @@ findings.
 A finding **blocks** when it is:
 
 - source `mockup` with verdict `wrong` or `minor`;
-- source `convention` (the build differs from the inventory);
-- source `floor` (inaccessible, no feedback for an action, content lost or hidden, broken
-  behaviour).
+- source `convention` with verdict `wrong` or `minor` (the build differs from the
+  inventory);
+- source `floor` with verdict `wrong` or `minor` (inaccessible, no feedback for an action,
+  content lost or hidden, broken behaviour).
 
 `taste-gap` findings are sent to the implementer once, in the round they first appear,
 and never block. `taste-override` and `taste-nit` findings never block and go to the
