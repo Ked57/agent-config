@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { loadModels, renderModels } from '../bin/skill-models.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const canonicalTemporaryDirectory = fs.realpathSync(os.tmpdir());
@@ -18,7 +19,8 @@ const keptSkills = [
   'fullstack-typescript-quality',
   'fullstack-typescript-static',
   'fullstack-typescript-tests',
-  'manual-qa'
+  'manual-qa',
+  'mockup-hillclimb'
 ];
 const agentBrowserSkills = ['agent-browser'];
 const agentBrowserLock = JSON.parse(fs.readFileSync(path.join(root, 'skills/agent-browser-skills.lock.json'), 'utf8'));
@@ -48,14 +50,15 @@ const listFiles = (directory, relativeDirectory = '') => fs.readdirSync(path.joi
   const relativePath = path.join(relativeDirectory, entry.name);
   return entry.isDirectory() ? listFiles(directory, relativePath) : [relativePath];
 }).sort();
-const assertInstalledSkillTree = (installationRoot, name) => {
+const defaultModels = loadModels({ sourceRoot: root });
+const assertInstalledSkillTree = (installationRoot, name, harnesses) => {
   const source = path.join(root, 'skills', name);
   const destination = path.join(installationRoot, name);
   assert.deepEqual(listFiles(destination), listFiles(source), `incomplete installed skill ${name}`);
   for (const file of listFiles(source)) {
     assert.equal(
       fs.readFileSync(path.join(destination, file), 'utf8'),
-      fs.readFileSync(path.join(source, file), 'utf8'),
+      renderModels(fs.readFileSync(path.join(source, file), 'utf8'), harnesses, defaultModels),
       `stale installed skill file ${name}/${file}`
     );
   }
@@ -122,8 +125,8 @@ test('installs one personal policy across Codex, Claude Code, and Cursor', () =>
   assert.match(installedRouting, /## 2\. Skill/);
   assert.match(installedRouting, /TypeScript quality-tooling work → `fullstack-typescript-quality`/);
   for (const name of keptSkills) {
-    assertInstalledSkillTree(path.join(home, '.agents/skills'), name);
-    assertInstalledSkillTree(path.join(home, '.claude/skills'), name);
+    assertInstalledSkillTree(path.join(home, '.agents/skills'), name, ['codex', 'cursor']);
+    assertInstalledSkillTree(path.join(home, '.claude/skills'), name, ['claude']);
   }
 
   assert.doesNotThrow(() => runUser(home, 'check'));
@@ -217,7 +220,7 @@ test('initialises a Vue TypeScript workspace and preserves project-owned routing
   assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /## 2\. Skill/);
   assert.match(fs.readFileSync(path.join(project, '.agents/policy/routing.md'), 'utf8'), /TypeScript quality-tooling work → `fullstack-typescript-quality`/);
   for (const name of keptSkills) {
-    assertInstalledSkillTree(path.join(project, '.agents/skills'), name);
+    assertInstalledSkillTree(path.join(project, '.agents/skills'), name, ['codex', 'cursor']);
   }
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /# agent-config:begin prettier-ignore/);
   assert.match(fs.readFileSync(path.join(project, '.prettierignore'), 'utf8'), /\.agents\//);

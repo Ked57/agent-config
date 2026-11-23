@@ -176,6 +176,9 @@ The installer copies every `skills/<name>/` directory that contains a `SKILL.md`
   frame, and a DOM comparison against each frame
 - `codex-review`, which a Cursor subagent uses to run a read-only Codex
   review of the current branch against `origin/main`
+- `mockup-hillclimb`, which builds a mockup through a loop: an implementer subagent
+  builds, a fresh judge subagent checks each round against the mockup and the
+  repository's conventions, and the main thread stops on fixed rules
 - `agent-browser`, the Apache-2.0 discovery stub from
   [`vercel-labs/agent-browser` at commit `72007a6`](https://github.com/vercel-labs/agent-browser/tree/72007a6788d863611b23bed0b59d0d659c638d8e)
 
@@ -186,6 +189,23 @@ pinned upstream inventory and normalized-content hashes are recorded in
 `agent-browser` is a discovery stub. Usage instructions stay in the CLI
 (`agent-browser skills get core`) so they match the installed binary. `manual-qa` loads
 that stub for browser UI. `policy/routing.md` carries the task type → skill mapping.
+
+### Subagent models
+
+A skill names the models its subagents use with placeholders such as
+`{{models.judge}}`. The installer fills them in for each harness when it writes the skill:
+
+- `models.json` in this repository holds the defaults, keyed by harness (`claude`,
+  `codex`, `cursor`) and then by role.
+- `~/.agent-config/models.json` overrides them for a user install, with the same shape.
+  It is never committed, so each person picks their own models. A role it names must
+  exist in `models.json`.
+- Project installs use the repository defaults only, because their files are committed.
+
+The `~/.claude/skills` copy gets the Claude Code model. The `~/.agents/skills` copy is
+shared by Codex and Cursor, so it names both when they differ (`` `a` in Codex, `b` in
+Cursor ``). A role with no model renders as `unset`, and the skill stops unless the prompt
+names one. Run `sync --user` again after changing either file.
 
 ## Routing and skills
 

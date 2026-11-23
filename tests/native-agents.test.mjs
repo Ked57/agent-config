@@ -16,6 +16,7 @@ function fixture(t) {
   const home = path.join(directory, 'home');
   fs.mkdirSync(home);
   for (const folder of ['bin', 'policy', 'skills']) fs.cpSync(path.join(root, folder), path.join(repo, folder), { recursive: true });
+  fs.copyFileSync(path.join(root, 'models.json'), path.join(repo, 'models.json'));
   const run = (command, extra = [], environment = {}) => {
     const env = { ...process.env, HOME: home, USERPROFILE: home, AGENT_CONFIG_EXTERNAL_PLUGINS: 'skip', ...environment };
     if (!('CODEX_HOME' in environment)) delete env.CODEX_HOME;

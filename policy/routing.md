@@ -30,6 +30,8 @@ declared dependencies.
   name it in the brief of any delegate that builds the UI. It owns extraction and the comparison with the
   frame; `manual-qa` still owns behaviour.
 - Building, restyling, or critiquing component or screen markup and styles → `emil-design-eng`; read it before editing templates or styles. `vue-primevue.md` repeats this step for Vue.
+- Hill-climbing a mockup implementation with a judge loop, when the user asks for it → `mockup-hillclimb`.
+  It runs `figma-to-code` inside its implementer.
 - Worst-case data and layout breakage → `break-ui`.
 - New motion → `animate`.
 - Dropped frames or which property to animate → `animation-performance`.

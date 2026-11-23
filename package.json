@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "check": "node --check bin/agent-config.mjs && node --check bin/native-agents.mjs && node --check evals/run.mjs && node --check evals/smoke.mjs && node --check evals/defects.mjs",
+    "check": "node --check bin/agent-config.mjs && node --check bin/native-agents.mjs && node --check bin/skill-models.mjs && node --check evals/run.mjs && node --check evals/smoke.mjs && node --check evals/defects.mjs",
     "eval": "node evals/run.mjs",
     "eval:mutants": "node evals/mutants.mjs",
     "eval:design-assets": "node evals/design-assets.mjs",
