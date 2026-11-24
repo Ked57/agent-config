@@ -1,7 +1,7 @@
 ---
 name: fullstack-typescript-tests
 description: Loaded by fullstack-typescript-quality for Vitest, Cypress component tests, coverage, CRAP, affected-test selection, and scoped coverage gates.
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Full-stack TypeScript tests
@@ -14,6 +14,7 @@ Owned by `fullstack-typescript-quality`, which loads this skill for test and cov
 - Cypress Component Testing plus Testing Library for `.tsx` / `.vue` component behaviour.
 - One owner per behaviour: keep the same component behaviour out of both Vitest and Cypress CT by default.
 - Cypress E2E only for critical complete user journeys.
+- When `msw` is a dependency, every `server.listen()` and `worker.start()` passes `onUnhandledRequest: "error"`, so a request no handler covers fails the test instead of reaching the network. Prove it with a controlled violation: a test that calls an unhandled URL fails.
 - For changed async UI, resolve controllable responses in reverse order and assert that stale work cannot overwrite the current result; cover unmount/remount where work or integrations outlive a render, proving one active handler/subscription and no obsolete update. Use the existing designated runner.
 
 ## Coverage

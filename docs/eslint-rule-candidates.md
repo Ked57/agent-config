@@ -126,13 +126,35 @@ Do not enable `require-data-selectors`: the policy prefers role, label, then tex
 - In Vitest files, ban `@vue/test-utils` / `@testing-library/vue` mounting when Cypress CT owns
   component behaviour (one runner per behaviour).
 
+## From `interfere-inc/landmines` (2026-11-22)
+
+landmines is a set of Oxlint rules aimed at agents that optimise for green checks. We do not depend
+on it (Oxlint-only, v0.1.1, tied to its authors' stack); we port the ideas to rules we already
+install. Adopted in `fullstack-typescript-static` unless noted.
+
+| Idea | Our rule | Why |
+|---|---|---|
+| `no-flake-masking` | `no-restricted-syntax` on `retry`, `retries`, `timeout`, `testTimeout`, `hookTimeout`, `defaultCommandTimeout`, `vi.setConfig`, numeric timeout arguments to `it`/`test`/hooks | A red test made green by retrying or waiting longer. Nothing else blocked it. |
+| `no-fixed-sleep` | `no-restricted-syntax` on `new Promise` around `setTimeout`, `no-restricted-imports` on `timers/promises` | Cypress had `no-unnecessary-waiting`; Vitest had nothing. |
+| Actionable messages | Every restriction entry names the replacement | The message is what makes the agent fix the code instead of hunting for an escape. |
+| `no-test-doubles` | `vi.mock`/`vi.doMock` of relative or aliased paths, `vi.stubGlobal`, only where `<domain>.mock.ts` exists | Their rule bans every fake, which contradicts `policy/domain-module.md`; we ban only replacing our own modules. |
+| `strict-msw` | `onUnhandledRequest: "error"` in `fullstack-typescript-tests`, proven by a controlled violation | A setup requirement, not a selector. |
+| `no-comments` | Local rule `skills/fullstack-typescript-static/no-comments.mjs`; shared policy now bans comments | Prose comments go stale and mislead agents. Same allowlist as landmines: directives, licenses, one-line `WARNING:`, public-API JSDoc only where configured. |
+| `no-unsignaled-poll` | Review only (below) | Not expressible as a selector. |
+
+Skipped: `no-explicit-return-types` (house style, weakens boundary contracts), `colocated-tests` and
+`test-file-names` (collide with `<domain>.mock.ts` and Cypress naming), `package-exports` (monorepo
+publishing), their exact-count allowlist (bulk suppressions already ratchet).
+
 ## Not expressible in ESLint
 
 - `tsconfig`: `noUncheckedIndexedAccess` (lookups may be missing), `exactOptionalPropertyTypes`
   (omitted versus `undefined`).
 - Other tools: coverage, CRAP, mutation testing (the real check on assertion strength), Knip, `vue-tsc`.
-- Review only: naming, behaviour-versus-implementation tests, narrating comments, index keys in Vue,
-  controlled versus uncontrolled inputs, weakening the ESLint config itself (CODEOWNERS or a hook).
+- Review only: naming, behaviour-versus-implementation tests, index keys in Vue,
+  controlled versus uncontrolled inputs, weakening the ESLint config itself (CODEOWNERS or a hook),
+  `expect.poll` / `vi.waitFor` polling a spy or recorder instead of awaiting a signal from the
+  code under test (needs real AST analysis, not a selector).
 
 ## Open questions
 

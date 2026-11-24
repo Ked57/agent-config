@@ -38,6 +38,8 @@ If an owning skill is unavailable, mark that layer unmet, name it, and continue.
 | Static analysis | ESLint + Knip | `fullstack-typescript-static` |
 | Type safety | `tsc --noEmit`; `vue-tsc --noEmit` for Vue SFCs | this skill (fast gate) |
 | Lint gate protection and baseline | ESLint comment rules + bulk suppressions | `fullstack-typescript-static` |
+| Prose comments | Local `no-comments` ESLint rule | `fullstack-typescript-static` |
+| Flake masking, fixed sleeps, own-module mocks | ESLint restriction rules on test files and runner configs | `fullstack-typescript-static` |
 | Pure TS unit tests | Vitest | `fullstack-typescript-tests` |
 | Component behaviour | Cypress CT + Testing Library | `fullstack-typescript-tests` |
 | Critical journeys | Cypress E2E | `fullstack-typescript-tests` |
