@@ -1,0 +1,6 @@
+{
+  "claude": {
+    "implementer": "opus",
+    "judge": "fable"
+  }
+}

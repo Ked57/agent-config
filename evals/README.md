@@ -33,7 +33,7 @@ with the same isolation, arm cache and result reuse; `SMOKE.md` there holds the 
 | C3-page-transition | Vue/PrimeVue UI, motion | routing, vue-primevue, animate | react |
 | C5-container-card-grid | Vue/PrimeVue UI, layout | routing, vue-primevue, emil-design-eng, manual-qa | react |
 | P1-landing-page | Designed page without a mockup | routing, vue-primevue, emil-design-eng, taste-skill, manual-qa | react |
-| D2-account-settings | Design from a mockup (PNG hand-off) | routing, vue-primevue, emil-design-eng, manual-qa | react, taste-skill |
+| D2-account-settings | Design from a mockup (PNG hand-off) | routing, vue-primevue, emil-design-eng, manual-qa | react, taste-skill, mockup-hillclimb |
 | N1-query-parser-util | Pure-utility control in a UI repo | routing, typescript | manual-qa, agent-browser, emil-design-eng, react |
 | B6-login-rate-limit | TS backend feature | routing, typescript | manual-qa, agent-browser, vue-primevue, emil-design-eng |
 | B7-tenant-isolation | Backend bug fix (reported defect) | routing, typescript | same |
@@ -107,6 +107,38 @@ runs. Renders are deterministic, so a category that drops between two configs dr
 changed; with 2 reps per task, read a change of less than about one finding per run as noise. The
 categories and thresholds are in [`design/README.md`](fixtures/vue-primevue/design/README.md) "Findings".
 `--recheck` re-scores saved runs, so findings can be added to evals run before they existed.
+
+### Mockup hill-climb
+
+`mockup-hillclimb` only fires when the user asks for the loop, so the comparison keeps the config fixed and
+changes only the request: both arms install the same tree, and arm B prefixes the prompt with the skill.
+The smoke lists the skill under "must not fire" for D2, which asks for a mockup build without the loop.
+
+```sh
+npm run eval -- --a WORKTREE --b WORKTREE --b-prefix "/mockup-hillclimb" --tasks vue-design \
+  --only D2-account-settings --reps 1 --no-judge --concurrency 2 --timeout-min 60 --name hillclimb-d2
+npm run eval:defects -- ~/agent-config-evals/<hillclimb-d2 dir>
+```
+
+Single runs on Opus 5.5 on 2026-11-22, the judge on Fable 5.2:
+
+| Task (input) | Arm | Findings | Checks | Cost, time |
+|---|---|---|---|---|
+| D2 (Figma) | plain | 0 | 6/6 | $3.01, 6 min |
+| D2 (Figma) | loop | 9 | 5/6 | $14.25, 28 min |
+| D6 (PNG only) | plain | 49 (spacing 19, colour 16, size 7, component 4) | 3/6, visual 0.50, layout 0.68 | $1.45, 4 min |
+| D6 (PNG only) | loop | 0 | visual 0.98, layout 0.87, components 0.92 | $10.43, 49 min |
+
+- **No headroom, no gain.** With the Figma stub's exact values, the plain build already matches, and the loop only adds
+  cost.
+- **Scope creep broke D2.** Its loop stopped on Done after 5 → 4 → 0 → 0 blocking findings, but round-1 taste and floor
+  fixes added a confirm dialog, a photo upload and route guards that nobody asked for. One of them, an
+  "unsaved changes" announcement, left that text in the page after Discard, and the `discard-reverts` check failed. The
+  scope rule in `JUDGE.md` ("Sources", "Scope") was added after this run. Its re-run hit the usage limit, so it has no
+  result yet.
+- **Reading values off a PNG is where the loop pays.** D6 from screenshots went from 49 findings to none. That run hit
+  the usage limit just before its final reply, so the suite records it as an error with score 0. The check scores
+  above come from its saved build.
 
 ## A/B comparisons
 

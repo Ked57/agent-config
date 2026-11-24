@@ -17,7 +17,7 @@
     { "set": "vue-primevue", "id": "P1-landing-page", "covers": "Designed page without a mockup",
       "fires": ["routing", "vue-primevue", "emil-design-eng", "plugin:taste-skill", "manual-qa"], "notFires": ["react"] },
     { "set": "vue-design", "id": "D2-account-settings", "covers": "Design from a mockup (PNG hand-off)",
-      "fires": ["routing", "vue-primevue", "emil-design-eng", "manual-qa"], "notFires": ["react", "plugin:taste-skill"] },
+      "fires": ["routing", "vue-primevue", "emil-design-eng", "manual-qa"], "notFires": ["react", "plugin:taste-skill", "mockup-hillclimb"] },
     { "set": "ts-backend", "id": "B6-login-rate-limit", "covers": "TS backend feature",
       "fires": ["routing", "typescript"], "notFires": ["manual-qa", "agent-browser", "vue-primevue", "emil-design-eng"] },
     { "set": "ts-backend", "id": "B7-tenant-isolation", "covers": "Backend bug fix (reported defect)",

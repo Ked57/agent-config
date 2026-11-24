@@ -20,8 +20,10 @@ Codex, and Claude Code.
 - Installed agents discover self-invoking skills from `policy/routing.md` skill
   routing and each skill's description. Update both when adding a skill that should
   fire on its own.
-- Do not add shared agent roles, a `harnesses/` tree, or an orchestration pack.
-  Coding tasks run in-session with routed packs and skills.
+- Skills decide when to start subagents; keep that procedure in the skill. Name the
+  models a skill's subagents use as `{{models.<role>}}` placeholders: the installer fills
+  them per harness from `models.json`, overridden by `~/.agent-config/models.json` for a
+  user install.
 - Do not add credentials, access tokens, session files, or absolute user-home
   paths. MCP registration is intentionally managed separately in each client.
 - Keep `adapters/` as client-specific registration documentation, not the

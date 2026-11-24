@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { discoverAgents } from './native-agents.mjs';
 import { installExternalPlugins } from './external-plugins.mjs';
+import { loadModels, renderModels } from './skill-models.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -98,7 +99,6 @@ const createFileOperations = (root, label) => {
   };
   return {
     assertSafe,
-    copy: (from, to) => writeFile(to, read(from)),
     relative: relativeToRoot,
     remove: (file) => {
       assertSafe(file);
@@ -108,7 +108,7 @@ const createFileOperations = (root, label) => {
   };
 };
 const projectFiles = createFileOperations(projectRoot, 'project');
-const { assertSafe: assertSafeTarget, copy, relative, remove, write } = projectFiles;
+const { assertSafe: assertSafeTarget, relative, remove, write } = projectFiles;
 const findExactLine = (value, line) => {
   let index = value.indexOf(line);
   while (index !== -1) {
@@ -199,6 +199,16 @@ const managedSourceFiles = [
 ];
 const revision = sha256(managedSourceFiles.map((file) => read(path.join(sourceRoot, file))).join('\n--- agent-config source boundary ---\n')).slice(0, 12);
 const userHome = os.homedir();
+// Personal model choices live beside the user lock so they stay out of shared checkouts and
+// committed project installs; project installs render only the repository defaults.
+const skillModels = loadModels({
+  sourceRoot,
+  overrideFile: userScope ? path.join(userHome, '.agent-config', 'models.json') : null
+});
+// Routing resolves every harness to this copy, so Claude Code's models have to be named
+// here too. The .claude/skills copy stays the Claude-only text for native discovery.
+const sharedSkillHarnesses = ['claude', 'codex', 'cursor'];
+const renderSkill = (source, harnesses) => renderModels(read(source), harnesses, skillModels);
 const configuredCodexHome = process.env.CODEX_HOME
   ? path.resolve(process.env.CODEX_HOME)
   : path.join(userHome, '.codex');
@@ -363,11 +373,11 @@ const projectPackEnabled = Object.fromEntries(policyPacks.map(({ name }) => [
   projectPackDetector[name] ?? true
 ]));
 const managedFiles = [
-  ...policyPacks.map(({ name, source }) => [path.join(policyDirectory, `${name}.md`), source, projectPackEnabled[name]]),
-  ...roleFiles.map(({ name, source }) => [path.join(agentsDirectory, name), source, true]),
+  ...policyPacks.map(({ name, source }) => [path.join(policyDirectory, `${name}.md`), read(source), projectPackEnabled[name]]),
+  ...roleFiles.map(({ name, source }) => [path.join(agentsDirectory, name), read(source), true]),
   ...portableSkillFiles.flatMap(({ name, file, source }) => [
-    [path.join(skillsDirectory, name, file), source, true],
-    [target('.claude', 'skills', name, file), source, true]
+    [path.join(skillsDirectory, name, file), renderSkill(source, sharedSkillHarnesses), true],
+    [target('.claude', 'skills', name, file), renderSkill(source, ['claude']), true]
   ])
 ];
 
@@ -419,14 +429,14 @@ const userStandaloneFiles = [
         ? 'portable-skill'
         : `skill:${name}:${file}`,
       destination: path.join(userHome, '.agents', 'skills', name, file),
-      contents: read(source)
+      contents: renderSkill(source, sharedSkillHarnesses)
     },
     {
       key: name === 'fullstack-typescript-quality' && file === 'SKILL.md'
         ? 'claude:portable-skill'
         : `claude:skill:${name}:${file}`,
       destination: path.join(userHome, '.claude', 'skills', name, file),
-      contents: read(source)
+      contents: renderSkill(source, ['claude'])
     }
   ])
 ];
@@ -653,11 +663,11 @@ const install = () => {
     }
   }
 
-  for (const [destination, source, enabled] of managedFiles) {
+  for (const [destination, contents, enabled] of managedFiles) {
     const name = relative(destination);
     if (!enabled) {
       if (ownedManagedFiles.has(name) && exists(destination)) {
-        if (sha256(read(destination)) === sha256(read(source))) {
+        if (sha256(read(destination)) === sha256(contents)) {
           remove(destination);
           console.log(`Removed no-longer-applicable ${name}`);
         } else {
@@ -672,7 +682,7 @@ const install = () => {
       continue;
     }
     const action = exists(destination) ? 'Synced' : 'Created';
-    copy(source, destination);
+    write(destination, contents);
     nextManagedFiles.push(name);
     console.log(`${action} ${name}`);
   }
@@ -759,8 +769,8 @@ const check = () => {
   if (!read(claudeFile).includes(marker('claude-bridge', claudeBridgePolicy).trim())) stale.push(relative(claudeFile));
   if (!read(cursorBridgeFile).includes(marker('cursor-bridge', cursorBridgePolicy).trim())) stale.push(relative(cursorBridgeFile));
   if (!read(prettierIgnoreFile).includes(lineMarker('prettier-ignore', prettierIgnoreContents).trim())) stale.push(relative(prettierIgnoreFile));
-  for (const [destination, source, enabled] of managedFiles) {
-    if (enabled && read(destination) !== read(source)) stale.push(relative(destination));
+  for (const [destination, contents, enabled] of managedFiles) {
+    if (enabled && read(destination) !== contents) stale.push(relative(destination));
   }
   if (stale.length) {
     for (const file of stale) console.error(`Outdated managed content: ${file}`);
