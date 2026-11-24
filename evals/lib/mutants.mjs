@@ -51,6 +51,7 @@ export function validateManifest(manifest, taskId, files) {
       }
     }
   }
+  if (manifest.installAfterPatch !== undefined && (typeof manifest.installAfterPatch !== 'string' || !manifest.installAfterPatch.trim())) problems.push('installAfterPatch must be a non-empty command');
   if (manifest.scoreGate !== undefined) {
     const gate = manifest.scoreGate;
     const unit = (value) => typeof value === 'number' && value >= 0 && value <= 1;

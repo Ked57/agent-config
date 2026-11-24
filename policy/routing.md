@@ -21,6 +21,8 @@ declared dependencies.
 - TypeScript quality-tooling work → `fullstack-typescript-quality`.
 - Implemented user-facing UI change (browser page, component, style, native app screen) → `manual-qa`.
   Not for backend, API, CLI, library, or documentation work unless the user asks for manual QA.
+- Opening or updating a merge or pull request whose diff changes user-facing UI → `mr-screenshots`.
+  It owns the before/after screenshots in the description; reuse `manual-qa` captures where they fit.
 - Browser automation → `agent-browser`; specialized workflows come from `agent-browser skills get`. `manual-qa` loads this owner for browser UI.
 - `fullstack-typescript-quality` loads `fullstack-typescript-static`, `fullstack-typescript-tests`, and `fullstack-typescript-mutation`; those children own their gates.
 - Public page or app screen that needs a designed look and has no provided design to match → `design-taste-frontend`.

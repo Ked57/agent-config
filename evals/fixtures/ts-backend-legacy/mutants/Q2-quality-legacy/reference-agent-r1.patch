@@ -1,0 +1,1055 @@
+diff -ruN a/.agents/agent-config.json b/.agents/agent-config.json
+--- /dev/null
++++ b/.agents/agent-config.json
+@@ -0,0 +1,53 @@
++{
++  "version": 1,
++  "runtime": "bun",
++  "commands": {
++    "fast": "bun run verify:fast",
++    "full": "bun run verify:full",
++    "unit": "bun run test:unit",
++    "knip": "bun run knip",
++    "build": "bun run build",
++    "mutation": "bun run test:mutation:domain"
++  },
++  "routing": [
++    {
++      "match": ["**/*"],
++      "required": ["full"]
++    },
++    {
++      "match": ["src/**/*.ts", "scripts/**/*.ts"],
++      "required": ["fast"]
++    },
++    {
++      "match": [
++        "src/lib/flags.ts",
++        "src/lib/ids.ts",
++        "src/lib/passwords.ts",
++        "src/lib/time.ts",
++        "src/lib/legacy/dates.ts",
++        "src/lib/legacy/money.ts",
++        "src/lib/**/*.test.ts"
++      ],
++      "required": ["unit", "fast"],
++      "recommended": ["mutation"]
++    },
++    {
++      "match": [
++        "package.json",
++        "bun.lock",
++        "tsconfig.json",
++        "eslint.config.js",
++        "eslint-rules/**",
++        "eslint-suppressions.json",
++        "vitest.config.ts",
++        "vitest.mutation.config.ts",
++        "knip.json",
++        "stryker.config.json",
++        ".prettierignore",
++        "drizzle.config.ts",
++        "drizzle/**"
++      ],
++      "required": ["full"]
++    }
++  ]
++}
+diff -ruN a/eslint.config.js b/eslint.config.js
+--- a/eslint.config.js
++++ b/eslint.config.js
+@@ -1,16 +1,253 @@
+ import js from "@eslint/js";
++import eslintComments from "@eslint-community/eslint-plugin-eslint-comments";
++import vitest from "@vitest/eslint-plugin";
++import importX from "eslint-plugin-import-x";
++import sonarjs from "eslint-plugin-sonarjs";
++import qualityMetrics from "quality-metrics";
+ import tseslint from "typescript-eslint";
+ 
++import noComments from "./eslint-rules/no-comments.mjs";
++
++const GATE_RULES = [
++  "complexity",
++  "sonarjs/cognitive-complexity",
++  "quality-metrics/halstead",
++  "max-lines",
++  "max-lines-per-function",
++  "max-params",
++  "@typescript-eslint/no-explicit-any",
++  "@typescript-eslint/ban-ts-comment",
++  "@eslint-community/eslint-comments/*",
++  "no-warning-comments",
++  "local/no-comments",
++];
++
++const TEST_GUARD_RULES = [
++  "no-restricted-syntax",
++  "no-restricted-imports",
++  "vitest/no-restricted-vi-methods",
++];
++
++const TEST_FILES = [
++  "src/**/*.test.ts",
++  "src/test/**/*.ts",
++  "vitest.config.ts",
++  "vitest.mutation.config.ts",
++];
++
++const DOUBLE_CAST = {
++  selector:
++    "TSAsExpression > TSAsExpression[typeAnnotation.type='TSUnknownKeyword']",
++  message:
++    "Do not cast through `unknown`: parse the value at the boundary or fix the source type.",
++};
++
++const DYNAMIC_IMPORT = {
++  selector: "ImportExpression",
++  message:
++    "Use a static import at the top of the module; dynamic imports are reserved for deliberate lazy loading.",
++};
++
++const FLAKE_MESSAGE =
++  "Find the race or the slow setup and fix it; await the operation instead of retrying or waiting longer.";
++
++const SLEEP_MESSAGE =
++  "Await the operation itself, or use `vi.useFakeTimers()` and advance time instead of sleeping.";
++
++const MOCK_MESSAGE =
++  "Inject the fake from the module's `<domain>.mock.ts` instead of replacing a project module or global.";
++
+ export default tseslint.config(
+-  { ignores: ["dist/**", "drizzle/**", "data/**", "node_modules/**"] },
++  {
++    ignores: [
++      "dist/**",
++      "drizzle/**",
++      "data/**",
++      "node_modules/**",
++      "coverage/**",
++      "reports/**",
++      ".stryker-tmp/**",
++    ],
++  },
++  {
++    linterOptions: { reportUnusedDisableDirectives: "error" },
++  },
+   js.configs.recommended,
+   ...tseslint.configs.recommended,
+   {
++    plugins: {
++      "@eslint-community/eslint-comments": eslintComments,
++      local: { rules: { "no-comments": noComments } },
++    },
++    rules: {
++      "local/no-comments": "error",
++      "@eslint-community/eslint-comments/no-unlimited-disable": "error",
++      "@eslint-community/eslint-comments/require-description": "error",
++      "@eslint-community/eslint-comments/no-restricted-disable": [
++        "error",
++        ...GATE_RULES,
++      ],
++      "no-warning-comments": [
++        "error",
++        {
++          terms: ["istanbul ignore", "v8 ignore", "c8 ignore"],
++          location: "anywhere",
++        },
++      ],
++    },
++  },
++  {
++    files: ["**/*.ts"],
++    languageOptions: {
++      parserOptions: {
++        projectService: true,
++        tsconfigRootDir: import.meta.dirname,
++      },
++    },
++    plugins: {
++      sonarjs,
++      "quality-metrics": qualityMetrics,
++      "import-x": importX,
++    },
+     rules: {
+       "@typescript-eslint/no-unused-vars": [
+         "error",
+         { argsIgnorePattern: "^_" },
+       ],
++      complexity: ["error", { max: 21 }],
++      "sonarjs/cognitive-complexity": ["error", 21],
++      "quality-metrics/halstead": [
++        "error",
++        { maxVolume: 1000, maxEffort: 80000 },
++      ],
++      "max-lines": ["error", { max: 499 }],
++      "max-lines-per-function": ["error", { max: 99 }],
++      "max-params": ["error", { max: 4 }],
++      "@typescript-eslint/no-explicit-any": [
++        "error",
++        { fixToUnknown: false, ignoreRestArgs: false },
++      ],
++      "@typescript-eslint/ban-ts-comment": [
++        "error",
++        {
++          "ts-ignore": true,
++          "ts-nocheck": true,
++          "ts-check": false,
++          "ts-expect-error": "allow-with-description",
++        },
++      ],
++      "@typescript-eslint/switch-exhaustiveness-check": [
++        "error",
++        { considerDefaultExhaustiveForUnions: false },
++      ],
++      "@typescript-eslint/consistent-type-assertions": [
++        "error",
++        { assertionStyle: "as", objectLiteralTypeAssertions: "never" },
++      ],
++      "@typescript-eslint/no-non-null-assertion": "error",
++      "@typescript-eslint/no-unsafe-assignment": "error",
++      "@typescript-eslint/no-unsafe-member-access": "error",
++      "@typescript-eslint/no-unsafe-call": "error",
++      "@typescript-eslint/no-unsafe-return": "error",
++      "@typescript-eslint/no-unsafe-argument": "error",
++      "@typescript-eslint/no-floating-promises": [
++        "error",
++        { ignoreVoid: false },
++      ],
++      "@typescript-eslint/no-misused-promises": "error",
++      "@typescript-eslint/return-await": "error",
++      "import-x/first": "error",
++      "no-restricted-syntax": ["error", DOUBLE_CAST, DYNAMIC_IMPORT],
++      "no-restricted-imports": [
++        "error",
++        {
++          patterns: [
++            {
++              group: ["**/*.mock"],
++              message:
++                "Production code must not import `*.mock` modules; inject the real dependency and keep fakes in tests.",
++            },
++          ],
++        },
++      ],
++    },
++  },
++  {
++    files: TEST_FILES,
++    plugins: { vitest },
++    rules: {
++      "@eslint-community/eslint-comments/no-restricted-disable": [
++        "error",
++        ...GATE_RULES,
++        ...TEST_GUARD_RULES,
++      ],
++      "vitest/no-focused-tests": "error",
++      "vitest/no-disabled-tests": "error",
++      "vitest/expect-expect": "error",
++      "vitest/valid-expect": "error",
++      "vitest/no-conditional-expect": "error",
++      "vitest/no-conditional-in-test": "error",
++      "vitest/no-standalone-expect": "error",
++      "vitest/no-identical-title": "error",
++      "vitest/valid-title": "error",
++      "vitest/require-to-throw-message": "error",
++      "vitest/no-large-snapshots": "error",
++      "vitest/no-interpolation-in-snapshots": "error",
++      "vitest/max-nested-describe": "error",
++      "vitest/prefer-hooks-on-top": "error",
++      "vitest/no-duplicate-hooks": "error",
++      "vitest/no-restricted-vi-methods": [
++        "error",
++        { stubGlobal: MOCK_MESSAGE },
++      ],
++      "no-restricted-syntax": [
++        "error",
++        DOUBLE_CAST,
++        DYNAMIC_IMPORT,
++        {
++          selector:
++            "Property[key.name=/^(retry|retries|timeout|testTimeout|hookTimeout|defaultCommandTimeout)$/]",
++          message: FLAKE_MESSAGE,
++        },
++        {
++          selector:
++            "CallExpression[callee.object.name='vi'][callee.property.name='setConfig']",
++          message: FLAKE_MESSAGE,
++        },
++        {
++          selector:
++            "CallExpression[callee.name=/^(it|test|describe|beforeEach|beforeAll|afterEach|afterAll)$/] > Literal[raw=/^[0-9]/]",
++          message: FLAKE_MESSAGE,
++        },
++        {
++          selector:
++            "CallExpression[callee.object.name=/^(it|test|describe)$/] > Literal[raw=/^[0-9]/]",
++          message: FLAKE_MESSAGE,
++        },
++        {
++          selector:
++            "NewExpression[callee.name='Promise'] CallExpression[callee.name='setTimeout']",
++          message: SLEEP_MESSAGE,
++        },
++        {
++          selector:
++            "CallExpression[callee.object.name='vi'][callee.property.name=/^(mock|doMock)$/][arguments.0.value=/^(\\.{1,2}|@|~)\\//]",
++          message: MOCK_MESSAGE,
++        },
++      ],
++      "no-restricted-imports": [
++        "error",
++        {
++          paths: [
++            { name: "node:timers/promises", message: SLEEP_MESSAGE },
++            { name: "timers/promises", message: SLEEP_MESSAGE },
++          ],
++        },
++      ],
+     },
+   },
++  {
++    files: ["**/*.js", "**/*.mjs"],
++    ...tseslint.configs.disableTypeChecked,
++  },
+ );
+diff -ruN a/eslint-rules/no-comments.mjs b/eslint-rules/no-comments.mjs
+--- /dev/null
++++ b/eslint-rules/no-comments.mjs
+@@ -0,0 +1,73 @@
++const DIRECTIVE = new RegExp(
++  [
++    String.raw`^\s*(eslint|eslint-disable|eslint-enable|eslint-disable-line|eslint-disable-next-line|global|globals)\b`,
++    String.raw`^\s*@ts-(expect-error|ignore|nocheck)\b`,
++    String.raw`^\s*prettier-ignore\s*$`,
++    String.raw`^\s*(istanbul|v8|c8) ignore\b`,
++    String.raw`^\s*[#@]__[A-Z_]+__\s*$`,
++    String.raw`^\s*webpack[A-Z]\w*:`,
++    String.raw`^\s*@vite-ignore\s*$`,
++    String.raw`^/ <reference\b`,
++    String.raw`^\s*@jsxImportSource\b`,
++    String.raw`^\s*SPDX-License-Identifier:`,
++    String.raw`^!`,
++    String.raw`^[\s*]*@license\b`,
++    String.raw`^# source(Mapping)?URL=`,
++  ].join("|"),
++);
++
++const WARNING = /^ WARNING: \S/;
++
++function isPublicApiDoc(comment, filename, publicApi) {
++  return (
++    comment.type === "Block" &&
++    comment.value.startsWith("*") &&
++    publicApi.some((part) => filename.includes(part))
++  );
++}
++
++function isLoneWarning(comment, next) {
++  return (
++    comment.type === "Line" &&
++    WARNING.test(comment.value) &&
++    (!next || next.loc.start.line !== comment.loc.end.line + 1)
++  );
++}
++
++export default {
++  meta: {
++    type: "suggestion",
++    schema: [
++      {
++        type: "object",
++        properties: { publicApi: { type: "array", items: { type: "string" } } },
++        additionalProperties: false,
++      },
++    ],
++    messages: {
++      prose:
++        "Remove this comment: rename or restructure the code so it explains itself, and put the reason in the commit message. Only a single-line `// WARNING: <hazard>` may stay.",
++    },
++  },
++  create(context) {
++    const publicApi = context.options[0]?.publicApi ?? [];
++    const filename = context.filename.replaceAll("\\", "/");
++    const report = (comment) =>
++      context.report({ loc: comment.loc, messageId: "prose" });
++    return {
++      Program() {
++        const comments = context.sourceCode.getAllComments();
++        comments.forEach((comment, index) => {
++          if (comment.type === "Shebang" || DIRECTIVE.test(comment.value))
++            return;
++          if (isLoneWarning(comment, comments[index + 1])) return;
++          if (isPublicApiDoc(comment, filename, publicApi)) return;
++          report(comment);
++        });
++        for (const comment of context.sourceCode.ast.templateBody?.comments ??
++          [])
++          report(comment);
++      },
++    };
++  },
++};
+diff -ruN a/eslint-suppressions.json b/eslint-suppressions.json
+--- /dev/null
++++ b/eslint-suppressions.json
+@@ -0,0 +1,232 @@
++{
++  "src/app.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/controllers/payments.controller.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-lines-per-function": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/controllers/reports-v1.controller.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/controllers/time-entries.controller.ts": {
++    "max-lines-per-function": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/controllers/users.controller.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/db/schema.ts": {
++    "local/no-comments": {
++      "count": 3
++    }
++  },
++  "src/db/seed.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-lines": {
++      "count": 1
++    },
++    "max-lines-per-function": {
++      "count": 1
++    },
++    "max-params": {
++      "count": 3
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/index.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/lib/errors.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/lib/flags.ts": {
++    "@typescript-eslint/consistent-type-assertions": {
++      "count": 1
++    },
++    "local/no-comments": {
++      "count": 5
++    }
++  },
++  "src/lib/legacy/dates.ts": {
++    "local/no-comments": {
++      "count": 8
++    }
++  },
++  "src/lib/legacy/idempotency.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-params": {
++      "count": 1
++    }
++  },
++  "src/lib/legacy/money.ts": {
++    "local/no-comments": {
++      "count": 5
++    }
++  },
++  "src/lib/legacy/validate.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/lib/time.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/plugins/auth.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/routes/attachments.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/routes/clients.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-lines-per-function": {
++      "count": 1
++    }
++  },
++  "src/routes/exports.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-lines-per-function": {
++      "count": 1
++    }
++  },
++  "src/routes/invoices.test.ts": {
++    "max-lines-per-function": {
++      "count": 1
++    }
++  },
++  "src/routes/projects.ts": {
++    "max-lines-per-function": {
++      "count": 1
++    }
++  },
++  "src/routes/tasks.test.ts": {
++    "max-lines-per-function": {
++      "count": 1
++    }
++  },
++  "src/routes/webhook-subscriptions.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-lines-per-function": {
++      "count": 1
++    }
++  },
++  "src/routes/webhooks.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/services/digest.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/services/invoices.ts": {
++    "local/no-comments": {
++      "count": 4
++    },
++    "quality-metrics/halstead": {
++      "count": 2
++    }
++  },
++  "src/services/jobs.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/services/ledger.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/services/mailer.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/services/reports.ts": {
++    "local/no-comments": {
++      "count": 2
++    },
++    "quality-metrics/halstead": {
++      "count": 3
++    }
++  },
++  "src/services/slack.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/services/tasks.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/services/webhook-delivery.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/sql/reports.sql.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/sql/time-entries.sql.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/sql/users.sql.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/test/helpers.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  }
++}
+\ No newline at end of file
+diff -ruN a/.gitignore b/.gitignore
+--- a/.gitignore
++++ b/.gitignore
+@@ -2,3 +2,6 @@
+ dist
+ data
+ *.db
++coverage
++reports
++.stryker-tmp
+diff -ruN a/knip.json b/knip.json
+--- /dev/null
++++ b/knip.json
+@@ -0,0 +1,19 @@
++{
++  "$schema": "https://unpkg.com/knip@6/schema.json",
++  "entry": ["scripts/*.ts"],
++  "project": ["src/**/*.ts", "scripts/**/*.ts", "eslint-rules/**/*.mjs"],
++  "ignore": ["src/services/slack.ts"],
++  "ignoreIssues": {
++    "src/app.ts": ["types"],
++    "src/controllers/time-entries.controller.ts": ["exports"],
++    "src/db/migrate.ts": ["exports"],
++    "src/lib/flags.ts": ["exports"],
++    "src/lib/legacy/dates.ts": ["exports"],
++    "src/lib/legacy/money.ts": ["exports"],
++    "src/lib/time.ts": ["exports"],
++    "src/plugins/auth.ts": ["exports"],
++    "src/services/digest.ts": ["exports"],
++    "src/services/invoices.ts": ["exports"],
++    "src/services/webhook-delivery.ts": ["exports", "types"]
++  }
++}
+diff -ruN a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -10,12 +10,19 @@
+     "build": "bun build src/index.ts --target bun --outdir dist",
+     "typecheck": "tsc --noEmit",
+     "lint": "eslint .",
++    "lint:directives": "bun run scripts/ci/check-disable-directives.ts",
++    "lint:suppressions": "bun run scripts/ci/check-suppression-growth.ts",
+     "format:check": "prettier --check .",
+     "format:fix": "prettier --write .",
+-    "test": "vitest run",
++    "test": "bun run test:unit",
++    "test:unit": "vitest run",
++    "test:mutation:domain": "stryker run",
++    "knip": "knip",
+     "db:generate": "drizzle-kit generate",
+     "db:migrate": "bun run scripts/migrate.ts",
+-    "db:seed": "bun run scripts/seed.ts"
++    "db:seed": "bun run scripts/seed.ts",
++    "verify:fast": "bun run format:check && bun run lint && bun run lint:directives && bun run typecheck && bun run test:unit",
++    "verify:full": "bun run verify:fast && bun run knip && bun run build"
+   },
+   "dependencies": {
+     "@libsql/client": "^0.18.0",
+@@ -23,11 +30,22 @@
+     "elysia": "^1.4.32"
+   },
+   "devDependencies": {
++    "@barney-media/crap-typescript-vitest": "^2.0.2",
++    "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
+     "@eslint/js": "^10.0.1",
++    "@stryker-mutator/core": "^10.1.1",
++    "@stryker-mutator/vitest-runner": "^10.1.1",
+     "@types/bun": "^1.4.4",
++    "@vitest/coverage-v8": "5.1.0",
++    "@vitest/eslint-plugin": "^1.6.28",
+     "drizzle-kit": "^0.31.11",
+     "eslint": "^10.15.0",
++    "eslint-plugin-import-x": "^4.18.1",
++    "eslint-plugin-sonarjs": "^4.2.2",
++    "knip": "^6.48.0",
+     "prettier": "^3.10.1",
++    "quality-metrics": "^0.1.1",
++    "ts-morph": "^28.0.0",
+     "typescript": "~6.0.3",
+     "typescript-eslint": "^8.72.2",
+     "vitest": "^5.1.0"
+diff -ruN a/.prettierignore b/.prettierignore
+--- a/.prettierignore
++++ b/.prettierignore
+@@ -2,3 +2,7 @@
+ data
+ drizzle/meta
+ bun.lock
++coverage
++reports
++.stryker-tmp
++eslint-suppressions.json
+diff -ruN a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -24,7 +24,11 @@
+ 
+ ## Checks
+ 
+-`bun run typecheck`, `bun run lint`, `bun run format:check`, `bun run test`, `bun run build`.
++`bun run verify:fast` runs formatting, lint, the disable-directive scan, typecheck and tests (with
++coverage and CRAP gates). `bun run verify:full` adds Knip and the build. `bun run test:mutation:domain`
++runs Stryker on the pure `src/lib` helpers. In CI, also run `bun run lint:suppressions <merge-base>`
++so no file's `eslint-suppressions.json` count can grow; shrink it only with
++`eslint --prune-suppressions`.
+ Tests run against a fresh temp SQLite database per test (`src/test/helpers.ts`).
+ 
+ ## Layout
+diff -ruN a/scripts/ci/check-disable-directives.ts b/scripts/ci/check-disable-directives.ts
+--- /dev/null
++++ b/scripts/ci/check-disable-directives.ts
+@@ -0,0 +1,35 @@
++import { Glob } from "bun";
++
++const LINTED_FILES = new Glob("**/*.{ts,js,mjs}");
++const IGNORED_DIRS =
++  /^(node_modules|dist|drizzle|data|coverage|reports|\.stryker-tmp)\//;
++const DIRECTIVE =
++  /(?:\/\/|\/\*|<!--)\s*eslint-disable(?:-next-line|-line)?(?=[\s*]|-->|$)(.*?)(?:\*\/|-->|$)/gm;
++
++function forbiddenReason(ruleList: string): string | null {
++  const rules = ruleList.split(" -- ")[0]?.trim() ?? "";
++  if (rules.length === 0) return "names no rule";
++  if (rules.includes("eslint-comments"))
++    return "disables an eslint-comments guard";
++  return null;
++}
++
++const failures: string[] = [];
++for await (const path of LINTED_FILES.scan({ dot: true })) {
++  if (IGNORED_DIRS.test(path)) continue;
++  const text = await Bun.file(path).text();
++  for (const match of text.matchAll(DIRECTIVE)) {
++    const reason = forbiddenReason(match[1] ?? "");
++    if (!reason) continue;
++    const line = text.slice(0, match.index).split("\n").length;
++    failures.push(`${path}:${line} ${reason}: ${match[0].trim()}`);
++  }
++}
++
++if (failures.length > 0) {
++  console.error(
++    `Forbidden ESLint disable directives. Fix the code instead of disabling the gate:\n${failures.join("\n")}`,
++  );
++  process.exit(1);
++}
++console.log("No forbidden ESLint disable directives.");
+diff -ruN a/scripts/ci/check-suppression-growth.ts b/scripts/ci/check-suppression-growth.ts
+--- /dev/null
++++ b/scripts/ci/check-suppression-growth.ts
+@@ -0,0 +1,63 @@
++import { $ } from "bun";
++
++const BASELINE = "eslint-suppressions.json";
++
++type Suppressions = Record<string, Record<string, { count: number }>>;
++
++const base = process.argv[2];
++if (!base) {
++  console.error(
++    "Usage: bun scripts/ci/check-suppression-growth.ts <merge-base-commit>",
++  );
++  process.exit(1);
++}
++
++const resolved = await $`git rev-parse --verify ${`${base}^{commit}`}`
++  .nothrow()
++  .quiet();
++if (resolved.exitCode !== 0) {
++  console.error(`Cannot read merge-base commit ${base}; refusing to pass.`);
++  process.exit(1);
++}
++
++const baseFile = await $`git show ${`${base}:${BASELINE}`}`.nothrow().quiet();
++if (baseFile.exitCode !== 0) {
++  console.log(
++    `${BASELINE} is new in this change; it becomes the adoption baseline.`,
++  );
++  process.exit(0);
++}
++
++const before = JSON.parse(baseFile.stdout.toString()) as Suppressions;
++const after = JSON.parse(await Bun.file(BASELINE).text()) as Suppressions;
++
++const renames = new Map<string, string>();
++const diff = await $`git diff --name-status -M -z ${`${base}...HEAD`}`.quiet();
++const fields = diff.stdout.toString().split("\0");
++for (let index = 0; index < fields.length; index += 1) {
++  const status = fields[index] ?? "";
++  if (status.startsWith("R")) {
++    renames.set(fields[index + 2] ?? "", fields[index + 1] ?? "");
++    index += 2;
++  } else if (status.length > 0) {
++    index += 1;
++  }
++}
++
++const grown: string[] = [];
++for (const [file, rules] of Object.entries(after)) {
++  const baseRules = before[renames.get(file) ?? file] ?? {};
++  for (const [rule, { count }] of Object.entries(rules)) {
++    const baseCount = baseRules[rule]?.count ?? 0;
++    if (count > baseCount)
++      grown.push(`${file} ${rule}: ${baseCount} -> ${count}`);
++  }
++}
++
++if (grown.length > 0) {
++  console.error(
++    `ESLint suppressions grew. Fix the new violations; only shrink the baseline with \`eslint --prune-suppressions\`:\n${grown.join("\n")}`,
++  );
++  process.exit(1);
++}
++console.log("No ESLint suppression count grew.");
+diff -ruN a/src/lib/ids.mock.ts b/src/lib/ids.mock.ts
+--- /dev/null
++++ b/src/lib/ids.mock.ts
+@@ -0,0 +1,7 @@
++export function fakeIds(prefix: string): () => string {
++  let count = 0;
++  return () => {
++    count += 1;
++    return `${prefix}_${String(count).padStart(16, "0")}`;
++  };
++}
+diff -ruN a/src/lib/ids.test.ts b/src/lib/ids.test.ts
+--- /dev/null
++++ b/src/lib/ids.test.ts
+@@ -0,0 +1,11 @@
++import { describe, expect, it } from "vitest";
++import { newId } from "./ids";
++import { fakeIds } from "./ids.mock";
++
++describe("ids", () => {
++  it("keeps the prefix and length of real ids in fakes", () => {
++    const next = fakeIds("tsk");
++    expect(next()).toHaveLength(newId("tsk").length);
++    expect(next()).toBe("tsk_0000000000000002");
++  });
++});
+diff -ruN a/src/routes/tasks.test.ts b/src/routes/tasks.test.ts
+--- a/src/routes/tasks.test.ts
++++ b/src/routes/tasks.test.ts
+@@ -120,3 +120,86 @@
+     ).toBe(404);
+   });
+ });
++
++describe("PATCH /api/tasks/:id", () => {
++  it("answers 404 for a task in another org", async () => {
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_6", {
++      token: admin,
++      body: { title: "Stolen" },
++    });
++    expect(response.status).toBe(404);
++  });
++
++  it("rejects a blank title", async () => {
++    const { json } = await createTestContext();
++    const response = await json("PATCH", "/api/tasks/tsk_4", {
++      token: admin,
++      body: { title: "   " },
++    });
++    expect(response).toMatchObject({
++      status: 400,
++      body: { code: "invalid_title" },
++    });
++  });
++
++  it("updates title, description and due date", async () => {
++    const { json } = await createTestContext();
++    const updated = await json("PATCH", "/api/tasks/tsk_4", {
++      token: admin,
++      body: {
++        title: "  Push notifications v2 ",
++        description: "Use the new provider",
++        dueDate: "2026-12-24",
++      },
++    });
++    expect(updated.body).toMatchObject({
++      title: "Push notifications v2",
++      description: "Use the new provider",
++      dueDate: "2026-12-24",
++    });
++  });
++
++  it("leaves an unchanged task untouched", async () => {
++    const { json } = await createTestContext();
++    const before = await json<{ updatedAt: string }>(
++      "GET",
++      "/api/tasks/tsk_2",
++      {
++        token: admin,
++      },
++    );
++    const after = await json<{ updatedAt: string }>(
++      "PATCH",
++      "/api/tasks/tsk_2",
++      {
++        token: admin,
++        body: { status: "in_progress", assigneeId: "usr_bob" },
++      },
++    );
++    expect(after.body.updatedAt).toBe(before.body.updatedAt);
++  });
++
++  it("reassigns and unassigns a task", async () => {
++    const { json } = await createTestContext();
++    const reassigned = await json("PATCH", "/api/tasks/tsk_2", {
++      token: admin,
++      body: { assigneeId: "usr_sam" },
++    });
++    expect(reassigned.body).toMatchObject({ assigneeId: "usr_sam" });
++    const unassigned = await json("PATCH", "/api/tasks/tsk_2", {
++      token: admin,
++      body: { assigneeId: null },
++    });
++    expect(unassigned.body).toMatchObject({ assigneeId: null });
++  });
++
++  it("rejects an assignee from another org", async () => {
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_2", {
++      token: admin,
++      body: { assigneeId: "usr_gina" },
++    });
++    expect(response.status).toBe(400);
++  });
++});
+diff -ruN a/stryker.config.json b/stryker.config.json
+--- /dev/null
++++ b/stryker.config.json
+@@ -0,0 +1,25 @@
++{
++  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
++  "testRunner": "vitest",
++  "vitest": {
++    "configFile": "vitest.mutation.config.ts"
++  },
++  "mutate": [
++    "src/lib/flags.ts",
++    "src/lib/ids.ts",
++    "src/lib/passwords.ts",
++    "src/lib/time.ts",
++    "src/lib/legacy/dates.ts",
++    "src/lib/legacy/money.ts"
++  ],
++  "reporters": ["clear-text", "progress", "html"],
++  "htmlReporter": {
++    "fileName": "reports/mutation/index.html"
++  },
++  "thresholds": {
++    "high": 90,
++    "low": 80,
++    "break": 78
++  },
++  "tempDirName": ".stryker-tmp"
++}
+diff -ruN a/tsconfig.json b/tsconfig.json
+--- a/tsconfig.json
++++ b/tsconfig.json
+@@ -17,6 +17,7 @@
+     "src/**/*.ts",
+     "scripts/**/*.ts",
+     "drizzle.config.ts",
+-    "vitest.config.ts"
++    "vitest.config.ts",
++    "vitest.mutation.config.ts"
+   ]
+ }
+diff -ruN a/vitest.config.ts b/vitest.config.ts
+--- a/vitest.config.ts
++++ b/vitest.config.ts
+@@ -1,9 +1,31 @@
+-import { defineConfig } from "vitest/config";
++import { withCrapTypescriptVitest } from "@barney-media/crap-typescript-vitest";
+ 
+-export default defineConfig({
+-  test: {
+-    include: ["src/**/*.test.ts"],
+-    environment: "node",
+-    setupFiles: ["./src/test/setup.ts"],
++export default withCrapTypescriptVitest(
++  {
++    test: {
++      include: ["src/**/*.test.ts"],
++      environment: "node",
++      setupFiles: ["./src/test/setup.ts"],
++      coverage: {
++        enabled: true,
++        provider: "v8",
++        include: ["src/**/*.ts"],
++        exclude: [
++          "src/**/*.test.ts",
++          "src/**/*.mock.ts",
++          "src/test/**",
++          "src/index.ts",
++          "src/db/seed.ts",
++        ],
++        reporter: ["text-summary", "json", "html"],
++        thresholds: {
++          statements: 77,
++          branches: 65,
++          functions: 79,
++          lines: 81,
++        },
++      },
++    },
+   },
+-});
++  { threshold: 25 },
++);
+diff -ruN a/vitest.mutation.config.ts b/vitest.mutation.config.ts
+--- /dev/null
++++ b/vitest.mutation.config.ts
+@@ -0,0 +1,9 @@
++import { defineConfig } from "vitest/config";
++
++export default defineConfig({
++  test: {
++    include: ["src/lib/**/*.test.ts"],
++    environment: "node",
++    setupFiles: ["./src/test/setup.ts"],
++  },
++});

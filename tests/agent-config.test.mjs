@@ -20,7 +20,8 @@ const keptSkills = [
   'fullstack-typescript-static',
   'fullstack-typescript-tests',
   'manual-qa',
-  'mockup-hillclimb'
+  'mockup-hillclimb',
+  'mr-screenshots'
 ];
 const agentBrowserSkills = ['agent-browser'];
 const agentBrowserLock = JSON.parse(fs.readFileSync(path.join(root, 'skills/agent-browser-skills.lock.json'), 'utf8'));
@@ -251,6 +252,7 @@ test('routing and shared policy resolve without role files', () => {
   assert.doesNotMatch(sharedPolicy, /orchestration\.md/);
   assert.match(sharedPolicy, /~\/\.agents\/skills\/manual-qa\/SKILL\.md/);
   assert.match(routing, /Implemented user-facing UI change \(browser page, component, style, native app screen\) → `manual-qa`/);
+  assert.match(routing, /merge or pull request whose diff changes user-facing UI → `mr-screenshots`/);
   assert.match(routing, /Browser automation → `agent-browser`/);
   assert.match(routing, /TypeScript quality-tooling work → `fullstack-typescript-quality`/);
   assert.doesNotMatch(routing, /## 3\. Topic and evidence/);
@@ -431,6 +433,24 @@ test('fullstack-typescript-static carries the type-aware, framework, and test ru
   assert.match(staticSkill, /react\/no-array-index-key/);
   assert.match(staticSkill, /no-focused-tests`, `no-disabled-tests`, `expect-expect`/);
   assert.match(staticSkill, /Leave `require-data-selectors` off/);
+});
+
+test('fullstack-typescript-static bans comments, flake masking, fixed sleeps, and own-module mocks', () => {
+  const staticSkill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-static/SKILL.md'), 'utf8');
+  const testsSkill = fs.readFileSync(path.join(root, 'skills/fullstack-typescript-tests/SKILL.md'), 'utf8');
+  const sharedPolicy = fs.readFileSync(path.join(root, 'policy/shared-policy.md'), 'utf8');
+
+  assert.match(sharedPolicy, /Do not write comments\./);
+  assert.match(sharedPolicy, /single-line `\/\/ WARNING: <hazard>`/);
+  assert.doesNotMatch(sharedPolicy, /Add comments for non-obvious decisions/);
+  assert.match(staticSkill, /the local rule shipped next to this skill, `no-comments\.mjs`/);
+  assert.ok(fs.existsSync(path.join(root, 'skills/fullstack-typescript-static/no-comments.mjs')));
+  assert.match(staticSkill, /carries a `message` that names the replacement action/);
+  assert.match(staticSkill, /retry\|retries\|timeout\|testTimeout\|hookTimeout\|defaultCommandTimeout/);
+  assert.match(staticSkill, /no-restricted-imports` on `node:timers\/promises`/);
+  assert.match(staticSkill, /vitest\/no-restricted-vi-methods` with `\{ stubGlobal: "<message>" \}`/);
+  assert.match(staticSkill, /so the flake, sleep, and mock bans below cannot be disabled by a comment/);
+  assert.match(testsSkill, /onUnhandledRequest: "error"/);
 });
 
 test('fullstack-typescript-tests scopes merge request runs and coverage to affected files', () => {

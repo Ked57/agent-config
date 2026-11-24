@@ -60,7 +60,7 @@ function makePatch(fixture, base, app) {
 }
 
 /** Worker: copy the fixture, apply one patch, run the task's checks, report. */
-function runJob({ fixtureName, pristine, scratch, task, patch, label }) {
+function runJob({ fixtureName, pristine, scratch, task, patch, label, install }) {
   const fixture = loadFixture(fixtureName);
   const runDir = path.join(scratch, 'jobs', `${task.id}__${label}`.replace(/[^A-Za-z0-9._-]+/g, '_'));
   const app = path.join(runDir, 'app');
@@ -70,6 +70,11 @@ function runJob({ fixtureName, pristine, scratch, task, patch, label }) {
     if (patch) {
       const applied = spawnSync('git', ['apply', '--whitespace=nowarn', patch], { cwd: app, encoding: 'utf8' });
       if (applied.status !== 0) return { error: `does not apply: ${applied.stderr.trim()}`, ms: Date.now() - started };
+      if (install && /^\+\+\+ b\/package\.json$/m.test(fs.readFileSync(patch, 'utf8'))) {
+        fs.rmSync(path.join(app, 'node_modules'), { recursive: true, force: true });
+        const installed = spawnSync('sh', ['-c', install], { cwd: app, encoding: 'utf8' });
+        if (installed.status !== 0) return { error: `${install} failed: ${(installed.stderr || installed.stdout).trim().slice(-400)}`, ms: Date.now() - started };
+      }
     }
     fs.writeFileSync(path.join(runDir, 'diff.patch'), diffAgainstPristine(fixture, pristine, app));
     const checks = recheckRun({ fixture, app, runDir, task });
@@ -189,6 +194,7 @@ async function main() {
           pristine: pristines.get(entry.fixture.name),
           task: entry.task,
           patch: file && path.join(entry.dir, file),
+          install: manifest.installAfterPatch,
           label: file ? file.replace(/\.patch$/, '') : 'untouched'
         });
       }

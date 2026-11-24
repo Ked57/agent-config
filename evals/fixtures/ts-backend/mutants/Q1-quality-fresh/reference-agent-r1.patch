@@ -1,0 +1,1283 @@
+diff -ruN a/.agents/agent-config.json b/.agents/agent-config.json
+--- /dev/null
++++ b/.agents/agent-config.json
+@@ -0,0 +1,51 @@
++{
++  "version": 1,
++  "runtime": "bun",
++  "commands": {
++    "fast": "bun run verify:fast",
++    "full": "bun run verify:full",
++    "unit": "bun run test:unit",
++    "knip": "bun run knip",
++    "guard": "bun run lint:guard",
++    "suppressions": "bun run lint:suppressions",
++    "mutation": "bun run test:mutation:domain"
++  },
++  "routing": [
++    {
++      "match": ["**/*"],
++      "required": ["full"]
++    },
++    {
++      "match": ["src/**/*.ts", "scripts/**/*.ts"],
++      "required": ["unit", "fast"]
++    },
++    {
++      "match": ["src/lib/**/*.ts"],
++      "required": ["unit", "fast"],
++      "recommended": ["mutation"]
++    },
++    {
++      "match": ["drizzle/**", "src/db/**"],
++      "required": ["unit", "full"]
++    },
++    {
++      "match": [
++        "package.json",
++        "bun.lock",
++        "tsconfig.json",
++        "eslint.config.js",
++        "eslint-rules/**",
++        "vitest.config.ts",
++        "stryker.config.mjs",
++        "knip.json",
++        "drizzle.config.ts",
++        ".prettierignore"
++      ],
++      "required": ["full"]
++    },
++    {
++      "match": ["eslint-suppressions.json"],
++      "required": ["suppressions", "full"]
++    }
++  ]
++}
+diff -ruN a/eslint.config.js b/eslint.config.js
+--- a/eslint.config.js
++++ b/eslint.config.js
+@@ -1,16 +1,240 @@
++import eslintComments from "@eslint-community/eslint-plugin-eslint-comments";
+ import js from "@eslint/js";
++import vitest from "@vitest/eslint-plugin";
++import importX from "eslint-plugin-import-x";
++import sonarjs from "eslint-plugin-sonarjs";
++import qualityMetrics from "quality-metrics";
+ import tseslint from "typescript-eslint";
+ 
++import noComments from "./eslint-rules/no-comments.mjs";
++
++const gateRules = [
++  "complexity",
++  "sonarjs/cognitive-complexity",
++  "quality-metrics/halstead",
++  "max-lines",
++  "max-lines-per-function",
++  "max-params",
++  "@typescript-eslint/no-explicit-any",
++  "@typescript-eslint/ban-ts-comment",
++  "@eslint-community/eslint-comments/*",
++  "no-warning-comments",
++  "local/no-comments",
++];
++
++const testFiles = ["src/**/*.test.ts", "src/test/**/*.ts"];
++const runnerConfigs = ["vitest.config.ts", "stryker.config.mjs"];
++
++const baseRestrictedSyntax = [
++  {
++    selector:
++      "TSAsExpression > TSAsExpression[typeAnnotation.type='TSUnknownKeyword']",
++    message:
++      "Do not launder types through `as unknown as`: parse the value with a schema or narrow it with a type guard.",
++  },
++  {
++    selector: "ImportExpression",
++    message:
++      "Use a static top-level import; this project has no lazy-loading boundary that needs dynamic import().",
++  },
++];
++
++const flakeMessage =
++  "Find the race or the slow setup and fix it; await the operation instead of retrying or waiting longer.";
++const sleepMessage =
++  "Await the operation itself, or use vi.useFakeTimers() and advance time instead of sleeping.";
++const ownMockMessage =
++  "Inject the fake from the module's `<name>.mock.ts` (or a setter such as setMailTransport) instead of replacing project modules.";
++
++const flakeRestrictedSyntax = [
++  {
++    selector:
++      "Property[key.name=/^(retry|retries|timeout|testTimeout|hookTimeout|defaultCommandTimeout)$/]",
++    message: flakeMessage,
++  },
++  {
++    selector:
++      "CallExpression[callee.object.name='vi'][callee.property.name='setConfig']",
++    message: flakeMessage,
++  },
++  {
++    selector:
++      "CallExpression[callee.name=/^(it|test|describe|beforeEach|beforeAll|afterEach|afterAll)$/] > Literal[raw=/^[0-9]/]",
++    message: flakeMessage,
++  },
++  {
++    selector:
++      "CallExpression[callee.object.name=/^(it|test|describe)$/] > Literal[raw=/^[0-9]/]",
++    message: flakeMessage,
++  },
++  {
++    selector:
++      "NewExpression[callee.name='Promise'] CallExpression[callee.name='setTimeout']",
++    message: sleepMessage,
++  },
++  {
++    selector:
++      "CallExpression[callee.object.name='vi'][callee.property.name=/^(mock|doMock)$/][arguments.0.value=/^(\\.{1,2}|@|~)\\//]",
++    message: ownMockMessage,
++  },
++];
++
+ export default tseslint.config(
+-  { ignores: ["dist/**", "drizzle/**", "data/**", "node_modules/**"] },
++  {
++    ignores: [
++      "dist/**",
++      "drizzle/**",
++      "data/**",
++      "coverage/**",
++      "reports/**",
++      ".stryker-tmp/**",
++      "node_modules/**",
++    ],
++  },
++  {
++    linterOptions: { reportUnusedDisableDirectives: "error" },
++  },
+   js.configs.recommended,
+   ...tseslint.configs.recommended,
+   {
++    plugins: {
++      "@eslint-community/eslint-comments": eslintComments,
++      "import-x": importX,
++      local: { rules: { "no-comments": noComments } },
++      "quality-metrics": qualityMetrics,
++      sonarjs,
++    },
+     rules: {
+       "@typescript-eslint/no-unused-vars": [
+         "error",
+         { argsIgnorePattern: "^_" },
+       ],
++      complexity: ["error", { max: 21 }],
++      "sonarjs/cognitive-complexity": ["error", 21],
++      "quality-metrics/halstead": [
++        "error",
++        { maxVolume: 3000, maxEffort: 150000 },
++      ],
++      "max-lines": ["error", { max: 499 }],
++      "max-lines-per-function": ["error", { max: 99 }],
++      "max-params": ["error", { max: 4 }],
++      "@typescript-eslint/no-explicit-any": "error",
++      "@typescript-eslint/ban-ts-comment": [
++        "error",
++        {
++          "ts-ignore": true,
++          "ts-nocheck": true,
++          "ts-expect-error": "allow-with-description",
++        },
++      ],
++      "no-warning-comments": [
++        "error",
++        {
++          terms: ["istanbul ignore", "v8 ignore", "c8 ignore"],
++          location: "anywhere",
++        },
++      ],
++      "@eslint-community/eslint-comments/no-unlimited-disable": "error",
++      "@eslint-community/eslint-comments/require-description": "error",
++      "@eslint-community/eslint-comments/no-restricted-disable": [
++        "error",
++        ...gateRules,
++      ],
++      "local/no-comments": "error",
++      "import-x/first": "error",
++      "no-restricted-syntax": ["error", ...baseRestrictedSyntax],
++    },
++  },
++  {
++    files: ["**/*.ts"],
++    languageOptions: {
++      parserOptions: { projectService: true },
++    },
++    rules: {
++      "@typescript-eslint/switch-exhaustiveness-check": [
++        "error",
++        { considerDefaultExhaustiveForUnions: false },
++      ],
++      "@typescript-eslint/consistent-type-assertions": [
++        "error",
++        { assertionStyle: "as", objectLiteralTypeAssertions: "never" },
++      ],
++      "@typescript-eslint/no-non-null-assertion": "error",
++      "@typescript-eslint/no-unsafe-assignment": "error",
++      "@typescript-eslint/no-unsafe-member-access": "error",
++      "@typescript-eslint/no-unsafe-call": "error",
++      "@typescript-eslint/no-unsafe-return": "error",
++      "@typescript-eslint/no-unsafe-argument": "error",
++      "@typescript-eslint/no-floating-promises": [
++        "error",
++        { ignoreVoid: false },
++      ],
++      "@typescript-eslint/no-misused-promises": "error",
++      "@typescript-eslint/return-await": "error",
++    },
++  },
++  {
++    files: ["src/**/*.ts", "scripts/**/*.ts"],
++    ignores: [...testFiles, "src/**/*.mock.ts"],
++    rules: {
++      "no-restricted-imports": [
++        "error",
++        {
++          patterns: [
++            {
++              group: ["**/*.mock"],
++              message:
++                "Production code must not import test fakes from `*.mock.ts`; inject the real dependency instead.",
++            },
++          ],
++        },
++      ],
++    },
++  },
++  {
++    files: [...testFiles, ...runnerConfigs],
++    plugins: { vitest },
++    rules: {
++      "vitest/no-focused-tests": "error",
++      "vitest/no-disabled-tests": "error",
++      "vitest/expect-expect": "error",
++      "vitest/valid-expect": "error",
++      "vitest/no-conditional-expect": "error",
++      "vitest/no-conditional-in-test": "error",
++      "vitest/no-standalone-expect": "error",
++      "vitest/no-identical-title": "error",
++      "vitest/valid-title": "error",
++      "vitest/require-to-throw-message": "error",
++      "vitest/no-large-snapshots": "error",
++      "vitest/no-interpolation-in-snapshots": "error",
++      "vitest/max-nested-describe": "error",
++      "vitest/prefer-hooks-on-top": "error",
++      "vitest/no-duplicate-hooks": "error",
++      "vitest/no-restricted-vi-methods": [
++        "error",
++        { stubGlobal: ownMockMessage },
++      ],
++      "no-restricted-syntax": [
++        "error",
++        ...baseRestrictedSyntax,
++        ...flakeRestrictedSyntax,
++      ],
++      "no-restricted-imports": [
++        "error",
++        {
++          paths: [
++            { name: "node:timers/promises", message: sleepMessage },
++            { name: "timers/promises", message: sleepMessage },
++          ],
++        },
++      ],
++      "@eslint-community/eslint-comments/no-restricted-disable": [
++        "error",
++        ...gateRules,
++        "no-restricted-syntax",
++        "no-restricted-imports",
++        "vitest/no-restricted-vi-methods",
++      ],
+     },
+   },
+ );
+diff -ruN a/eslint-rules/no-comments.mjs b/eslint-rules/no-comments.mjs
+--- /dev/null
++++ b/eslint-rules/no-comments.mjs
+@@ -0,0 +1,73 @@
++const DIRECTIVE = new RegExp(
++  [
++    String.raw`^\s*(eslint|eslint-disable|eslint-enable|eslint-disable-line|eslint-disable-next-line|global|globals)\b`,
++    String.raw`^\s*@ts-(expect-error|ignore|nocheck)\b`,
++    String.raw`^\s*prettier-ignore\s*$`,
++    String.raw`^\s*(istanbul|v8|c8) ignore\b`,
++    String.raw`^\s*[#@]__[A-Z_]+__\s*$`,
++    String.raw`^\s*webpack[A-Z]\w*:`,
++    String.raw`^\s*@vite-ignore\s*$`,
++    String.raw`^/ <reference\b`,
++    String.raw`^\s*@jsxImportSource\b`,
++    String.raw`^\s*SPDX-License-Identifier:`,
++    String.raw`^!`,
++    String.raw`^[\s*]*@license\b`,
++    String.raw`^# source(Mapping)?URL=`,
++  ].join("|"),
++);
++
++const WARNING = /^ WARNING: \S/;
++
++function isPublicApiDoc(comment, filename, publicApi) {
++  return (
++    comment.type === "Block" &&
++    comment.value.startsWith("*") &&
++    publicApi.some((part) => filename.includes(part))
++  );
++}
++
++function isLoneWarning(comment, next) {
++  return (
++    comment.type === "Line" &&
++    WARNING.test(comment.value) &&
++    (!next || next.loc.start.line !== comment.loc.end.line + 1)
++  );
++}
++
++export default {
++  meta: {
++    type: "suggestion",
++    schema: [
++      {
++        type: "object",
++        properties: { publicApi: { type: "array", items: { type: "string" } } },
++        additionalProperties: false,
++      },
++    ],
++    messages: {
++      prose:
++        "Remove this comment: rename or restructure the code so it explains itself, and put the reason in the commit message. Only a single-line `// WARNING: <hazard>` may stay.",
++    },
++  },
++  create(context) {
++    const publicApi = context.options[0]?.publicApi ?? [];
++    const filename = context.filename.replaceAll("\\", "/");
++    const report = (comment) =>
++      context.report({ loc: comment.loc, messageId: "prose" });
++    return {
++      Program() {
++        const comments = context.sourceCode.getAllComments();
++        comments.forEach((comment, index) => {
++          if (comment.type === "Shebang" || DIRECTIVE.test(comment.value))
++            return;
++          if (isLoneWarning(comment, comments[index + 1])) return;
++          if (isPublicApiDoc(comment, filename, publicApi)) return;
++          report(comment);
++        });
++        for (const comment of context.sourceCode.ast.templateBody?.comments ??
++          [])
++          report(comment);
++      },
++    };
++  },
++};
+diff -ruN a/eslint-suppressions.json b/eslint-suppressions.json
+--- /dev/null
++++ b/eslint-suppressions.json
+@@ -0,0 +1,46 @@
++{
++  "src/db/seed.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-lines-per-function": {
++      "count": 1
++    }
++  },
++  "src/plugins/auth.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/routes/projects.ts": {
++    "max-lines-per-function": {
++      "count": 1
++    }
++  },
++  "src/routes/tasks.ts": {
++    "complexity": {
++      "count": 1
++    },
++    "max-lines-per-function": {
++      "count": 1
++    },
++    "sonarjs/cognitive-complexity": {
++      "count": 1
++    }
++  },
++  "src/routes/webhooks.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/services/mailer.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/test/helpers.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  }
++}
+diff -ruN a/.gitignore b/.gitignore
+--- a/.gitignore
++++ b/.gitignore
+@@ -2,3 +2,6 @@
+ dist
+ data
+ *.db
++coverage
++reports
++.stryker-tmp
+diff -ruN a/knip.json b/knip.json
+--- /dev/null
++++ b/knip.json
+@@ -0,0 +1,5 @@
++{
++  "$schema": "https://unpkg.com/knip@6/schema.json",
++  "entry": ["src/app.ts", "scripts/*.ts"],
++  "project": ["src/**/*.ts", "scripts/**/*.ts", "eslint-rules/**/*.mjs"]
++}
+diff -ruN a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -13,9 +13,16 @@
+     "format:check": "prettier --check .",
+     "format:fix": "prettier --write .",
+     "test": "vitest run",
++    "test:unit": "vitest run",
++    "test:mutation:domain": "stryker run",
+     "db:generate": "drizzle-kit generate",
+     "db:migrate": "bun run scripts/migrate.ts",
+-    "db:seed": "bun run scripts/seed.ts"
++    "db:seed": "bun run scripts/seed.ts",
++    "knip": "knip",
++    "lint:guard": "bun run scripts/check-disable-directives.ts",
++    "lint:suppressions": "bun run scripts/check-suppression-growth.ts",
++    "verify:fast": "bun run format:check && bun run lint && bun run lint:guard && bun run typecheck && bun run test:unit",
++    "verify:full": "bun run verify:fast && bun run knip && bun run build"
+   },
+   "dependencies": {
+     "@libsql/client": "^0.18.0",
+@@ -23,11 +30,22 @@
+     "elysia": "^1.4.32"
+   },
+   "devDependencies": {
++    "@barney-media/crap-typescript-vitest": "^2.0.2",
++    "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
+     "@eslint/js": "^10.0.1",
++    "@stryker-mutator/core": "^10.1.1",
++    "@stryker-mutator/vitest-runner": "^10.1.1",
+     "@types/bun": "^1.4.4",
++    "@vitest/coverage-v8": "5.1.0",
++    "@vitest/eslint-plugin": "^1.6.28",
+     "drizzle-kit": "^0.31.11",
+     "eslint": "^10.15.0",
++    "eslint-plugin-import-x": "^4.18.1",
++    "eslint-plugin-sonarjs": "^4.2.2",
++    "knip": "^6.48.0",
+     "prettier": "^3.10.1",
++    "quality-metrics": "^0.1.1",
++    "ts-morph": "^28.0.0",
+     "typescript": "~6.0.3",
+     "typescript-eslint": "^8.72.2",
+     "vitest": "^5.1.0"
+diff -ruN a/.prettierignore b/.prettierignore
+--- a/.prettierignore
++++ b/.prettierignore
+@@ -2,3 +2,7 @@
+ data
+ drizzle/meta
+ bun.lock
++coverage
++reports
++.stryker-tmp
++eslint-suppressions.json
+diff -ruN a/scripts/check-disable-directives.ts b/scripts/check-disable-directives.ts
+--- /dev/null
++++ b/scripts/check-disable-directives.ts
+@@ -0,0 +1,51 @@
++import { ESLint } from "eslint";
++
++const lintedFiles = new Bun.Glob("**/*.{ts,mts,cts,js,mjs,cjs}");
++const directive =
++  /(?:\/\/|\/\*|<!--)\s*eslint-disable(?:-next-line|-line)?(?<rest>.*?)(?:\*\/|-->|$)/gm;
++const protectedPrefix = "@eslint-community/eslint-comments/";
++
++function namedRules(rest: string): string[] {
++  const [ruleList = ""] = rest.split(/\s--\s/);
++  return ruleList
++    .split(",")
++    .map((rule) => rule.trim())
++    .filter((rule) => rule.length > 0);
++}
++
++function violationsIn(path: string, text: string): string[] {
++  const found: string[] = [];
++  for (const match of text.matchAll(directive)) {
++    const rules = namedRules(match.groups?.rest ?? "");
++    const line = text.slice(0, match.index).split("\n").length;
++    if (rules.length === 0) {
++      found.push(`${path}:${line} disables every rule`);
++    }
++    for (const rule of rules.filter((name) =>
++      name.startsWith(protectedPrefix),
++    )) {
++      found.push(`${path}:${line} disables the gate guard ${rule}`);
++    }
++  }
++  return found;
++}
++
++const eslint = new ESLint();
++const violations: string[] = [];
++for await (const path of lintedFiles.scan({ dot: false })) {
++  if (path.startsWith("node_modules/") || (await eslint.isPathIgnored(path))) {
++    continue;
++  }
++  violations.push(...violationsIn(path, await Bun.file(path).text()));
++}
++
++if (violations.length > 0) {
++  console.error(
++    [
++      "Remove these disable comments and fix the reported code instead:",
++      ...violations,
++    ].join("\n"),
++  );
++  process.exit(1);
++}
++console.log("No disable comment targets the lint gate guards.");
+diff -ruN a/scripts/check-suppression-growth.ts b/scripts/check-suppression-growth.ts
+--- /dev/null
++++ b/scripts/check-suppression-growth.ts
+@@ -0,0 +1,85 @@
++import { readFileSync } from "node:fs";
++
++const suppressionsFile = "eslint-suppressions.json";
++
++type Suppressions = Record<string, Record<string, { count: number }>>;
++
++function git(args: string[]): { ok: boolean; stdout: string } {
++  const result = Bun.spawnSync(["git", ...args], { stderr: "pipe" });
++  return { ok: result.exitCode === 0, stdout: result.stdout.toString() };
++}
++
++function fail(message: string): never {
++  console.error(message);
++  process.exit(1);
++}
++
++function parseSuppressions(text: string): Suppressions {
++  const parsed: unknown = JSON.parse(text);
++  if (typeof parsed !== "object" || parsed === null) {
++    fail(`${suppressionsFile} is not a JSON object`);
++  }
++  return parsed as Suppressions;
++}
++
++function mergeBase(target: string): string {
++  const base = git(["merge-base", "HEAD", target]);
++  if (!base.ok)
++    fail(`Cannot read the merge-base with ${target}; refusing to pass.`);
++  return base.stdout.trim();
++}
++
++function renamesSince(base: string): Map<string, string> {
++  const diff = git(["diff", "--name-status", "-z", "-M", base, "HEAD"]);
++  if (!diff.ok) fail(`Cannot diff against ${base}; refusing to pass.`);
++  const fields = diff.stdout.split("\0");
++  const renames = new Map<string, string>();
++  for (let index = 0; index < fields.length; index += 1) {
++    const status = fields[index] ?? "";
++    if (status.startsWith("R")) {
++      renames.set(fields[index + 2] ?? "", fields[index + 1] ?? "");
++      index += 2;
++    } else if (status.startsWith("C")) {
++      index += 2;
++    } else {
++      index += 1;
++    }
++  }
++  return renames;
++}
++
++const target =
++  process.argv[2] ?? process.env.SUPPRESSION_BASE_REF ?? "origin/main";
++const base = mergeBase(target);
++const baseFile = git(["show", `${base}:${suppressionsFile}`]);
++if (!baseFile.ok) {
++  const exists = git(["cat-file", "-e", `${base}^{commit}`]);
++  if (!exists.ok)
++    fail(`Cannot read merge-base commit ${base}; refusing to pass.`);
++  console.log(
++    `${suppressionsFile} is new in this change; it becomes the baseline.`,
++  );
++  process.exit(0);
++}
++
++const before = parseSuppressions(baseFile.stdout);
++const after = parseSuppressions(readFileSync(suppressionsFile, "utf8"));
++const renames = renamesSince(base);
++const grown: string[] = [];
++for (const [path, rules] of Object.entries(after)) {
++  const previous = before[renames.get(path) ?? path] ?? {};
++  for (const [rule, { count }] of Object.entries(rules)) {
++    const allowed = previous[rule]?.count ?? 0;
++    if (count > allowed) grown.push(`${path} ${rule}: ${allowed} -> ${count}`);
++  }
++}
++
++if (grown.length > 0) {
++  fail(
++    [
++      "ESLint suppressions grew; fix the new violations instead of suppressing them:",
++      ...grown,
++    ].join("\n"),
++  );
++}
++console.log("No file gained ESLint suppressions.");
+diff -ruN a/src/app.test.ts b/src/app.test.ts
+--- /dev/null
++++ b/src/app.test.ts
+@@ -0,0 +1,46 @@
++import { describe, expect, it, vi } from "vitest";
++
++import { createApp } from "./app";
++import { logger } from "./lib/logger";
++import { createTestContext, SEED_TOKENS } from "./test/helpers";
++
++describe("app error handling", () => {
++  it("responds 404 for unknown routes", async () => {
++    const { request } = await createTestContext();
++    const response = await request("GET", "/api/nope");
++    expect(response.status).toBe(404);
++    expect(await response.text()).toBe("Not Found");
++  });
++
++  it("responds 500 and logs when the database fails", async () => {
++    const error = vi.spyOn(logger, "error").mockImplementation(() => undefined);
++    const { db, request } = await createTestContext();
++    db.$client.close();
++    const response = await request("GET", "/api/projects", {
++      token: SEED_TOKENS.acmeAdmin,
++    });
++    expect(response.status).toBe(500);
++    expect(await response.json()).toHaveProperty("error");
++    expect(error).toHaveBeenCalledWith(
++      "unhandled error",
++      expect.objectContaining({ code: "UNKNOWN" }),
++    );
++  });
++
++  it("reports non-Error failures as text", async () => {
++    vi.spyOn(logger, "error").mockImplementation(() => undefined);
++    const { db } = await createTestContext();
++    const failingDb = new Proxy(db, {
++      get() {
++        throw "database unavailable";
++      },
++    });
++    const response = await createApp({ db: failingDb }).handle(
++      new Request("http://localhost/api/me", {
++        headers: { authorization: `Bearer ${SEED_TOKENS.acmeAdmin}` },
++      }),
++    );
++    expect(response.status).toBe(500);
++    expect(await response.json()).toEqual({ error: "database unavailable" });
++  });
++});
+diff -ruN a/src/db/client.ts b/src/db/client.ts
+--- a/src/db/client.ts
++++ b/src/db/client.ts
+@@ -6,7 +6,7 @@
+ 
+ export function createDb(url: string, options: { logger?: Logger } = {}) {
+   const client = createClient({ url });
+-  return drizzle(client, { schema, logger: options.logger });
++  return drizzle(client, { schema, logger: options.logger ?? false });
+ }
+ 
+ export type Db = ReturnType<typeof createDb>;
+diff -ruN a/src/db/migrate.ts b/src/db/migrate.ts
+--- a/src/db/migrate.ts
++++ b/src/db/migrate.ts
+@@ -4,7 +4,7 @@
+ 
+ import type { Db } from "./client";
+ 
+-export const migrationsFolder = fileURLToPath(
++const migrationsFolder = fileURLToPath(
+   new URL("../../drizzle", import.meta.url),
+ );
+ 
+diff -ruN a/src/lib/ids.mock.ts b/src/lib/ids.mock.ts
+--- /dev/null
++++ b/src/lib/ids.mock.ts
+@@ -0,0 +1,7 @@
++export function fakeIds(prefix: string): () => string {
++  let count = 0;
++  return () => {
++    count += 1;
++    return `${prefix}_${String(count).padStart(16, "0")}`;
++  };
++}
+diff -ruN a/src/lib/ids.test.ts b/src/lib/ids.test.ts
+--- /dev/null
++++ b/src/lib/ids.test.ts
+@@ -0,0 +1,11 @@
++import { describe, expect, it } from "vitest";
++import { newId } from "./ids";
++import { fakeIds } from "./ids.mock";
++
++describe("ids", () => {
++  it("keeps the prefix and length of real ids in fakes", () => {
++    const next = fakeIds("tsk");
++    expect(next()).toHaveLength(newId("tsk").length);
++    expect(next()).toBe("tsk_0000000000000002");
++  });
++});
+diff -ruN a/src/lib/logger.test.ts b/src/lib/logger.test.ts
+--- /dev/null
++++ b/src/lib/logger.test.ts
+@@ -0,0 +1,60 @@
++import { describe, expect, it, vi } from "vitest";
++
++import { logger } from "./logger";
++
++function captureConsole() {
++  return {
++    out: vi.spyOn(console, "log").mockImplementation(() => undefined),
++    err: vi.spyOn(console, "error").mockImplementation(() => undefined),
++  };
++}
++
++describe("logger", () => {
++  it("writes info as JSON to stdout and warnings and errors to stderr", () => {
++    vi.stubEnv("LOG_LEVEL", "info");
++    const { out, err } = captureConsole();
++    logger.info("hello", { requestId: "r1" });
++    logger.warn("careful");
++    logger.error("broken");
++    expect(out).toHaveBeenCalledTimes(1);
++    expect(JSON.parse(String(out.mock.calls[0]?.[0]))).toMatchObject({
++      level: "info",
++      msg: "hello",
++      requestId: "r1",
++    });
++    expect(err).toHaveBeenCalledTimes(2);
++  });
++
++  it("drops messages below the configured level", () => {
++    vi.stubEnv("LOG_LEVEL", "warn");
++    const { out, err } = captureConsole();
++    logger.debug("noise");
++    logger.info("noise");
++    logger.warn("kept");
++    expect(out).not.toHaveBeenCalled();
++    expect(err).toHaveBeenCalledTimes(1);
++  });
++
++  it("writes debug messages when the level is debug", () => {
++    vi.stubEnv("LOG_LEVEL", "debug");
++    const { out } = captureConsole();
++    logger.debug("details");
++    expect(out).toHaveBeenCalledTimes(1);
++  });
++
++  it("falls back to info for an unknown level", () => {
++    vi.stubEnv("LOG_LEVEL", "verbose");
++    const { out } = captureConsole();
++    logger.debug("hidden");
++    logger.info("shown");
++    expect(out).toHaveBeenCalledTimes(1);
++  });
++
++  it("falls back to info when no level is set", () => {
++    vi.stubEnv("LOG_LEVEL", undefined);
++    const { out } = captureConsole();
++    logger.debug("hidden");
++    logger.info("shown");
++    expect(out).toHaveBeenCalledTimes(1);
++  });
++});
+diff -ruN a/src/plugins/auth.ts b/src/plugins/auth.ts
+--- a/src/plugins/auth.ts
++++ b/src/plugins/auth.ts
+@@ -5,7 +5,7 @@
+ import { apiTokens, users } from "../db/schema";
+ import { hashToken } from "../lib/tokens";
+ 
+-export interface AuthUser {
++interface AuthUser {
+   id: string;
+   orgId: string;
+   role: "admin" | "member";
+diff -ruN a/src/routes/auth.test.ts b/src/routes/auth.test.ts
+--- a/src/routes/auth.test.ts
++++ b/src/routes/auth.test.ts
+@@ -1,6 +1,8 @@
+-import { describe, expect, it } from "vitest";
++import { describe, expect, it, vi } from "vitest";
+ 
++import { apiTokens } from "../db/schema";
+ import { SEED_PASSWORD } from "../db/seed";
++import { hashToken } from "../lib/tokens";
+ import { createTestContext, SEED_TOKENS } from "../test/helpers";
+ 
+ describe("auth", () => {
+@@ -39,4 +41,37 @@
+         .status,
+     ).toBe(200);
+   });
++
++  it("rejects an unknown email", async () => {
++    const { request } = await createTestContext();
++    const login = await request("POST", "/api/auth/token", {
++      body: { email: "nobody@acme.test", password: SEED_PASSWORD },
++    });
++    expect(login.status).toBe(401);
++  });
++
++  it("issues tokens valid for 24 hours by default", async () => {
++    vi.stubEnv("TOKEN_TTL_HOURS", undefined);
++    const { request } = await createTestContext();
++    const before = Date.now();
++    const login = await request("POST", "/api/auth/token", {
++      body: { email: "ADA@acme.test", password: SEED_PASSWORD },
++    });
++    const { expiresAt } = (await login.json()) as { expiresAt: string };
++    const ttl = Date.parse(expiresAt) - before;
++    expect(ttl).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000);
++    expect(ttl).toBeLessThan(24 * 60 * 60 * 1000 + 60_000);
++  });
++
++  it("rejects an expired token", async () => {
++    const { db, request } = await createTestContext();
++    await db.insert(apiTokens).values({
++      id: "tok_expired",
++      userId: "usr_ada",
++      tokenHash: hashToken("expired-token"),
++      expiresAt: new Date(Date.now() - 1000),
++    });
++    const me = await request("GET", "/api/me", { token: "expired-token" });
++    expect(me.status).toBe(401);
++  });
+ });
+diff -ruN a/src/routes/projects.test.ts b/src/routes/projects.test.ts
+--- a/src/routes/projects.test.ts
++++ b/src/routes/projects.test.ts
+@@ -1,4 +1,7 @@
+-import { describe, expect, it } from "vitest";
++import { sql } from "drizzle-orm";
++import { describe, expect, it, vi } from "vitest";
++
++import { logger } from "../lib/logger";
+ 
+ import { createTestContext, SEED_TOKENS } from "../test/helpers";
+ 
+@@ -62,3 +65,55 @@
+     expect(items.map((item) => item.id)).toEqual(["tsk_1", "tsk_2", "tsk_3"]);
+   });
+ });
++
++describe("project details and tasks", () => {
++  it("returns a project of the caller's organization", async () => {
++    const { request } = await createTestContext();
++    const response = await request("GET", "/api/projects/prj_web", {
++      token: SEED_TOKENS.acmeMember,
++    });
++    expect(response.status).toBe(200);
++    expect(await response.json()).toMatchObject({ id: "prj_web" });
++  });
++
++  it("responds 404 for tasks of another organization's project", async () => {
++    const { request } = await createTestContext();
++    const list = await request("GET", "/api/projects/prj_infra/tasks", {
++      token: SEED_TOKENS.acmeAdmin,
++    });
++    expect(list.status).toBe(404);
++    const create = await request("POST", "/api/projects/prj_infra/tasks", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { title: "Sneaky" },
++    });
++    expect(create.status).toBe(404);
++  });
++
++  it("creates an unassigned task with defaults", async () => {
++    const { request } = await createTestContext();
++    const response = await request("POST", "/api/projects/prj_app/tasks", {
++      token: SEED_TOKENS.acmeMember,
++      body: { title: "Write docs" },
++    });
++    expect(response.status).toBe(201);
++    expect(await response.json()).toMatchObject({
++      title: "Write docs",
++      isUrgent: false,
++      assigneeId: null,
++    });
++  });
++
++  it("fails loudly when the database drops a task insert", async () => {
++    vi.spyOn(logger, "error").mockImplementation(() => undefined);
++    const { db, request } = await createTestContext();
++    await db.run(
++      sql`CREATE TRIGGER drop_inserts BEFORE INSERT ON tasks BEGIN SELECT RAISE(IGNORE); END`,
++    );
++    const response = await request("POST", "/api/projects/prj_app/tasks", {
++      token: SEED_TOKENS.acmeAdmin,
++      body: { title: "Lost" },
++    });
++    expect(response.status).toBe(500);
++    expect(await response.json()).toEqual({ error: "insert returned no row" });
++  });
++});
+diff -ruN a/src/routes/task-updates.test.ts b/src/routes/task-updates.test.ts
+--- /dev/null
++++ b/src/routes/task-updates.test.ts
+@@ -0,0 +1,168 @@
++import { sql } from "drizzle-orm";
++import { describe, expect, it, vi } from "vitest";
++
++import { logger } from "../lib/logger";
++
++import { createTestContext, SEED_TOKENS } from "../test/helpers";
++
++const admin = { token: SEED_TOKENS.acmeAdmin };
++
++describe("GET /api/tasks/:id", () => {
++  it("returns an existing task", async () => {
++    const { request } = await createTestContext();
++    const response = await request("GET", "/api/tasks/tsk_2", admin);
++    expect(response.status).toBe(200);
++    expect(await response.json()).toMatchObject({
++      id: "tsk_2",
++      status: "in_progress",
++      assigneeId: "usr_bob",
++    });
++  });
++
++  it("responds 404 for an unknown task", async () => {
++    const { request } = await createTestContext();
++    const response = await request("GET", "/api/tasks/tsk_missing", admin);
++    expect(response.status).toBe(404);
++  });
++});
++
++describe("PATCH /api/tasks/:id fields", () => {
++  it("responds 404 for a task in another organization", async () => {
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_6", {
++      ...admin,
++      body: { title: "Hijacked" },
++    });
++    expect(response.status).toBe(404);
++  });
++
++  it("rejects a blank title", async () => {
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_4", {
++      ...admin,
++      body: { title: "   " },
++    });
++    expect(response.status).toBe(400);
++  });
++
++  it("updates title, description, urgency and due date", async () => {
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_4", {
++      ...admin,
++      body: {
++        title: "  Push notifications v2  ",
++        description: "Use the new provider",
++        isUrgent: true,
++        dueDate: "2027-01-15",
++      },
++    });
++    expect(response.status).toBe(200);
++    expect(await response.json()).toMatchObject({
++      title: "Push notifications v2",
++      description: "Use the new provider",
++      isUrgent: true,
++      dueDate: "2027-01-15",
++    });
++  });
++
++  it("returns the task unchanged when nothing changes", async () => {
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_2", {
++      ...admin,
++      body: { status: "in_progress", assigneeId: "usr_bob" },
++    });
++    expect(response.status).toBe(200);
++    expect(await response.json()).toMatchObject({
++      id: "tsk_2",
++      updatedAt: "2026-10-01T09:02:00.000Z",
++    });
++  });
++
++  it("unassigns a task without sending mail", async () => {
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_2", {
++      ...admin,
++      body: { assigneeId: null },
++    });
++    expect(response.status).toBe(200);
++    expect(await response.json()).toMatchObject({ assigneeId: null });
++  });
++});
++
++describe("PATCH /api/tasks/:id rules", () => {
++  it("rejects assignees from another organization", async () => {
++    const { request } = await createTestContext();
++    const response = await request("PATCH", "/api/tasks/tsk_4", {
++      ...admin,
++      body: { assigneeId: "usr_gina" },
++    });
++    expect(response.status).toBe(400);
++  });
++
++  it("requires an assignee before a task is done", async () => {
++    const { request } = await createTestContext();
++    await request("PATCH", "/api/tasks/tsk_4", {
++      ...admin,
++      body: { status: "in_progress" },
++    });
++    const response = await request("PATCH", "/api/tasks/tsk_4", {
++      ...admin,
++      body: { status: "done" },
++    });
++    expect(response.status).toBe(409);
++  });
++
++  it("marks a task done when it gets an assignee in the same change", async () => {
++    const { request } = await createTestContext();
++    await request("PATCH", "/api/tasks/tsk_4", {
++      ...admin,
++      body: { status: "in_progress" },
++    });
++    const response = await request("PATCH", "/api/tasks/tsk_4", {
++      ...admin,
++      body: { status: "done", assigneeId: "usr_ada" },
++    });
++    expect(response.status).toBe(200);
++    expect(await response.json()).toMatchObject({
++      status: "done",
++      assigneeId: "usr_ada",
++    });
++  });
++
++  it("refuses a new due date on a finished task but allows clearing it", async () => {
++    const { request } = await createTestContext();
++    const dated = await request("PATCH", "/api/tasks/tsk_1", {
++      ...admin,
++      body: { dueDate: "2027-01-15" },
++    });
++    expect(dated.status).toBe(409);
++    const cleared = await request("PATCH", "/api/tasks/tsk_1", {
++      ...admin,
++      body: { dueDate: null },
++    });
++    expect(cleared.status).toBe(200);
++    expect(await cleared.json()).toMatchObject({ dueDate: null });
++  });
++});
++
++describe("DELETE /api/tasks/:id and storage failures", () => {
++  it("responds 404 for a task in another organization", async () => {
++    const { request } = await createTestContext();
++    const response = await request("DELETE", "/api/tasks/tsk_6", admin);
++    expect(response.status).toBe(404);
++  });
++
++  it("fails loudly when the database drops a task update", async () => {
++    vi.spyOn(logger, "error").mockImplementation(() => undefined);
++    const { db, request } = await createTestContext();
++    await db.run(
++      sql`CREATE TRIGGER drop_updates BEFORE UPDATE ON tasks BEGIN SELECT RAISE(IGNORE); END`,
++    );
++    const response = await request("PATCH", "/api/tasks/tsk_4", {
++      ...admin,
++      body: { title: "Lost" },
++    });
++    expect(response.status).toBe(500);
++    expect(await response.json()).toEqual({ error: "update returned no row" });
++  });
++});
+diff -ruN a/src/routes/webhooks.test.ts b/src/routes/webhooks.test.ts
+--- a/src/routes/webhooks.test.ts
++++ b/src/routes/webhooks.test.ts
+@@ -1,5 +1,5 @@
+ import { eq } from "drizzle-orm";
+-import { describe, expect, it } from "vitest";
++import { describe, expect, it, vi } from "vitest";
+ 
+ import { organizations } from "../db/schema";
+ import { createTestContext } from "../test/helpers";
+@@ -34,4 +34,44 @@
+       .get();
+     expect(org?.credits).toBe(50);
+   });
++
++  it("rejects every request when no secret is configured", async () => {
++    vi.stubEnv("WEBHOOK_SECRET", "");
++    const { request } = await createTestContext();
++    const response = await request("POST", "/api/webhooks/billing", {
++      body: event,
++      headers: { "x-webhook-secret": "" },
++    });
++    expect(response.status).toBe(401);
++  });
++
++  it("acknowledges other event types without changing credits", async () => {
++    const { request, db } = await createTestContext();
++    const response = await request("POST", "/api/webhooks/billing", {
++      body: { ...event, type: "payment.failed" },
++      headers: { "x-webhook-secret": "test-webhook-secret" },
++    });
++    expect(response.status).toBe(200);
++    const org = await db
++      .select()
++      .from(organizations)
++      .where(eq(organizations.id, "org_globex"))
++      .get();
++    expect(org?.credits).toBe(0);
++  });
++
++  it("treats a payment without credits as zero credits", async () => {
++    const { request, db } = await createTestContext();
++    const response = await request("POST", "/api/webhooks/billing", {
++      body: { ...event, data: { orgId: "org_acme" } },
++      headers: { "x-webhook-secret": "test-webhook-secret" },
++    });
++    expect(response.status).toBe(200);
++    const org = await db
++      .select()
++      .from(organizations)
++      .where(eq(organizations.id, "org_acme"))
++      .get();
++    expect(org?.credits).toBe(100);
++  });
+ });
+diff -ruN a/src/services/notifications.test.ts b/src/services/notifications.test.ts
+--- /dev/null
++++ b/src/services/notifications.test.ts
+@@ -0,0 +1,44 @@
++import { describe, expect, it, vi } from "vitest";
++
++import { logger } from "../lib/logger";
++import { createTestContext } from "../test/helpers";
++import { sendMail, setMailTransport, type MailMessage } from "./mailer";
++import { notifyTaskAssigned } from "./notifications";
++
++const task = { id: "tsk_4", title: "Push notifications" };
++
++describe("mail notifications", () => {
++  it("logs mail with the default transport", async () => {
++    const info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
++    await sendMail({ to: "ada@acme.test", subject: "Hi", text: "Hello" });
++    expect(info).toHaveBeenCalledWith("mail.sent", {
++      to: "ada@acme.test",
++      subject: "Hi",
++    });
++  });
++
++  it("emails an existing assignee", async () => {
++    const sent: MailMessage[] = [];
++    setMailTransport(async (message) => {
++      sent.push(message);
++    });
++    const { db } = await createTestContext();
++    await notifyTaskAssigned(db, task, "usr_ada");
++    expect(sent).toEqual([
++      expect.objectContaining({
++        to: "ada@acme.test",
++        subject: "You were assigned: Push notifications",
++      }),
++    ]);
++  });
++
++  it("sends nothing when the assignee no longer exists", async () => {
++    const sent: MailMessage[] = [];
++    setMailTransport(async (message) => {
++      sent.push(message);
++    });
++    const { db } = await createTestContext();
++    await notifyTaskAssigned(db, task, "usr_missing");
++    expect(sent).toEqual([]);
++  });
++});
+diff -ruN a/stryker.config.mjs b/stryker.config.mjs
+--- /dev/null
++++ b/stryker.config.mjs
+@@ -0,0 +1,9 @@
++export default {
++  testRunner: "vitest",
++  plugins: ["@stryker-mutator/vitest-runner"],
++  vitest: { configFile: "vitest.config.ts", related: false },
++  mutate: ["src/lib/**/*.ts", "!src/lib/**/*.test.ts", "!src/lib/**/*.mock.ts"],
++  coverageAnalysis: "perTest",
++  reporters: ["clear-text", "progress", "html"],
++  thresholds: { high: 90, low: 80, break: 80 },
++};
+diff -ruN a/tsconfig.json b/tsconfig.json
+--- a/tsconfig.json
++++ b/tsconfig.json
+@@ -7,6 +7,7 @@
+     "types": ["bun"],
+     "strict": true,
+     "noUncheckedIndexedAccess": true,
++    "exactOptionalPropertyTypes": true,
+     "isolatedModules": true,
+     "allowSyntheticDefaultImports": true,
+     "forceConsistentCasingInFileNames": true,
+diff -ruN a/vitest.config.ts b/vitest.config.ts
+--- a/vitest.config.ts
++++ b/vitest.config.ts
+@@ -1,9 +1,33 @@
+-import { defineConfig } from "vitest/config";
++import { withCrapTypescriptVitest } from "@barney-media/crap-typescript-vitest";
+ 
+-export default defineConfig({
+-  test: {
+-    include: ["src/**/*.test.ts"],
+-    environment: "node",
+-    setupFiles: ["./src/test/setup.ts"],
++export default withCrapTypescriptVitest(
++  {
++    test: {
++      include: ["src/**/*.test.ts"],
++      environment: "node",
++      setupFiles: ["./src/test/setup.ts"],
++      unstubEnvs: true,
++      restoreMocks: true,
++      coverage: {
++        enabled: true,
++        provider: "v8",
++        reporter: ["text", "json", "json-summary"],
++        include: ["src/**/*.ts"],
++        exclude: [
++          "src/**/*.test.ts",
++          "src/**/*.mock.ts",
++          "src/test/**",
++          "src/index.ts",
++          "src/db/schema.ts",
++        ],
++        thresholds: {
++          statements: 100,
++          branches: 100,
++          functions: 100,
++          lines: 100,
++        },
++      },
++    },
+   },
+-});
++  { threshold: 25, format: "text", failuresOnly: true },
++);

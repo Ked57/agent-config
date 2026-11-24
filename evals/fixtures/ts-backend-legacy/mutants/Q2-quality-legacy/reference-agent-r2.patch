@@ -1,0 +1,1528 @@
+diff -ruN a/.agents/agent-config.json b/.agents/agent-config.json
+--- /dev/null
++++ b/.agents/agent-config.json
+@@ -0,0 +1,49 @@
++{
++  "version": 1,
++  "runtime": "bun",
++  "commands": {
++    "fast": "bun run verify:fast",
++    "full": "bun run verify:full",
++    "unit": "bun run test:unit",
++    "knip": "bun run knip",
++    "mutation": "bun run test:mutation:domain"
++  },
++  "routing": [
++    {
++      "match": ["**/*"],
++      "required": ["full"]
++    },
++    {
++      "match": ["src/**/*.ts", "scripts/**/*.ts", "drizzle/**"],
++      "required": ["unit", "fast"]
++    },
++    {
++      "match": [
++        "src/lib/legacy/dates.ts",
++        "src/lib/legacy/money.ts",
++        "src/lib/time.ts",
++        "src/lib/flags.ts",
++        "src/lib/ids.ts",
++        "src/lib/passwords.ts"
++      ],
++      "required": ["unit", "fast"],
++      "recommended": ["mutation"]
++    },
++    {
++      "match": [
++        "package.json",
++        "bun.lock",
++        "tsconfig.json",
++        "eslint.config.js",
++        "eslint-rules/**",
++        "eslint-suppressions.json",
++        "vitest.config.ts",
++        "coverage-baseline.json",
++        "knip.json",
++        "stryker.config.json",
++        "drizzle.config.ts"
++      ],
++      "required": ["full"]
++    }
++  ]
++}
+diff -ruN a/coverage-baseline.json b/coverage-baseline.json
+--- /dev/null
++++ b/coverage-baseline.json
+@@ -0,0 +1,236 @@
++{
++  "src/app.ts": {
++    "statements": 50,
++    "branches": 10,
++    "functions": 100,
++    "lines": 54.54
++  },
++  "src/controllers/comments.controller.ts": {
++    "statements": 68,
++    "branches": 33.33,
++    "functions": 83.33,
++    "lines": 71.42
++  },
++  "src/controllers/payments.controller.ts": {
++    "statements": 90.47,
++    "branches": 85.71,
++    "functions": 100,
++    "lines": 100
++  },
++  "src/controllers/reports-v1.controller.ts": {
++    "statements": 79.41,
++    "branches": 50,
++    "functions": 75,
++    "lines": 83.87
++  },
++  "src/controllers/time-entries.controller.ts": {
++    "statements": 81.25,
++    "branches": 65.67,
++    "functions": 100,
++    "lines": 88.13
++  },
++  "src/controllers/users.controller.ts": {
++    "statements": 87.09,
++    "branches": 75,
++    "functions": 100,
++    "lines": 92.59
++  },
++  "src/lib/logger.ts": {
++    "statements": 57.14,
++    "branches": 42.85,
++    "functions": 66.66,
++    "lines": 58.33
++  },
++  "src/lib/time.ts": {
++    "statements": 92.3,
++    "branches": 50,
++    "functions": 75,
++    "lines": 100
++  },
++  "src/lib/legacy/dates.ts": {
++    "statements": 96.15,
++    "branches": 100,
++    "functions": 88.88,
++    "lines": 95.65
++  },
++  "src/lib/legacy/money.ts": {
++    "statements": 70,
++    "branches": 60,
++    "functions": 71.42,
++    "lines": 70
++  },
++  "src/lib/legacy/validate.ts": {
++    "statements": 76.92,
++    "branches": 85.18,
++    "functions": 100,
++    "lines": 76
++  },
++  "src/plugins/auth.ts": {
++    "statements": 91.66,
++    "branches": 100,
++    "functions": 66.66,
++    "lines": 100
++  },
++  "src/routes/attachments.ts": {
++    "statements": 72.41,
++    "branches": 46.15,
++    "functions": 85.71,
++    "lines": 80
++  },
++  "src/routes/auth.ts": {
++    "statements": 100,
++    "branches": 83.33,
++    "functions": 100,
++    "lines": 100
++  },
++  "src/routes/clients.ts": {
++    "statements": 37.93,
++    "branches": 45.45,
++    "functions": 50,
++    "lines": 45.83
++  },
++  "src/routes/exports.ts": {
++    "statements": 80.64,
++    "branches": 55,
++    "functions": 80,
++    "lines": 85.71
++  },
++  "src/routes/invoices.ts": {
++    "statements": 60.86,
++    "branches": 50,
++    "functions": 66.66,
++    "lines": 60.86
++  },
++  "src/routes/labels.ts": {
++    "statements": 72.22,
++    "branches": 50,
++    "functions": 80,
++    "lines": 75
++  },
++  "src/routes/ledger.ts": {
++    "statements": 80,
++    "branches": 50,
++    "functions": 100,
++    "lines": 80
++  },
++  "src/routes/projects.ts": {
++    "statements": 94.28,
++    "branches": 68.75,
++    "functions": 100,
++    "lines": 96.87
++  },
++  "src/routes/reports.ts": {
++    "statements": 100,
++    "branches": 75,
++    "functions": 100,
++    "lines": 100
++  },
++  "src/routes/tasks.ts": {
++    "statements": 72.22,
++    "branches": 66.66,
++    "functions": 80,
++    "lines": 76.47
++  },
++  "src/routes/webhook-subscriptions.ts": {
++    "statements": 42.1,
++    "branches": 20,
++    "functions": 71.42,
++    "lines": 44.11
++  },
++  "src/routes/webhooks.ts": {
++    "statements": 88.23,
++    "branches": 78.56,
++    "functions": 100,
++    "lines": 87.5
++  },
++  "src/services/audit.ts": {
++    "statements": 100,
++    "branches": 83.33,
++    "functions": 100,
++    "lines": 100
++  },
++  "src/services/digest.ts": {
++    "statements": 6.25,
++    "branches": 0,
++    "functions": 0,
++    "lines": 7.14
++  },
++  "src/services/invoices.ts": {
++    "statements": 73.8,
++    "branches": 63.38,
++    "functions": 88.88,
++    "lines": 80.26
++  },
++  "src/services/jobs.ts": {
++    "statements": 94.44,
++    "branches": 83.33,
++    "functions": 100,
++    "lines": 100
++  },
++  "src/services/ledger.ts": {
++    "statements": 100,
++    "branches": 71.42,
++    "functions": 100,
++    "lines": 100
++  },
++  "src/services/mailer.ts": {
++    "statements": 75,
++    "branches": 100,
++    "functions": 66.66,
++    "lines": 75
++  },
++  "src/services/notifications.ts": {
++    "statements": 93.33,
++    "branches": 72.72,
++    "functions": 100,
++    "lines": 100
++  },
++  "src/services/reports.ts": {
++    "statements": 100,
++    "branches": 70,
++    "functions": 100,
++    "lines": 100
++  },
++  "src/services/slack.ts": {
++    "statements": 0,
++    "branches": 0,
++    "functions": 0,
++    "lines": 0
++  },
++  "src/services/tasks.ts": {
++    "statements": 87.2,
++    "branches": 81.08,
++    "functions": 91.66,
++    "lines": 93.15
++  },
++  "src/services/webhook-delivery.ts": {
++    "statements": 8.69,
++    "branches": 0,
++    "functions": 0,
++    "lines": 10.52
++  },
++  "src/sql/comments.sql.ts": {
++    "statements": 60,
++    "branches": 100,
++    "functions": 60,
++    "lines": 60
++  },
++  "src/sql/reports.sql.ts": {
++    "statements": 66.66,
++    "branches": 100,
++    "functions": 66.66,
++    "lines": 66.66
++  },
++  "src/sql/time-entries.sql.ts": {
++    "statements": 90,
++    "branches": 61.11,
++    "functions": 100,
++    "lines": 88.88
++  },
++  "src/sql/users.sql.ts": {
++    "statements": 88.88,
++    "branches": 50,
++    "functions": 100,
++    "lines": 88.88
++  }
++}
+diff -ruN a/eslint.config.js b/eslint.config.js
+--- a/eslint.config.js
++++ b/eslint.config.js
+@@ -1,16 +1,265 @@
+ import js from "@eslint/js";
++import eslintComments from "@eslint-community/eslint-plugin-eslint-comments";
++import vitest from "@vitest/eslint-plugin";
++import importX from "eslint-plugin-import-x";
++import sonarjs from "eslint-plugin-sonarjs";
++import qualityMetrics from "quality-metrics";
+ import tseslint from "typescript-eslint";
+ 
++import noComments from "./eslint-rules/no-comments.mjs";
++
++const TEST_FILES = [
++  "src/**/*.test.ts",
++  "scripts/**/*.test.ts",
++  "src/test/**/*.ts",
++];
++const RUNNER_CONFIGS = ["vitest.config.ts"];
++
++const GATE_RULES = [
++  "complexity",
++  "sonarjs/cognitive-complexity",
++  "quality-metrics/halstead",
++  "max-lines",
++  "max-lines-per-function",
++  "max-params",
++  "@typescript-eslint/no-explicit-any",
++  "@typescript-eslint/ban-ts-comment",
++  "@eslint-community/eslint-comments/*",
++  "no-warning-comments",
++  "local/no-comments",
++];
++const TEST_GATE_RULES = [
++  ...GATE_RULES,
++  "no-restricted-syntax",
++  "no-restricted-imports",
++  "vitest/no-restricted-vi-methods",
++];
++
++const PRODUCTION_SYNTAX_BANS = [
++  {
++    selector:
++      'TSAsExpression > TSAsExpression[typeAnnotation.type="TSUnknownKeyword"]',
++    message:
++      "Do not launder types through `as unknown as`: parse the value at the boundary or fix the source type.",
++  },
++  {
++    selector: "ImportExpression",
++    message:
++      "Use a static import at the top of the module; dynamic import is reserved for deliberate lazy loading.",
++  },
++];
++
++const FLAKE_MESSAGE =
++  "Do not retry or extend timeouts: find the race or the slow setup and fix it; await the operation instead of waiting longer.";
++const SLEEP_MESSAGE =
++  "Do not sleep in tests: await the operation itself, or use vi.useFakeTimers() and advance time.";
++const MOCK_MESSAGE =
++  "Do not replace the project's own modules: inject the fake from the matching `<domain>.mock.ts` instead.";
++
++const FLAKE_SYNTAX_BANS = [
++  {
++    selector:
++      "Property[key.name=/^(retry|retries|timeout|testTimeout|hookTimeout|defaultCommandTimeout)$/]",
++    message: FLAKE_MESSAGE,
++  },
++  {
++    selector:
++      "CallExpression[callee.object.name='vi'][callee.property.name='setConfig']",
++    message: FLAKE_MESSAGE,
++  },
++  {
++    selector:
++      "CallExpression[callee.name=/^(it|test|describe|beforeEach|beforeAll|afterEach|afterAll)$/] > Literal[raw=/^[0-9]/]",
++    message: FLAKE_MESSAGE,
++  },
++  {
++    selector:
++      "CallExpression[callee.object.name=/^(it|test|describe)$/] > Literal[raw=/^[0-9]/]",
++    message: FLAKE_MESSAGE,
++  },
++];
++
++const TEST_ONLY_SYNTAX_BANS = [
++  {
++    selector:
++      "NewExpression[callee.name='Promise'] CallExpression[callee.name='setTimeout']",
++    message: SLEEP_MESSAGE,
++  },
++  {
++    selector:
++      "CallExpression[callee.object.name='vi'][callee.property.name=/^(mock|doMock)$/][arguments.0.value=/^\\.{1,2}\\//]",
++    message: MOCK_MESSAGE,
++  },
++];
++
+ export default tseslint.config(
+-  { ignores: ["dist/**", "drizzle/**", "data/**", "node_modules/**"] },
++  {
++    ignores: [
++      "dist/**",
++      "drizzle/**",
++      "data/**",
++      "node_modules/**",
++      "coverage/**",
++      "reports/**",
++      ".stryker-tmp/**",
++    ],
++  },
++  { linterOptions: { reportUnusedDisableDirectives: "error" } },
+   js.configs.recommended,
+   ...tseslint.configs.recommended,
+   {
++    plugins: {
++      "@eslint-community/eslint-comments": eslintComments,
++      local: { rules: { "no-comments": noComments } },
++    },
+     rules: {
+       "@typescript-eslint/no-unused-vars": [
+         "error",
+         { argsIgnorePattern: "^_" },
+       ],
++      "local/no-comments": "error",
++      "@eslint-community/eslint-comments/no-unlimited-disable": "error",
++      "@eslint-community/eslint-comments/require-description": "error",
++      "@eslint-community/eslint-comments/no-restricted-disable": [
++        "error",
++        ...GATE_RULES,
++      ],
++      "no-warning-comments": [
++        "error",
++        {
++          terms: ["istanbul ignore", "v8 ignore", "c8 ignore"],
++          location: "anywhere",
++        },
++      ],
++    },
++  },
++  {
++    files: ["**/*.ts"],
++    plugins: {
++      sonarjs,
++      "quality-metrics": qualityMetrics,
++      "import-x": importX,
++    },
++    languageOptions: {
++      parserOptions: {
++        projectService: true,
++        tsconfigRootDir: import.meta.dirname,
++      },
++    },
++    rules: {
++      complexity: ["error", { max: 21 }],
++      "sonarjs/cognitive-complexity": ["error", 21],
++      "quality-metrics/halstead": [
++        "error",
++        { maxVolume: 1000, maxEffort: 4000 },
++      ],
++      "max-lines": ["error", { max: 499 }],
++      "max-lines-per-function": ["error", { max: 99 }],
++      "max-params": ["error", { max: 4 }],
++      "@typescript-eslint/no-explicit-any": "error",
++      "@typescript-eslint/ban-ts-comment": [
++        "error",
++        {
++          "ts-ignore": true,
++          "ts-nocheck": true,
++          "ts-expect-error": "allow-with-description",
++        },
++      ],
++      "@typescript-eslint/switch-exhaustiveness-check": [
++        "error",
++        { considerDefaultExhaustiveForUnions: false },
++      ],
++      "@typescript-eslint/consistent-type-assertions": [
++        "error",
++        { assertionStyle: "as", objectLiteralTypeAssertions: "never" },
++      ],
++      "@typescript-eslint/no-non-null-assertion": "error",
++      "@typescript-eslint/no-unsafe-assignment": "error",
++      "@typescript-eslint/no-unsafe-member-access": "error",
++      "@typescript-eslint/no-unsafe-call": "error",
++      "@typescript-eslint/no-unsafe-return": "error",
++      "@typescript-eslint/no-unsafe-argument": "error",
++      "@typescript-eslint/no-floating-promises": [
++        "error",
++        { ignoreVoid: false },
++      ],
++      "@typescript-eslint/no-misused-promises": "error",
++      "@typescript-eslint/return-await": "error",
++      "import-x/first": "error",
++      "no-restricted-syntax": ["error", ...PRODUCTION_SYNTAX_BANS],
++      "no-restricted-imports": [
++        "error",
++        {
++          patterns: [
++            {
++              group: ["**/*.mock"],
++              message:
++                "Production code must not import test fakes: inject the real dependency, and use `*.mock.ts` only from tests.",
++            },
++          ],
++        },
++      ],
++    },
++  },
++  {
++    files: RUNNER_CONFIGS,
++    rules: {
++      "no-restricted-syntax": [
++        "error",
++        ...PRODUCTION_SYNTAX_BANS,
++        ...FLAKE_SYNTAX_BANS,
++      ],
++      "@eslint-community/eslint-comments/no-restricted-disable": [
++        "error",
++        ...TEST_GATE_RULES,
++      ],
++    },
++  },
++  {
++    files: TEST_FILES,
++    plugins: { vitest },
++    rules: {
++      "vitest/no-focused-tests": "error",
++      "vitest/no-disabled-tests": "error",
++      "vitest/expect-expect": "error",
++      "vitest/valid-expect": "error",
++      "vitest/no-conditional-expect": "error",
++      "vitest/no-conditional-in-test": "error",
++      "vitest/no-standalone-expect": "error",
++      "vitest/no-identical-title": "error",
++      "vitest/valid-title": "error",
++      "vitest/require-to-throw-message": "error",
++      "vitest/no-large-snapshots": "error",
++      "vitest/no-interpolation-in-snapshots": "error",
++      "vitest/max-nested-describe": "error",
++      "vitest/prefer-hooks-on-top": "error",
++      "vitest/no-duplicate-hooks": "error",
++      "vitest/no-restricted-vi-methods": [
++        "error",
++        {
++          stubGlobal:
++            "Do not stub globals: inject the fake from the matching `<domain>.mock.ts`, or pass the dependency in explicitly.",
++        },
++      ],
++      "no-restricted-syntax": [
++        "error",
++        ...PRODUCTION_SYNTAX_BANS,
++        ...FLAKE_SYNTAX_BANS,
++        ...TEST_ONLY_SYNTAX_BANS,
++      ],
++      "no-restricted-imports": [
++        "error",
++        {
++          paths: [
++            { name: "node:timers/promises", message: SLEEP_MESSAGE },
++            { name: "timers/promises", message: SLEEP_MESSAGE },
++          ],
++        },
++      ],
++      "@eslint-community/eslint-comments/no-restricted-disable": [
++        "error",
++        ...TEST_GATE_RULES,
++      ],
+     },
+   },
+ );
+diff -ruN a/eslint-rules/no-comments.mjs b/eslint-rules/no-comments.mjs
+--- /dev/null
++++ b/eslint-rules/no-comments.mjs
+@@ -0,0 +1,73 @@
++const DIRECTIVE = new RegExp(
++  [
++    String.raw`^\s*(eslint|eslint-disable|eslint-enable|eslint-disable-line|eslint-disable-next-line|global|globals)\b`,
++    String.raw`^\s*@ts-(expect-error|ignore|nocheck)\b`,
++    String.raw`^\s*prettier-ignore\s*$`,
++    String.raw`^\s*(istanbul|v8|c8) ignore\b`,
++    String.raw`^\s*[#@]__[A-Z_]+__\s*$`,
++    String.raw`^\s*webpack[A-Z]\w*:`,
++    String.raw`^\s*@vite-ignore\s*$`,
++    String.raw`^/ <reference\b`,
++    String.raw`^\s*@jsxImportSource\b`,
++    String.raw`^\s*SPDX-License-Identifier:`,
++    String.raw`^!`,
++    String.raw`^[\s*]*@license\b`,
++    String.raw`^# source(Mapping)?URL=`,
++  ].join("|"),
++);
++
++const WARNING = /^ WARNING: \S/;
++
++function isPublicApiDoc(comment, filename, publicApi) {
++  return (
++    comment.type === "Block" &&
++    comment.value.startsWith("*") &&
++    publicApi.some((part) => filename.includes(part))
++  );
++}
++
++function isLoneWarning(comment, next) {
++  return (
++    comment.type === "Line" &&
++    WARNING.test(comment.value) &&
++    (!next || next.loc.start.line !== comment.loc.end.line + 1)
++  );
++}
++
++export default {
++  meta: {
++    type: "suggestion",
++    schema: [
++      {
++        type: "object",
++        properties: { publicApi: { type: "array", items: { type: "string" } } },
++        additionalProperties: false,
++      },
++    ],
++    messages: {
++      prose:
++        "Remove this comment: rename or restructure the code so it explains itself, and put the reason in the commit message. Only a single-line `// WARNING: <hazard>` may stay.",
++    },
++  },
++  create(context) {
++    const publicApi = context.options[0]?.publicApi ?? [];
++    const filename = context.filename.replaceAll("\\", "/");
++    const report = (comment) =>
++      context.report({ loc: comment.loc, messageId: "prose" });
++    return {
++      Program() {
++        const comments = context.sourceCode.getAllComments();
++        comments.forEach((comment, index) => {
++          if (comment.type === "Shebang" || DIRECTIVE.test(comment.value))
++            return;
++          if (isLoneWarning(comment, comments[index + 1])) return;
++          if (isPublicApiDoc(comment, filename, publicApi)) return;
++          report(comment);
++        });
++        for (const comment of context.sourceCode.ast.templateBody?.comments ??
++          [])
++          report(comment);
++      },
++    };
++  },
++};
+diff -ruN a/eslint-suppressions.json b/eslint-suppressions.json
+--- /dev/null
++++ b/eslint-suppressions.json
+@@ -0,0 +1,281 @@
++{
++  "src/app.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/controllers/comments.controller.ts": {
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/controllers/payments.controller.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-lines-per-function": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/controllers/reports-v1.controller.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/controllers/time-entries.controller.ts": {
++    "max-lines-per-function": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 2
++    }
++  },
++  "src/controllers/users.controller.ts": {
++    "local/no-comments": {
++      "count": 2
++    },
++    "quality-metrics/halstead": {
++      "count": 2
++    }
++  },
++  "src/db/schema.ts": {
++    "local/no-comments": {
++      "count": 3
++    }
++  },
++  "src/db/seed.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-lines": {
++      "count": 1
++    },
++    "max-lines-per-function": {
++      "count": 1
++    },
++    "max-params": {
++      "count": 3
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/index.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/lib/errors.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/lib/flags.ts": {
++    "@typescript-eslint/consistent-type-assertions": {
++      "count": 1
++    },
++    "local/no-comments": {
++      "count": 5
++    }
++  },
++  "src/lib/legacy/dates.ts": {
++    "local/no-comments": {
++      "count": 8
++    }
++  },
++  "src/lib/legacy/idempotency.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-params": {
++      "count": 1
++    }
++  },
++  "src/lib/legacy/money.ts": {
++    "local/no-comments": {
++      "count": 5
++    }
++  },
++  "src/lib/legacy/validate.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/lib/time.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/plugins/auth.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/routes/attachments.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/routes/auth.ts": {
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/routes/clients.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-lines-per-function": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 3
++    }
++  },
++  "src/routes/exports.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-lines-per-function": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/routes/invoices.test.ts": {
++    "max-lines-per-function": {
++      "count": 1
++    }
++  },
++  "src/routes/projects.ts": {
++    "max-lines-per-function": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/routes/tasks.test.ts": {
++    "max-lines-per-function": {
++      "count": 1
++    }
++  },
++  "src/routes/webhook-subscriptions.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "max-lines-per-function": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 2
++    }
++  },
++  "src/routes/webhooks.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/services/digest.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/services/invoices.ts": {
++    "local/no-comments": {
++      "count": 4
++    },
++    "quality-metrics/halstead": {
++      "count": 5
++    }
++  },
++  "src/services/jobs.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/services/ledger.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/services/mailer.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/services/reports.ts": {
++    "local/no-comments": {
++      "count": 2
++    },
++    "quality-metrics/halstead": {
++      "count": 3
++    }
++  },
++  "src/services/slack.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/services/tasks.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 4
++    }
++  },
++  "src/services/webhook-delivery.ts": {
++    "local/no-comments": {
++      "count": 1
++    },
++    "quality-metrics/halstead": {
++      "count": 1
++    }
++  },
++  "src/sql/reports.sql.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/sql/time-entries.sql.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  },
++  "src/sql/users.sql.ts": {
++    "local/no-comments": {
++      "count": 1
++    }
++  },
++  "src/test/helpers.ts": {
++    "local/no-comments": {
++      "count": 2
++    }
++  }
++}
+\ No newline at end of file
+diff -ruN a/.githooks/pre-commit b/.githooks/pre-commit
+--- /dev/null
++++ b/.githooks/pre-commit
+@@ -0,0 +1,2 @@
++#!/bin/sh
++exec bun run verify:fast
+diff -ruN a/.gitignore b/.gitignore
+--- a/.gitignore
++++ b/.gitignore
+@@ -2,3 +2,6 @@
+ dist
+ data
+ *.db
++coverage
++reports
++.stryker-tmp
+diff -ruN a/knip.json b/knip.json
+--- /dev/null
++++ b/knip.json
+@@ -0,0 +1,19 @@
++{
++  "$schema": "https://unpkg.com/knip@6/schema.json",
++  "entry": ["scripts/*.ts"],
++  "project": ["src/**/*.ts", "scripts/**/*.ts", "eslint-rules/**/*.mjs"],
++  "ignoreIssues": {
++    "src/services/slack.ts": ["files"],
++    "src/app.ts": ["types"],
++    "src/controllers/time-entries.controller.ts": ["exports"],
++    "src/db/migrate.ts": ["exports"],
++    "src/lib/flags.ts": ["exports"],
++    "src/lib/legacy/dates.ts": ["exports"],
++    "src/lib/legacy/money.ts": ["exports"],
++    "src/lib/time.ts": ["exports"],
++    "src/plugins/auth.ts": ["exports"],
++    "src/services/digest.ts": ["exports"],
++    "src/services/invoices.ts": ["exports"],
++    "src/services/webhook-delivery.ts": ["exports", "types"]
++  }
++}
+diff -ruN a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -15,7 +15,15 @@
+     "test": "vitest run",
+     "db:generate": "drizzle-kit generate",
+     "db:migrate": "bun run scripts/migrate.ts",
+-    "db:seed": "bun run scripts/seed.ts"
++    "db:seed": "bun run scripts/seed.ts",
++    "test:unit": "vitest run",
++    "test:mutation:domain": "stryker run",
++    "knip": "knip",
++    "lint:directives": "bun run scripts/check-disable-directives.ts",
++    "lint:suppressions": "bun run scripts/check-suppression-growth.ts",
++    "verify:fast": "bun run format:check && bun run lint && bun run lint:directives && bun run typecheck && bun run test:unit",
++    "verify:full": "bun run verify:fast && bun run knip && bun run build",
++    "hooks:install": "git config core.hooksPath .githooks"
+   },
+   "dependencies": {
+     "@libsql/client": "^0.18.0",
+@@ -23,11 +31,22 @@
+     "elysia": "^1.4.32"
+   },
+   "devDependencies": {
++    "@barney-media/crap-typescript-vitest": "^2.0.2",
++    "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
+     "@eslint/js": "^10.0.1",
++    "@stryker-mutator/core": "^10.1.1",
++    "@stryker-mutator/vitest-runner": "^10.1.1",
+     "@types/bun": "^1.4.4",
++    "@vitest/coverage-v8": "5.1.0",
++    "@vitest/eslint-plugin": "^1.6.28",
+     "drizzle-kit": "^0.31.11",
+     "eslint": "^10.15.0",
++    "eslint-plugin-import-x": "^4.18.1",
++    "eslint-plugin-sonarjs": "^4.2.2",
++    "knip": "^6.48.0",
+     "prettier": "^3.10.1",
++    "quality-metrics": "^0.1.1",
++    "ts-morph": "^28.0.0",
+     "typescript": "~6.0.3",
+     "typescript-eslint": "^8.72.2",
+     "vitest": "^5.1.0"
+diff -ruN a/.prettierignore b/.prettierignore
+--- a/.prettierignore
++++ b/.prettierignore
+@@ -2,3 +2,7 @@
+ data
+ drizzle/meta
+ bun.lock
++coverage
++reports
++.stryker-tmp
++eslint-suppressions.json
+diff -ruN a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -27,6 +27,18 @@
+ `bun run typecheck`, `bun run lint`, `bun run format:check`, `bun run test`, `bun run build`.
+ Tests run against a fresh temp SQLite database per test (`src/test/helpers.ts`).
+ 
++| Command                              | What it runs                                                                 |
++| ------------------------------------ | ---------------------------------------------------------------------------- |
++| `bun run verify:fast`                | format check, lint, disable-directive scan, typecheck, tests with coverage   |
++| `bun run verify:full`                | `verify:fast`, Knip, build                                                   |
++| `bun run test:mutation:domain`       | Stryker on the pure helpers in `src/lib` (slow; nightly or manual)           |
++| `bun run lint:suppressions <target>` | CI: fails when a per-file, per-rule ESLint suppression count grew vs. target |
++| `bun run hooks:install`              | points Git at `.githooks/`, whose pre-commit runs `verify:fast`              |
++
++Existing violations are frozen, never absorbed: ESLint in `eslint-suppressions.json` (shrink it with
++`eslint --prune-suppressions`), coverage floors per file in `coverage-baseline.json` (every other file
++must be at 100%), dead code in `knip.json` `ignoreIssues`. Raise or delete entries as you fix them.
++
+ ## Layout
+ 
+ See [docs/architecture.md](docs/architecture.md). The HTTP contract for clients and payments is
+diff -ruN a/scripts/check-disable-directives.test.ts b/scripts/check-disable-directives.test.ts
+--- /dev/null
++++ b/scripts/check-disable-directives.test.ts
+@@ -0,0 +1,31 @@
++import { describe, expect, it } from "vitest";
++
++import { findForbiddenDirectives } from "./check-disable-directives";
++
++const disable = ["eslint", "disable"].join("-");
++
++describe("disable directive scan", () => {
++  it("reports directives that name a guard rule or no rule", () => {
++    const source = [
++      `/* ${disable} @eslint-community/eslint-comments/no-restricted-disable */`,
++      `// ${disable}-next-line`,
++      `/* ${disable}-line */`,
++      `<!-- ${disable} -->`,
++    ].join("\n");
++    expect(findForbiddenDirectives(source)).toEqual([
++      "1: disable directive names guard rule @eslint-community/eslint-comments/no-restricted-disable",
++      "2: disable directive names no rule",
++      "3: disable directive names no rule",
++      "4: disable directive names no rule",
++    ]);
++  });
++
++  it("accepts directives that name ordinary rules with a description", () => {
++    const source = [
++      `// ${disable}-next-line no-console -- CLI output`,
++      `/* ${disable} no-alert, no-debugger -- legacy widget */`,
++      `// ${disable}d feature, not a directive`,
++    ].join("\n");
++    expect(findForbiddenDirectives(source)).toEqual([]);
++  });
++});
+diff -ruN a/scripts/check-disable-directives.ts b/scripts/check-disable-directives.ts
+--- /dev/null
++++ b/scripts/check-disable-directives.ts
+@@ -0,0 +1,53 @@
++import { globSync, readFileSync } from "node:fs";
++
++import { ESLint } from "eslint";
++
++const DIRECTIVE =
++  /(?:\/\/|\/\*|<!--)\s*eslint-disable(?:-next-line|-line)?(?=[\s*]|-->|$)(?<body>.*?)(?:\*\/|-->|$)/gm;
++const GUARD_PREFIX = "@eslint-community/eslint-comments/";
++
++function namedRules(body: string): string[] {
++  const [rules = ""] = body.split(/\s--\s/);
++  return rules
++    .split(",")
++    .map((rule) => rule.trim())
++    .filter((rule) => rule.length > 0);
++}
++
++export function findForbiddenDirectives(source: string): string[] {
++  const problems: string[] = [];
++  for (const match of source.matchAll(DIRECTIVE)) {
++    const rules = namedRules(match.groups?.body ?? "");
++    const line = source.slice(0, match.index).split("\n").length;
++    if (rules.length === 0) {
++      problems.push(`${line}: disable directive names no rule`);
++    }
++    for (const rule of rules.filter((name) => name.startsWith(GUARD_PREFIX))) {
++      problems.push(`${line}: disable directive names guard rule ${rule}`);
++    }
++  }
++  return problems;
++}
++
++async function lintedFiles(): Promise<string[]> {
++  const eslint = new ESLint();
++  const candidates = globSync("**/*.{ts,mts,cts,js,mjs,cjs}", {
++    exclude: (path) => path === "node_modules",
++  });
++  const linted: string[] = [];
++  for (const file of candidates) {
++    if (!(await eslint.isPathIgnored(file))) linted.push(file);
++  }
++  return linted;
++}
++
++if (import.meta.main) {
++  let failed = false;
++  for (const file of await lintedFiles()) {
++    for (const problem of findForbiddenDirectives(readFileSync(file, "utf8"))) {
++      console.error(`${file}:${problem}`);
++      failed = true;
++    }
++  }
++  if (failed) process.exit(1);
++}
+diff -ruN a/scripts/check-suppression-growth.test.ts b/scripts/check-suppression-growth.test.ts
+--- /dev/null
++++ b/scripts/check-suppression-growth.test.ts
+@@ -0,0 +1,43 @@
++import { describe, expect, it } from "vitest";
++
++import {
++  grownSuppressions,
++  parseSuppressions,
++  renamedFrom,
++} from "./check-suppression-growth";
++
++const base = parseSuppressions(
++  JSON.stringify({
++    "src/a.ts": { "max-params": { count: 2 }, complexity: { count: 1 } },
++    "src/old.ts": { "local/no-comments": { count: 3 } },
++  }),
++);
++
++describe("suppression growth", () => {
++  it("fails a grown per-file, per-rule count even when the total shrinks", () => {
++    const current = parseSuppressions(
++      JSON.stringify({
++        "src/a.ts": { "max-params": { count: 3 } },
++        "src/b.ts": { complexity: { count: 1 } },
++      }),
++    );
++    expect(grownSuppressions(base, current, new Map())).toEqual([
++      "src/a.ts: max-params 2 -> 3",
++      "src/b.ts: complexity 0 -> 1",
++    ]);
++  });
++
++  it("compares a renamed file with its merge-base path", () => {
++    const renames = renamedFrom("R100\0src/old.ts\0src/new.ts\0M\0src/a.ts\0");
++    const current = parseSuppressions(
++      JSON.stringify({ "src/new.ts": { "local/no-comments": { count: 3 } } }),
++    );
++    expect(grownSuppressions(base, current, renames)).toEqual([]);
++  });
++
++  it("rejects a malformed baseline", () => {
++    expect(() =>
++      parseSuppressions(JSON.stringify({ "src/a.ts": { rule: {} } })),
++    ).toThrow("eslint-suppressions.json is malformed");
++  });
++});
+diff -ruN a/scripts/check-suppression-growth.ts b/scripts/check-suppression-growth.ts
+--- /dev/null
++++ b/scripts/check-suppression-growth.ts
+@@ -0,0 +1,108 @@
++import { execFileSync } from "node:child_process";
++import { readFileSync } from "node:fs";
++
++const BASELINE = "eslint-suppressions.json";
++const RENAME = /R\d*\0([^\0]+)\0([^\0]+)\0/g;
++
++type RuleCounts = Record<string, { count: number }>;
++type Suppressions = Record<string, RuleCounts>;
++
++function git(args: string[]): string {
++  return execFileSync("git", args, { encoding: "utf8" });
++}
++
++function gitSucceeds(args: string[]): boolean {
++  try {
++    execFileSync("git", args, { stdio: "ignore" });
++    return true;
++  } catch {
++    return false;
++  }
++}
++
++function isRecord(value: unknown): value is Record<string, unknown> {
++  return typeof value === "object" && value !== null && !Array.isArray(value);
++}
++
++function countOf(entry: unknown): number {
++  const count = isRecord(entry) ? entry.count : undefined;
++  if (typeof count !== "number") throw new Error(`${BASELINE} is malformed`);
++  return count;
++}
++
++function parseRuleCounts(rules: unknown): RuleCounts {
++  if (!isRecord(rules)) throw new Error(`${BASELINE} is malformed`);
++  const counts: RuleCounts = {};
++  for (const [rule, entry] of Object.entries(rules)) {
++    counts[rule] = { count: countOf(entry) };
++  }
++  return counts;
++}
++
++export function parseSuppressions(text: string): Suppressions {
++  const parsed: unknown = JSON.parse(text);
++  if (!isRecord(parsed)) throw new Error(`${BASELINE} is not a file map`);
++  const suppressions: Suppressions = {};
++  for (const [file, rules] of Object.entries(parsed)) {
++    suppressions[file] = parseRuleCounts(rules);
++  }
++  return suppressions;
++}
++
++export function renamedFrom(nameStatusZ: string): Map<string, string> {
++  const renames = new Map<string, string>();
++  for (const [, from, to] of `${nameStatusZ}\0`.matchAll(RENAME)) {
++    if (from && to) renames.set(to, from);
++  }
++  return renames;
++}
++
++export function grownSuppressions(
++  base: Suppressions,
++  current: Suppressions,
++  renames: Map<string, string>,
++): string[] {
++  const grown: string[] = [];
++  for (const [file, rules] of Object.entries(current)) {
++    const baseRules = base[renames.get(file) ?? file] ?? {};
++    for (const [rule, { count }] of Object.entries(rules)) {
++      const baseCount = baseRules[rule]?.count ?? 0;
++      if (count > baseCount) {
++        grown.push(`${file}: ${rule} ${baseCount} -> ${count}`);
++      }
++    }
++  }
++  return grown;
++}
++
++function baselineAt(mergeBase: string): Suppressions | null {
++  if (!gitSucceeds(["cat-file", "-e", `${mergeBase}^{commit}`])) {
++    throw new Error(`cannot read merge-base commit ${mergeBase}`);
++  }
++  if (!gitSucceeds(["cat-file", "-e", `${mergeBase}:${BASELINE}`])) {
++    return null;
++  }
++  return parseSuppressions(git(["show", `${mergeBase}:${BASELINE}`]));
++}
++
++function main(target: string): number {
++  const mergeBase = git(["merge-base", "HEAD", target]).trim();
++  const base = baselineAt(mergeBase);
++  if (!base) {
++    console.log(`${BASELINE} is new in this change: adopting it as baseline`);
++    return 0;
++  }
++  const renames = renamedFrom(
++    git(["diff", "-z", "--name-status", "-M", mergeBase, "HEAD"]),
++  );
++  const current = parseSuppressions(readFileSync(BASELINE, "utf8"));
++  const grown = grownSuppressions(base, current, renames);
++  for (const line of grown) console.error(`suppression count grew: ${line}`);
++  return grown.length === 0 ? 0 : 1;
++}
++
++if (import.meta.main) {
++  const [target] = process.argv.slice(2);
++  if (!target) throw new Error("usage: check-suppression-growth.ts <target>");
++  process.exit(main(target));
++}
+diff -ruN a/src/lib/ids.mock.ts b/src/lib/ids.mock.ts
+--- /dev/null
++++ b/src/lib/ids.mock.ts
+@@ -0,0 +1,7 @@
++export function fakeIds(prefix: string): () => string {
++  let count = 0;
++  return () => {
++    count += 1;
++    return `${prefix}_${String(count).padStart(16, "0")}`;
++  };
++}
+diff -ruN a/src/lib/ids.test.ts b/src/lib/ids.test.ts
+--- /dev/null
++++ b/src/lib/ids.test.ts
+@@ -0,0 +1,11 @@
++import { describe, expect, it } from "vitest";
++import { newId } from "./ids";
++import { fakeIds } from "./ids.mock";
++
++describe("ids", () => {
++  it("keeps the prefix and length of real ids in fakes", () => {
++    const next = fakeIds("tsk");
++    expect(next()).toHaveLength(newId("tsk").length);
++    expect(next()).toBe("tsk_0000000000000002");
++  });
++});
+diff -ruN a/src/routes/tasks.test.ts b/src/routes/tasks.test.ts
+--- a/src/routes/tasks.test.ts
++++ b/src/routes/tasks.test.ts
+@@ -89,6 +89,57 @@
+     });
+   });
+ 
++  it("trims and saves edited fields", async () => {
++    const { json } = await createTestContext();
++    const edited = await json("PATCH", "/api/tasks/tsk_4", {
++      token: admin,
++      body: {
++        title: "  Push alerts  ",
++        description: "iOS first",
++        dueDate: "2026-12-01",
++        assigneeId: null,
++      },
++    });
++    expect(edited.body).toMatchObject({
++      title: "Push alerts",
++      description: "iOS first",
++      dueDate: "2026-12-01",
++      assigneeId: null,
++    });
++  });
++
++  it("returns the task unchanged when nothing differs", async () => {
++    const { json } = await createTestContext();
++    const unchanged = await json("PATCH", "/api/tasks/tsk_2", {
++      token: admin,
++      body: { status: "in_progress", assigneeId: "usr_bob" },
++    });
++    expect(unchanged.body).toMatchObject({
++      status: "in_progress",
++      assigneeId: "usr_bob",
++      nextOccurrence: null,
++    });
++  });
++
++  it("rejects blank titles, foreign assignees and tasks of another org", async () => {
++    const { request } = await createTestContext();
++    const blank = await request("PATCH", "/api/tasks/tsk_4", {
++      token: admin,
++      body: { title: "   " },
++    });
++    const foreignAssignee = await request("PATCH", "/api/tasks/tsk_4", {
++      token: admin,
++      body: { assigneeId: "usr_gina" },
++    });
++    const foreignTask = await request("PATCH", "/api/tasks/tsk_6", {
++      token: admin,
++      body: { title: "Mine now" },
++    });
++    expect([blank.status, foreignAssignee.status, foreignTask.status]).toEqual([
++      400, 400, 404,
++    ]);
++  });
++
+   it("sets labels", async () => {
+     const { json } = await createTestContext();
+     const labelled = await json("PUT", "/api/tasks/tsk_4/labels", {
+diff -ruN a/src/test/helpers.ts b/src/test/helpers.ts
+--- a/src/test/helpers.ts
++++ b/src/test/helpers.ts
+@@ -1,4 +1,5 @@
+ import { randomUUID } from "node:crypto";
++import { copyFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import { join } from "node:path";
+ 
+@@ -11,6 +12,19 @@
+ 
+ export { SEED_TOKENS };
+ 
++const tempDbPath = () => join(tmpdir(), `tasks-api-test-${randomUUID()}.db`);
++
++async function createSeededTemplate(): Promise<string> {
++  const path = tempDbPath();
++  const db = createDb(`file:${path}`);
++  await runMigrations(db);
++  await seed(db);
++  db.$client.close();
++  return path;
++}
++
++const seededTemplate = createSeededTemplate();
++
+ interface RequestOptions {
+   token?: string;
+   body?: unknown;
+@@ -22,12 +36,9 @@
+  * Pass a Drizzle `logger` to observe the queries a request runs.
+  */
+ export async function createTestContext(options: { logger?: Logger } = {}) {
+-  const db = createDb(
+-    `file:${join(tmpdir(), `tasks-api-test-${randomUUID()}.db`)}`,
+-    options,
+-  );
+-  await runMigrations(db);
+-  await seed(db);
++  const path = tempDbPath();
++  copyFileSync(await seededTemplate, path);
++  const db = createDb(`file:${path}`, options);
+   const app = createApp({ db });
+   const request = (
+     method: string,
+diff -ruN a/stryker.config.json b/stryker.config.json
+--- /dev/null
++++ b/stryker.config.json
+@@ -0,0 +1,26 @@
++{
++  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
++  "testRunner": "vitest",
++  "vitest": {
++    "configFile": "vitest.config.ts"
++  },
++  "mutate": [
++    "src/lib/legacy/dates.ts",
++    "src/lib/legacy/money.ts",
++    "src/lib/time.ts",
++    "src/lib/flags.ts",
++    "src/lib/ids.ts",
++    "src/lib/passwords.ts"
++  ],
++  "coverageAnalysis": "perTest",
++  "reporters": ["clear-text", "progress", "html"],
++  "htmlReporter": {
++    "fileName": "reports/mutation/index.html"
++  },
++  "tempDirName": ".stryker-tmp",
++  "thresholds": {
++    "high": 90,
++    "low": 78,
++    "break": 78
++  }
++}
+diff -ruN a/tsconfig.json b/tsconfig.json
+--- a/tsconfig.json
++++ b/tsconfig.json
+@@ -2,11 +2,12 @@
+   "compilerOptions": {
+     "lib": ["ES2022"],
+     "target": "ES2022",
+-    "module": "ES2022",
++    "module": "ESNext",
+     "moduleResolution": "bundler",
+     "types": ["bun"],
+     "strict": true,
+     "noUncheckedIndexedAccess": true,
++    "resolveJsonModule": true,
+     "isolatedModules": true,
+     "allowSyntheticDefaultImports": true,
+     "forceConsistentCasingInFileNames": true,
+diff -ruN a/vitest.config.ts b/vitest.config.ts
+--- a/vitest.config.ts
++++ b/vitest.config.ts
+@@ -1,9 +1,50 @@
+-import { defineConfig } from "vitest/config";
++import { withCrapTypescriptVitest } from "@barney-media/crap-typescript-vitest";
++import type { ViteUserConfig } from "vitest/config";
+ 
+-export default defineConfig({
++import coverageBaseline from "./coverage-baseline.json" with { type: "json" };
++
++const COVERAGE_EXCLUDE = [
++  "src/**/*.test.ts",
++  "src/**/*.mock.ts",
++  "src/test/**",
++  "src/index.ts",
++  "src/db/seed.ts",
++  "src/db/schema.ts",
++];
++
++const FULL_COVERAGE = {
++  perFile: true,
++  statements: 100,
++  branches: 100,
++  functions: 100,
++  lines: 100,
++};
++
++const baselinedFiles = Object.keys(coverageBaseline);
++const filesOutsideBaseline =
++  baselinedFiles.length === 0 ? "src/**" : `!(${baselinedFiles.join("|")})`;
++
++const config = {
+   test: {
+-    include: ["src/**/*.test.ts"],
++    include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
+     environment: "node",
+     setupFiles: ["./src/test/setup.ts"],
++    coverage: {
++      enabled: true,
++      provider: "v8",
++      include: ["src/**/*.ts"],
++      exclude: COVERAGE_EXCLUDE,
++      reporter: ["text-summary", "json-summary"],
++      thresholds: {
++        [filesOutsideBaseline]: FULL_COVERAGE,
++        ...coverageBaseline,
++      },
++    },
+   },
++} satisfies ViteUserConfig;
++
++export default withCrapTypescriptVitest(config, {
++  threshold: 25,
++  excludes: [...COVERAGE_EXCLUDE, ".stryker-tmp/**"],
++  failuresOnly: true,
+ });
