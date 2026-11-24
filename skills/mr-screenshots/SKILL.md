@@ -43,7 +43,8 @@ saying so and how it was checked.
 - **Before** is captured from the merge base, not from that running app. `git worktree
   add` a checkout of the merge base in a temporary directory, install its dependencies,
   serve that checkout with the same fixture env on a free port, and capture there with
-  the same steps. Remove the worktree afterwards.
+  the same steps. Before shooting, check that the changed region shows the base UI; if
+  it shows the change, you are on the branch build. Remove the worktree afterwards.
 - When a side cannot be served, mount the real page or component from that checkout in
   the project's component-test runner (Cypress component testing, Playwright CT,
   Storybook) with the same mock data on both sides. Keep that capture spec out of the
