@@ -171,6 +171,9 @@ The installer copies every `skills/<name>/` directory that contains a `SKILL.md`
 - `fullstack-typescript-quality`, which loads `fullstack-typescript-static`,
   `fullstack-typescript-tests`, and `fullstack-typescript-mutation`
 - `manual-qa`
+- `mr-screenshots`, which puts before/after screenshots of each visible change in the
+  description of an MR/PR that changes user-facing UI (large MRs fold extra shots into
+  collapsed blocks)
 - `figma-to-code`, which builds UI from a Figma frame: exact values from the Figma MCP,
   kit instances and variables mapped to the project's components and tokens, every state
   frame, and a DOM comparison against each frame

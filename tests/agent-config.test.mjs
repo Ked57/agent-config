@@ -18,7 +18,8 @@ const keptSkills = [
   'fullstack-typescript-quality',
   'fullstack-typescript-static',
   'fullstack-typescript-tests',
-  'manual-qa'
+  'manual-qa',
+  'mr-screenshots'
 ];
 const agentBrowserSkills = ['agent-browser'];
 const agentBrowserLock = JSON.parse(fs.readFileSync(path.join(root, 'skills/agent-browser-skills.lock.json'), 'utf8'));
@@ -248,6 +249,7 @@ test('routing and shared policy resolve without role files', () => {
   assert.doesNotMatch(sharedPolicy, /orchestration\.md/);
   assert.match(sharedPolicy, /~\/\.agents\/skills\/manual-qa\/SKILL\.md/);
   assert.match(routing, /Implemented user-facing UI change \(browser page, component, style, native app screen\) → `manual-qa`/);
+  assert.match(routing, /merge or pull request whose diff changes user-facing UI → `mr-screenshots`/);
   assert.match(routing, /Browser automation → `agent-browser`/);
   assert.match(routing, /TypeScript quality-tooling work → `fullstack-typescript-quality`/);
   assert.doesNotMatch(routing, /## 3\. Topic and evidence/);
