@@ -125,6 +125,7 @@ Stop at the first rule that fires:
 - **Done**: two consecutive rounds with zero blocking findings.
 - **Stuck**: the blocking count has not dropped for two rounds.
 - **Circling**: a finding returns after being fixed, or two fixes keep undoing each other.
+  A noise finding does not circle until the next round raises it again.
 - **Cap**: six rounds.
 
 ## Report
