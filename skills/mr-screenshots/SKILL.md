@@ -37,16 +37,19 @@ saying so and how it was checked.
 
 ## 2. Capture
 
-- **After** comes from the branch. Reuse `manual-qa` screenshots when they match the shot
-  list.
-- **Before** comes from the base branch: `git worktree add` a checkout of the merge base
-  in a temporary directory and capture there with the same steps. Remove that worktree
-  afterwards.
-- Use the running app when available (`agent-browser`, via
-  `~/.agents/skills/agent-browser/SKILL.md`). When it is not, mount the real page or
-  component in the project's component-test runner (Cypress component testing,
-  Playwright CT, Storybook) with the same mock data on both sides. Keep that capture spec
-  out of the commit unless it is a real regression test.
+- **After** comes from the branch's running app. Reuse `manual-qa` screenshots when they
+  match the shot list, and drive that app with `agent-browser` (via
+  `~/.agents/skills/agent-browser/SKILL.md`).
+- **Before** is captured from the merge base, not from that running app. `git worktree
+  add` a checkout of the merge base in a temporary directory, install its dependencies,
+  serve that checkout with the same fixture env on a free port, and capture there with
+  the same steps. Remove the worktree afterwards.
+- When a side cannot be served, mount the real page or component from that checkout in
+  the project's component-test runner (Cypress component testing, Playwright CT,
+  Storybook) with the same mock data on both sides. Keep that capture spec out of the
+  commit unless it is a real regression test. If the base still cannot be captured, put
+  the shot under **Not captured** with the reason instead of omitting it or reusing the
+  after image.
 - Use fixture or mock data only. No real customer data, credentials, tokens, or internal
   URLs in an image: uploads are reachable by anyone holding the link.
 - Name files `before-<shot>.png` / `after-<shot>.png`, and keep them outside the repository.
